@@ -1,0 +1,262 @@
+.header {
+  height: 70px;
+  background-color: var(--card-bg);
+  border-bottom: 1px solid var(--neutral-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.leftSection {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+}
+
+.logoContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--primary);
+  letter-spacing: 0.5px;
+}
+
+.logoIcon {
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+}
+
+.navLinks {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.navLink {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--neutral);
+  padding: 8px 4px;
+  position: relative;
+  transition: color 0.2s ease;
+}
+
+.navLink:hover {
+  color: var(--primary);
+}
+
+.activeNavLink {
+  color: var(--secondary);
+}
+
+.activeNavLink::after {
+  content: "";
+  position: absolute;
+  bottom: -16px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background-color: var(--secondary);
+  border-radius: 2px 2px 0 0;
+}
+
+.rightSection {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.notificationWrapper {
+  position: relative;
+}
+
+.iconButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neutral);
+  background-color: #F8FAFC;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.iconButton:hover {
+  color: var(--primary);
+  background-color: #F1F5F9;
+}
+
+.badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  background-color: var(--secondary);
+  border-radius: 50%;
+  border: 2px solid var(--card-bg);
+  animation: pulseNotification 2s infinite;
+}
+
+.userProfile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-left: 1px solid var(--neutral-border);
+  padding-left: 24px;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--neutral-border);
+}
+
+.userInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.userRole {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--neutral);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+
+/* Notification Popover Dropdown */
+.popover {
+  position: absolute;
+  top: 50px;
+  right: 0;
+  width: 380px;
+  max-height: 450px;
+  background: var(--card-bg);
+  border: 1px solid var(--neutral-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow-y: auto;
+  z-index: 110;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.popoverHeader {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--neutral-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.popoverTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.clearButton {
+  font-size: 12px;
+  color: var(--neutral);
+  font-weight: 500;
+}
+
+.clearButton:hover {
+  color: var(--primary);
+}
+
+.popoverContent {
+  padding: 8px 0;
+}
+
+.emptyLogs {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--neutral);
+  font-size: 13px;
+}
+
+.logItem {
+  padding: 12px 20px;
+  border-bottom: 1px solid #F1F5F9;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: background-color 0.2s ease;
+}
+
+.logItem:last-child {
+  border-bottom: none;
+}
+
+.logItem:hover {
+  background-color: #F8FAFC;
+}
+
+.logMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logTypeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+}
+
+.logWhatsapp {
+  background-color: #DCFCE7;
+  color: #16A34A;
+}
+
+.logEmail {
+  background-color: #EFF6FF;
+  color: #2563EB;
+}
+
+.logTime {
+  font-size: 11px;
+  color: var(--neutral);
+}
+
+.logRecipient {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.logBody {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  background: #F8FAFC;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #F1F5F9;
+}

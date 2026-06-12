@@ -1,0 +1,197 @@
+.container {
+  min-height: calc(100vh - 70px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background-color: var(--background);
+}
+
+.heroSection {
+  text-align: center;
+  margin-bottom: 48px;
+  max-width: 680px;
+}
+
+.title {
+  font-size: 38px;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 12px;
+  letter-spacing: -1px;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  max-width: 1200px;
+  width: 100%;
+  margin-bottom: 40px;
+}
+
+@media (max-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--neutral-border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--secondary);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.iconWrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.iconAdmin {
+  background-color: #EFF6FF;
+  color: #2563EB;
+}
+
+.iconEmployee {
+  background-color: #FAF5FF;
+  color: #7E22CE;
+}
+
+.iconProduction {
+  background-color: #FFF7ED;
+  color: #F97316;
+}
+
+.iconInstallation {
+  background-color: #ECFDF5;
+  color: #10B981;
+}
+
+.iconCustomer {
+  background-color: #FEF2F2;
+  color: #EF4444;
+}
+
+.cardTitle {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.description {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background-color: #F1F5F9;
+  color: #475569;
+}
+
+.tagSecurity {
+  border: 1px solid #FCA5A5;
+  color: #991B1B;
+  background-color: #FEF2F2;
+}
+
+.quickJumpsSection {
+  background-color: var(--card-bg);
+  border: 1px solid var(--neutral-border);
+  border-radius: var(--radius-md);
+  padding: 24px 32px;
+  max-width: 1200px;
+  width: 100%;
+}
+
+.quickJumpsTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quickJumpsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.quickJumpButton {
+  padding: 8px 16px;
+  background-color: #F8FAFC;
+  border: 1px solid var(--neutral-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quickJumpButton:hover {
+  background-color: #EFF6FF;
+  border-color: #3B82F6;
+  color: #2563EB;
+}
