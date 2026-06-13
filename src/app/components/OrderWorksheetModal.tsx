@@ -733,10 +733,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
   };
 
   return (
-    <div className="flex-1 w-full bg-[#f8fafc] flex flex-row h-screen text-slate-800 font-sans overflow-hidden">
+    <div className="flex-1 w-full bg-[#f8fafc] flex flex-row h-full text-slate-800 font-sans overflow-hidden" style={{ height: "100%" }}>
       
       {/* 1. LEFT SIDEBAR */}
-      <aside className="w-[240px] bg-[#f0f4f8] border-r border-slate-200 flex flex-col select-none shrink-0 h-full">
+      <aside className="w-[240px] bg-[#f0f4f8] border-r border-slate-200 flex flex-col select-none shrink-0 h-full" style={{ height: "100%" }}>
         
         {/* Logo Section */}
         <div className="p-6 border-b border-slate-200 flex items-center space-x-3">
@@ -937,7 +937,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
           {/* B. Two-Column Content Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 flex-1 min-h-0 overflow-hidden">
             
-            <div className="lg:col-span-3 space-y-6 flex flex-col overflow-y-auto flex-1 pr-4 pb-6">
+            <div className="lg:col-span-3 space-y-6 flex flex-col overflow-y-auto h-full pr-4 pb-6">
               
               {/* Warning/Banners */}
               {isSlaOverdue && activeStepTab === 0 && (

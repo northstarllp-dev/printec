@@ -307,9 +307,8 @@ export default function StaffLayout({
           </div>
         )}
 
-        {/* Main Workspace Scroll Area */}
-        <main style={isWorksheetPage ? { flex: 1, background: "var(--color-background)" } : { flex: 1, overflowY: "auto", background: "var(--background)" }}>
-          <div style={isWorksheetPage ? { width: "100%" } : { maxWidth: 1280, margin: "0 auto" }}>
+        <main style={isWorksheetPage ? { flex: 1, display: "flex", flexDirection: "column", height: "100%", background: "var(--color-background)", overflow: "hidden" } : { flex: 1, overflowY: "auto", background: "var(--background)" }}>
+          <div style={isWorksheetPage ? { width: "100%", height: "100%", display: "flex", flexDirection: "column", flex: 1 } : { maxWidth: 1280, margin: "0 auto" }}>
             {children}
           </div>
         </main>
