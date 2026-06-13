@@ -2,8 +2,15 @@
 
 import React from "react";
 import { User, Phone, Mail, Award, CheckCircle, ShieldAlert } from "lucide-react";
+import { useDashboard } from "@/context/DashboardContext";
 
 export const EmployeeProfileView: React.FC = () => {
+  const { currentEmployee } = useDashboard();
+  const getInitials = (name: string) => {
+    return name.split(" ").map(n => n[0]).join("").toUpperCase();
+  };
+  const empName = currentEmployee?.name || "Amit Sharma";
+  const initials = getInitials(empName).slice(0, 2);
   return (
     <div className="space-y-6" style={{ padding: "24px 24px 32px" }}>
       {/* Header */}
@@ -21,24 +28,24 @@ export const EmployeeProfileView: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Profile Card */}
         <div className="md:col-span-1 prt-card p-6 flex flex-col items-center text-center space-y-4">
-          <div className="w-24 h-24 rounded-full bg-[var(--primary-900)] border-2 border-[var(--secondary-500)] flex items-center justify-center text-3xl font-bold text-[var(--secondary-400)] relative">
-            <span>AS</span>
-            <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[var(--secondary-500)] border-2 border-white"></span>
+          <div className="w-24 h-24 rounded-full bg-[var(--secondary-500)] border-2 border-[var(--primary-900)] flex items-center justify-center text-3xl font-bold text-white relative">
+            <span>{initials}</span>
+            <span className="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-[var(--primary-900)] border-2 border-white"></span>
           </div>
           <div>
-            <h3 className="text-lg font-bold text-slate-800">Amit Sharma</h3>
-            <span className="prt-badge border bg-emerald-50 text-[var(--secondary-600)] border-[var(--secondary-200)] mt-1 inline-block">
-              Staff / Field Agent
+            <h3 className="text-lg font-bold text-slate-800">{empName}</h3>
+            <span className="prt-badge border bg-emerald-50 text-[var(--primary-900)] border-emerald-200 mt-1 inline-block">
+              Staff / {currentEmployee?.role || "Field Agent"}
             </span>
           </div>
           <div className="w-full space-y-2 border-t border-[var(--border)] pt-4 text-xs font-medium text-slate-600">
             <div className="flex items-center space-x-2">
               <Mail size={14} className="text-slate-400" />
-              <span>amit.k@printec.com</span>
+              <span>{currentEmployee?.email || "staff@printec.com"}</span>
             </div>
             <div className="flex items-center space-x-2">
               <Phone size={14} className="text-slate-400" />
-              <span>+91 98765 33333</span>
+              <span>{currentEmployee?.phone || "+91 98765 33333"}</span>
             </div>
           </div>
         </div>
@@ -47,7 +54,7 @@ export const EmployeeProfileView: React.FC = () => {
         <div className="md:col-span-2 space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="prt-card p-5 flex items-center space-x-4">
-              <div className="p-3 bg-emerald-50 text-[var(--secondary-500)] rounded-[var(--radius-lg)]"><CheckCircle size={20} /></div>
+              <div className="p-3 bg-emerald-50 text-[var(--primary-900)] rounded-[var(--radius-lg)]"><CheckCircle size={20} /></div>
               <div>
                 <span className="prt-label block">Completed Tasks</span>
                 <span className="text-xl font-bold text-slate-800 font-mono">14 Projects</span>

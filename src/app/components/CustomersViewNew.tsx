@@ -4,56 +4,44 @@ import React, { useState } from "react";
 import { Search, Filter, Plus, MoreVertical, MapPin, Mail, Phone } from "lucide-react";
 import { useDashboard } from "@/context/DashboardContext";
 
-const generateMockCustomers = () => {
-  const customers = [];
-  const companies = ["TechCorp", "Global Industries", "Metro Retailers", "Swift Logistics", "Luxe Stay", "Premier Retail", "Federal Express", "Global Enterprises"];
-  
-  for (let i = 1; i <= 128; i++) {
-    customers.push({
-      id: `CUST-${String(i).padStart(4, "0")}`,
-      name: `${companies[i % companies.length]} Ltd.`,
-      phone: `+91 ${String(Math.floor(Math.random() * 9000000000) + 1000000000).slice(0, 10)}`,
-      email: `contact@${companies[i % companies.length].toLowerCase()}.com`,
-      city: ["Mumbai", "Delhi", "Bangalore", "Chennai", "Hyderabad", "Pune"][i % 6],
-      status: i % 3 === 0 ? "Active" : i % 3 === 1 ? "Inactive" : "Pending",
-    });
-  }
-  return customers;
-};
+// Using real data from DashboardContext
 
-const mockCustomers = generateMockCustomers();
-
-const getStatusColor = (status: string) => {
+const getStatusColor = (status: string | undefined) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
     "Active": { bg: "#dcfce7", text: "#16a34a", label: "ACTIVE" },
     "Inactive": { bg: "#fee2e2", text: "#dc2626", label: "INACTIVE" },
     "Pending": { bg: "#fef3c7", text: "#ea580c", label: "PENDING" },
   };
-  return colors[status] || colors["Active"];
+  return colors[status || "Active"] || colors["Active"];
 };
 
 export function CustomersViewNew() {
+  const { customers } = useDashboard()!;
   const [searchTerm, setSearchTerm] = useState("");
-  const [customers] = useState(mockCustomers);
+
+  const totalCustomers = customers.length;
+  const activeCustomers = customers.filter(c => c.status === "Active").length;
+  const pendingCustomers = customers.filter(c => c.status === "Pending").length;
+  const activePercentage = totalCustomers > 0 ? Math.round((activeCustomers / totalCustomers) * 100) : 0;
 
   const stats = [
     {
       label: "TOTAL CUSTOMERS",
-      value: "348",
-      change: "+18 this month",
+      value: totalCustomers.toString(),
+      change: "All time",
       icon: MapPin,
-      color: "#22c55e",
+      color: "#018F10",
     },
     {
       label: "ACTIVE ACCOUNTS",
-      value: "256",
-      change: "73% of total",
+      value: activeCustomers.toString(),
+      change: `${activePercentage}% of total`,
       icon: Phone,
       color: "#3b82f6",
     },
     {
       label: "PENDING FOLLOW-UP",
-      value: "24",
+      value: pendingCustomers.toString(),
       change: "Requires action",
       icon: Mail,
       color: "#f59e0b",
@@ -80,30 +68,7 @@ export function CustomersViewNew() {
               Browse and manage customer database entries and contact information
             </p>
           </div>
-          <button
-            style={{
-              padding: "10px 16px",
-              background: "#22c55e",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: "600",
-              color: "white",
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#16a34a";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#22c55e";
-            }}
-          >
-            <Plus size={16} /> Add Customer
-          </button>
+
         </div>
 
         {/* Stats Cards */}

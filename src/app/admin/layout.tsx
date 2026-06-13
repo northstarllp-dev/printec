@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDashboard } from "@/context/DashboardContext";
+import { useEffect } from "react";
 
 export default function AdminLayout({
   children,
@@ -21,11 +22,13 @@ export default function AdminLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isWorksheetPage = pathname.startsWith("/admin/orders/") && pathname !== "/admin/orders";
   const { 
     notifications, 
     markAllNotificationsRead, 
     clearNotifications,
     isAuthenticated,
+    isAuthLoading,
     logout,
     currentUserRole,
     activities,
@@ -38,37 +41,36 @@ export default function AdminLayout({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  useEffect(() => {
+    if (!isAuthLoading && pathname !== "/admin/login") {
+      if (!isAuthenticated || currentUserRole !== "Admin") {
+        router.push("/admin/login");
+      }
+    }
+  }, [isAuthenticated, currentUserRole, pathname, router, isAuthLoading]);
+
   // If we are on the login page, don't show the layout header
   if (pathname === "/admin/login") {
     return <>{children}</>;
   }
 
-  // Protection wrapper - if not authenticated, the pages themselves will redirect via useEffect in DashboardContext/login page, but we show loading here
-  if (!isAuthenticated || currentUserRole !== "Admin") {
-    // In next.js app router, the layout runs before children.
-    // If not authenticated, we could just return a loader while the child component triggers the redirect.
+  // Protection wrapper - if not authenticated or loading, show loading here
+  if (isAuthLoading || !isAuthenticated || currentUserRole !== "Admin") {
     return (
       <div style={{ minHeight:"100vh", background:"#0F172A", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
-        <div style={{ width:36, height:36, border:"3px solid #22C55E", borderTopColor:"transparent", borderRadius:"50%", animation:"prt-spin 0.8s linear infinite" }} />
-        <span style={{ fontSize:13, color:"#64748B", fontFamily:"inherit" }}>Redirecting to Admin Portal…</span>
+        <div style={{ width:36, height:36, border:"3px solid #018F10", borderTopColor:"transparent", borderRadius:"50%", animation:"prt-spin 0.8s linear infinite" }} />
+        <span style={{ fontSize:13, color:"#64748B", fontFamily:"inherit" }}>Redirecting to Login...</span>
       </div>
     );
   }
 
-  if (selectedOrderForWorksheet) {
-    return (
-      <div style={{ display: "flex", minHeight: "100vh", background: "var(--color-background)", width: "100%" }}>
-        {children}
-      </div>
-    );
-  }
+
 
   const unreadNotifCount = notifications.filter(n => !n.read).length;
 
   const navigationItems = [
     { id: "/admin/orders", label: "Orders" },
     { id: "/admin/enquire", label: "Enquire" },
-    { id: "/admin/customers", label: "Customers" },
     { id: "/admin/employees", label: "Employees" },
     { id: "/admin/settings", label: "Settings" },
   ] as const;
@@ -81,12 +83,29 @@ export default function AdminLayout({
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "var(--color-background)" }}>
+    <div style={{ display: "flex", height: isWorksheetPage ? "100vh" : "auto", minHeight: "100vh", background: "var(--color-background)", overflow: isWorksheetPage ? "hidden" : "visible" }}>
       {/* ── MAIN WORKSPACE ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         
         {/* Workspace Top Row */}
+        {!isWorksheetPage && (
         <header style={{ display: "flex", alignItems: "center", width: "100%", height: "56px", background: "white", borderBottom: "1px solid #e2e8f0", paddingLeft: "32px", paddingRight: "32px", position: "sticky", top: 0, zIndex: 40 }}>
+          {/* Logo & Portal Role Indicator */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginRight: "32px", flexShrink: 0 }}>
+            <div style={{ width: "28px", height: "28px", background: "#0F172A", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", color: "#018F10" }} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 20h18" /><path d="M6 20V11" />
+                <circle cx="6" cy="11" r="1" fill="#018F10" />
+                <path d="M6 11l6-4.5" />
+                <circle cx="12" cy="6.5" r="1" fill="#018F10" />
+                <path d="M12 6.5l5 3.5" />
+              </svg>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", lineHeight: "1" }}>
+              <span style={{ fontSize: "13px", fontWeight: "800", color: "#0F172A", letterSpacing: "0.03em" }}>PRINTEC</span>
+              <span style={{ fontSize: "9px", color: "#003568", fontWeight: "700", textTransform: "uppercase", marginTop: "1px" }}>Admin Portal</span>
+            </div>
+          </div>
           <nav style={{ display: "flex", gap: "24px", height: "100%", alignItems: "center" }}>
             {navigationItems.map(item => {
               const isActive = isActivePath(item.id);
@@ -97,8 +116,8 @@ export default function AdminLayout({
                   style={{
                     background: "none",
                     border: "none",
-                    borderBottom: isActive ? "3px solid #22c55e" : "none",
-                    color: isActive ? "#22c55e" : "#64748b",
+                    borderBottom: isActive ? "3px solid #018F10" : "none",
+                    color: isActive ? "#018F10" : "#64748b",
                     fontSize: "14px",
                     fontWeight: isActive ? "700" : "600",
                     cursor: "pointer",
@@ -253,9 +272,10 @@ export default function AdminLayout({
             </div>
           </div>
         </header>
+        )}
 
         {/* Mobile Dropdown Menu */}
-        {isMobileMenuOpen && (
+        {!isWorksheetPage && isMobileMenuOpen && (
           <div style={{ background: "white", borderBottom: "1px solid var(--border)", padding: "12px 24px", display: "flex", flexDirection: "column", gap: 2 }} className="show-mobile">
             {navigationItems.map(item => {
               const isActive = isActivePath(item.id);
@@ -280,8 +300,8 @@ export default function AdminLayout({
         )}
 
         {/* Main Workspace Scroll Area */}
-        <main style={{ flex: 1, overflowY: "auto", background: "var(--background)" }}>
-          <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        <main style={isWorksheetPage ? { flex: 1, background: "var(--color-background)" } : { flex: 1, overflowY: "auto", background: "var(--background)" }}>
+          <div style={isWorksheetPage ? { width: "100%" } : { maxWidth: 1280, margin: "0 auto" }}>
             {children}
           </div>
         </main>

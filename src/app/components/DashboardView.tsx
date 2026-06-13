@@ -16,14 +16,21 @@ interface DashboardViewProps {
 // ─────────────────────────────────────────────
 // STAGE BADGE CONFIG — directly from Figma SS3
 // ─────────────────────────────────────────────
-const stageBadge: Record<PipelineStage, { label: string; className: string }> = {
-  "Enquired":        { label: "NEW ENQUIRY",    className: "prt-badge prt-badge-new-enquiry" },
-  "Site Visit":      { label: "SITE VISIT REQ", className: "prt-badge prt-badge-site-visit" },
-  "Quotation":       { label: "QUOTE PENDING",  className: "prt-badge prt-badge-quote-pending" },
-  "Design":          { label: "DESIGN STAGE",   className: "prt-badge prt-badge-design" },
-  "Production":      { label: "PRODUCTION",     className: "prt-badge prt-badge-production" },
-  "Installation":    { label: "INSTALLATION",   className: "prt-badge prt-badge-installation" },
-  "Order Completed": { label: "COMPLETED",      className: "prt-badge prt-badge-completed" },
+const stageBadge: Record<string, { label: string; className: string }> = {
+  "Site Visit Pending":      { label: "SITE VISIT",    className: "prt-badge prt-badge-site-visit" },
+  "Site Visit Scheduled":    { label: "SITE VISIT",    className: "prt-badge prt-badge-site-visit" },
+  "Site Visit Completed":    { label: "SITE VISIT",    className: "prt-badge prt-badge-site-visit" },
+  "Quotation In Progress":   { label: "QUOTE PENDING", className: "prt-badge prt-badge-quote-pending" },
+  "Quotation Sent":          { label: "QUOTE SENT",    className: "prt-badge prt-badge-quote-pending" },
+  "Quotation Negotiation":   { label: "NEGOTIATION",   className: "prt-badge prt-badge-quote-pending" },
+  "Quotation Approved":      { label: "QUOTE APPROVED",className: "prt-badge prt-badge-quote-pending" },
+  "Design In Progress":      { label: "DESIGN STAGE",  className: "prt-badge prt-badge-design" },
+  "Design Approved":         { label: "DESIGN DONE",   className: "prt-badge prt-badge-design" },
+  "Production":              { label: "PRODUCTION",    className: "prt-badge prt-badge-production" },
+  "Ready For Installation":  { label: "READY",         className: "prt-badge prt-badge-production" },
+  "Installation Scheduled":  { label: "INSTALLATION",  className: "prt-badge prt-badge-installation" },
+  "Completed":               { label: "COMPLETED",     className: "prt-badge prt-badge-completed" },
+  "Closed":                  { label: "CLOSED",        className: "prt-badge prt-badge-completed" },
 };
 
 const EMPLOYEE_NAMES: Record<string, string> = {
@@ -60,9 +67,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onOpenAddOrder, on
   const isEmployee = currentUserRole === "Employee";
 
   // ── Metrics ──────────────────────────────────
-  const totalActive = orders.filter(o => o.stage !== "Order Completed").length;
+  const totalActive = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
   const websiteLeads = enquiries.filter(e => e.status === "Pending").length;
-  const pendingCalls = orders.filter(o => o.stage === "Site Visit").length;
+  const pendingCalls = orders.filter(o => o.stage === "Site Visit Pending" || o.stage === "Site Visit Scheduled").length;
 
   // ── Filtering & Sorting ───────────────────────
   const filtered = orders.filter(o => {
@@ -97,7 +104,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onOpenAddOrder, on
     new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
 
   const stagesList: (PipelineStage | "All")[] = [
-    "All", "Enquired", "Site Visit", "Quotation", "Design", "Production", "Installation", "Order Completed"
+    "All",
+    "Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed",
+    "Quotation In Progress", "Quotation Sent", "Quotation Negotiation", "Quotation Approved",
+    "Design In Progress", "Design Approved",
+    "Production", "Ready For Installation",
+    "Installation Scheduled",
+    "Completed", "Closed"
   ];
 
   return (
@@ -223,14 +236,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onOpenAddOrder, on
             onChange={e => { setStageFilter(e.target.value as any); setCurrentPage(1); }}
             className="text-body-md font-semibold text-[var(--color-on-surface-variant)] border border-[var(--color-outline-variant)] rounded py-2 px-3 bg-[var(--color-surface-container-lowest)] cursor-pointer outline-none focus:border-[var(--color-primary)]"
           >
-            <option value="All">All Stages</option>
-            <option value="Enquired">New Enquiry</option>
-            <option value="Site Visit">Site Visit</option>
-            <option value="Quotation">Quote Pending</option>
-            <option value="Design">Design Stage</option>
-            <option value="Production">Production</option>
-            <option value="Installation">Installation</option>
-            <option value="Order Completed">Completed</option>
+            {stagesList.map(stg => (
+              <option key={stg} value={stg}>
+                {stg === "All" ? "All Stages" : stg}
+              </option>
+            ))}
           </select>
 
           {/* Sort */}

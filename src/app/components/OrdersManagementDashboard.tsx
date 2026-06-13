@@ -1,71 +1,132 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { 
   Download, 
   Plus, 
   Search, 
   Filter,
   ChevronDown,
-  MoreVertical,
   TrendingUp,
   Clock,
   AlertCircle,
-  UserPlus,
   Eye,
-  Trash2
+  Trash2,
+  X,
+  Briefcase,
+  AlertTriangle,
+  CheckCircle
 } from "lucide-react";
 import { useDashboard } from "@/context/DashboardContext";
+import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
-    "Enquired": { bg: "#e0e7ff", text: "#6366f1", label: "ENQUIRED" },
-    "Site Visit": { bg: "#e0e7ff", text: "#6366f1", label: "SITE VISIT" },
-    "Quotation": { bg: "#fef3c7", text: "#ea580c", label: "QUOTATION" },
-    "Design": { bg: "#f3e8ff", text: "#a855f7", label: "DESIGN" },
-    "Production": { bg: "#dbeafe", text: "#0284c7", label: "PRODUCTION" },
-    "Installation": { bg: "#dbeafe", text: "#0284c7", label: "INSTALLATION" },
-    "Order Completed": { bg: "#dcfce7", text: "#16a34a", label: "COMPLETED" },
+    "Site Visit Pending":     { bg: "#e0e7ff", text: "#6366f1", label: "SITE VISIT" },
+    "Site Visit Scheduled":   { bg: "#e0e7ff", text: "#6366f1", label: "SCHEDULED" },
+    "Site Visit Completed":   { bg: "#e0e7ff", text: "#6366f1", label: "SITE DONE" },
+    "Quotation In Progress":  { bg: "#fef3c7", text: "#ea580c", label: "QUOTATION" },
+    "Quotation Sent":         { bg: "#fef3c7", text: "#ea580c", label: "QUOTE SENT" },
+    "Quotation Negotiation":  { bg: "#fef3c7", text: "#ea580c", label: "NEGOTIATING" },
+    "Quotation Approved":     { bg: "#fef3c7", text: "#ea580c", label: "QUOTE OK" },
+    "Design In Progress":     { bg: "#f3e8ff", text: "#a855f7", label: "DESIGN" },
+    "Design Approved":        { bg: "#f3e8ff", text: "#a855f7", label: "DESIGN OK" },
+    "Production":             { bg: "#dbeafe", text: "#0284c7", label: "PRODUCTION" },
+    "Ready For Installation": { bg: "#dbeafe", text: "#0284c7", label: "READY" },
+    "Installation Scheduled": { bg: "#dbeafe", text: "#0284c7", label: "INSTALLATION" },
+    "Completed":              { bg: "#dcfce7", text: "#16a34a", label: "COMPLETED" },
+    "Closed":                 { bg: "#dcfce7", text: "#16a34a", label: "CLOSED" },
   };
-  return colors[status] || colors["Enquired"];
+  return colors[status] || { bg: "#f1f5f9", text: "#64748b", label: status.toUpperCase() };
 };
 
 export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?: () => void }) {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
-  const { orders, customers, addNotification, currentUserRole, assignEmployeesToOrder, setSelectedOrderForWorksheet, deleteOrder } = useDashboard();
+  const { orders, customers, employees, enquiries, addNotification, currentUserRole, currentEmployee, assignEmployeesToOrder, setSelectedOrderForWorksheet, deleteOrder } = useDashboard()!;
   
-  // State for staff assignment popover
-  const [assigningOrderId, setAssigningOrderId] = useState<string | null>(null);
+  // State for right assignment panel
+  const [assignPanelOrderId, setAssignPanelOrderId] = useState<string | null>(null);
   
   // State for options dropdown
   const [optionsOrderId, setOptionsOrderId] = useState<string | null>(null);
 
-  const stats = [
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const handleAddEnquiry = (data: EnquiryFormData) => {
+    console.log("New Enquiry Data:", data);
+    setIsAddModalOpen(false);
+  };
+
+  const employeeName = currentEmployee?.name || "";
+
+  // Calculations for Admin
+  const activeOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
+  const websiteLeads = enquiries ? enquiries.filter(e => e.source === "Website").length : 0;
+  const pendingCalls = enquiries ? enquiries.filter(e => e.status === "Pending" && e.source === "Phone Call").length : 0;
+  const convertedLeads = enquiries ? enquiries.filter(e => e.status === "Converted").length : 0;
+
+  // Calculations for Staff
+  const myActiveOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && o.assignedEmployees.includes(employeeName)).length;
+  const myUrgentOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && o.urgent && o.assignedEmployees.includes(employeeName)).length;
+  const myActionRequired = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && o.assignedEmployees.includes(employeeName) && (o.deadlineStatus === "Action Required" || o.deadlineStatus === "Delayed")).length;
+  const myCompletedOrders = orders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && o.assignedEmployees.includes(employeeName)).length;
+
+  const stats = currentUserRole === "Employee" ? [
+    {
+      label: "ASSIGNED TO ME",
+      value: myActiveOrders.toString(),
+      change: "Active projects in your queue",
+      icon: Briefcase,
+      color: "#018F10",
+    },
+    {
+      label: "URGENT PROJECTS",
+      value: myUrgentOrders.toString(),
+      change: "High priority tasks",
+      icon: AlertTriangle,
+      color: "#ef4444",
+    },
+    {
+      label: "ACTION REQUIRED",
+      value: myActionRequired.toString(),
+      change: "Delayed or blocked orders",
+      icon: AlertCircle,
+      color: "#f59e0b",
+    },
+    {
+      label: "MY COMPLETED",
+      value: myCompletedOrders.toString(),
+      change: "All-time completed orders",
+      icon: CheckCircle,
+      color: "#06b6d4",
+    },
+  ] : [
     {
       label: "TOTAL ACTIVE",
-      value: orders.length.toString(),
+      value: activeOrders.toString(),
       change: "Current orders in pipeline",
       icon: TrendingUp,
-      color: "#22c55e",
+      color: "#018F10",
     },
     {
       label: "WEBSITE LEADS",
-      value: "42",
-      change: "Last 7 days",
+      value: websiteLeads.toString(),
+      change: "All time",
       icon: TrendingUp,
       color: "#3b82f6",
     },
     {
       label: "PENDING CALLS",
-      value: "08",
+      value: pendingCalls.toString(),
       change: "Immediate action req.",
       icon: AlertCircle,
       color: "#f59e0b",
     },
     {
-      label: "AVG. RESPONSE",
-      value: "2.4h",
-      change: "Under target (4h)",
+      label: "CONVERTED",
+      value: convertedLeads.toString(),
+      change: "Total converted enquiries",
       icon: Clock,
       color: "#06b6d4",
     },
@@ -75,13 +136,23 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
     addNotification("Export Started", "Downloading orders.csv...", "success");
   };
 
-  const filteredOrders = orders.filter(order => 
-    order.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = 
+      order.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.id.toLowerCase().includes(searchTerm.toLowerCase());
+      
+    if (!matchesSearch) return false;
+
+    if (currentUserRole === "Employee") {
+      const employeeName = currentEmployee?.name || "Amit Sharma";
+      return order.assignedEmployees.includes(employeeName);
+    }
+
+    return true;
+  });
 
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
+    <div style={{ padding: "32px", paddingRight: assignPanelOrderId ? "412px" : "32px", transition: "padding-right 0.3s cubic-bezier(0.4, 0, 0.2, 1)", background: "#f8fafc", minHeight: "100vh" }}>
       {/* Header Section */}
       <div style={{ marginBottom: "32px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
@@ -119,36 +190,38 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
             >
               <Download size={16} /> Export CSV
             </button>
-            <button
-              onClick={onOpenAddOrder}
-              style={{
-                padding: "10px 16px",
-                background: "#22c55e",
-                border: "none",
-                borderRadius: "8px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "13px",
-                fontWeight: "600",
-                color: "white",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#16a34a";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#22c55e";
-              }}
-            >
-              <Plus size={16} /> Manual Entry
-            </button>
+            {currentUserRole !== "Employee" && (
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                style={{
+                  padding: "10px 16px",
+                  background: "#018F10",
+                  border: "none",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  color: "white",
+                  transition: "all 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#01730c";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "#018F10";
+                }}
+              >
+                <Plus size={16} /> New Enquiry
+              </button>
+            )}
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
           {stats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
@@ -191,9 +264,11 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
         </div>
       </div>
 
-      {/* Table Section */}
-      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
-        {/* Search & Filter Bar */}
+      {/* Main Content Area */}
+      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+        {/* Table Section */}
+        <div style={{ flex: 1, background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible", minWidth: 0 }}>
+          {/* Search & Filter Bar */}
         <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{ flex: 1, position: "relative" }}>
             <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
@@ -212,8 +287,8 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
                 transition: "all 0.2s",
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#3b82f6";
-                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(59, 130, 246, 0.1)";
+                e.currentTarget.style.borderColor = "#018F10";
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(1, 143, 16, 0.1)";
                 e.currentTarget.style.outline = "none";
               }}
               onBlur={(e) => {
@@ -228,10 +303,13 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
         </div>
 
         {/* Table View */}
-        <div style={{ overflowY: "auto", maxHeight: "600px", overflowX: "auto" }}>
+        <div style={{ overflow: "visible" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  ORDER ID
+                </th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   DATE
                 </th>
@@ -272,15 +350,15 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
                       e.currentTarget.style.background = "transparent";
                     }}
                   >
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "600" }}>
+                      {order.id}
+                    </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>
                       {dateStr}
                     </td>
                     <td style={{ padding: "16px 20px" }}>
                       <div style={{ fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
                         {order.projectName}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
-                        ID: {order.id}
                       </div>
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "500" }}>
@@ -301,13 +379,35 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
                         {statusColor.label}
                       </span>
                     </td>
-                    <td style={{ padding: "16px 20px" }}>
+                    <td 
+                      style={{ 
+                        padding: "16px 20px", 
+                        cursor: currentUserRole === "Admin" ? "pointer" : "default",
+                        transition: "background 0.2s"
+                      }}
+                      onClick={() => {
+                        if (currentUserRole === "Admin") {
+                          setAssignPanelOrderId(order.id);
+                        }
+                      }}
+                      title={currentUserRole === "Admin" ? "Click to assign team" : ""}
+                      onMouseEnter={(e) => {
+                        if (currentUserRole === "Admin") {
+                          e.currentTarget.style.background = "#eff6ff";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (currentUserRole === "Admin") {
+                          e.currentTarget.style.background = "transparent";
+                        }
+                      }}
+                    >
                       <div className="flex items-center gap-1 relative">
                         {order.assignedEmployees && order.assignedEmployees.map((emp, i) => (
                           <div
                             key={i}
                             title={emp}
-                            className="w-7 h-7 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white cursor-pointer"
+                            className="w-7 h-7 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white"
                             style={{ marginLeft: i > 0 ? "-8px" : "0" }}
                           >
                             {emp.substring(0, 2).toUpperCase()}
@@ -316,95 +416,36 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
                         {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
                           <span className="text-xs text-slate-400 italic">Unassigned</span>
                         )}
-                        {currentUserRole === "Admin" && (
-                          <div className="relative">
-                            <button
-                              onClick={() => setAssigningOrderId(assigningOrderId === order.id ? null : order.id)}
-                              className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-[10px] font-bold border-2 border-white cursor-pointer transition-colors"
-                              style={{ marginLeft: order.assignedEmployees && order.assignedEmployees.length > 0 ? "-8px" : "8px" }}
-                              title="Assign Staff"
-                            >
-                              <UserPlus size={12} />
-                            </button>
-                            {/* Simple Staff Selection Popover */}
-                            {assigningOrderId === order.id && (
-                              <div className="absolute left-0 mt-2 p-2 bg-white border border-slate-200 rounded-lg shadow-lg z-50 min-w-[150px]">
-                                <div className="text-xs font-bold text-slate-500 mb-2 px-1">Assign Staff</div>
-                                {["SK", "RM", "AK", "AM"].map(staff => {
-                                  const isAssigned = order.assignedEmployees?.includes(staff);
-                                  return (
-                                    <label key={staff} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer">
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isAssigned || false}
-                                        onChange={(e) => {
-                                          let current = order.assignedEmployees || [];
-                                          if (e.target.checked) current = [...current, staff];
-                                          else current = current.filter(x => x !== staff);
-                                          assignEmployeesToOrder(order.id, current);
-                                        }}
-                                      />
-                                      <span className="text-sm font-medium">{staff}</span>
-                                    </label>
-                                  );
-                                })}
-                                <div className="mt-2 text-right">
-                                  <button onClick={() => setAssigningOrderId(null)} className="text-xs text-[var(--color-primary)] font-bold cursor-pointer hover:underline">Done</button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </td>
-                    <td style={{ padding: "16px 20px", textAlign: "center", position: "relative" }}>
+                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <button
-                        onClick={() => setOptionsOrderId(optionsOrderId === order.id ? null : order.id)}
+                        onClick={() => {
+                          router.push(`${currentUserRole === "Admin" ? "/admin" : "/staff"}/orders/${order.id}`);
+                        }}
                         style={{
-                          background: "none",
+                          padding: "6px 12px",
+                          background: "var(--color-primary)",
                           border: "none",
+                          borderRadius: "6px",
+                          color: "white",
+                          fontSize: "12px",
+                          fontWeight: "700",
                           cursor: "pointer",
-                          color: "#94a3b8",
-                          padding: "4px 8px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
                           transition: "all 0.2s",
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.color = "#475569";
+                          e.currentTarget.style.background = "var(--color-primary-container)";
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.color = "#94a3b8";
+                          e.currentTarget.style.background = "var(--color-primary)";
                         }}
                       >
-                        <MoreVertical size={16} />
+                        <Eye size={14} /> View Order
                       </button>
-                      
-                      {optionsOrderId === order.id && (
-                        <div className="absolute right-8 top-10 bg-white border border-slate-200 rounded-lg shadow-lg z-50 min-w-[160px] py-1 text-left">
-                          <button
-                            onClick={() => {
-                              setSelectedOrderForWorksheet(order);
-                              setOptionsOrderId(null);
-                            }}
-                            className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-                          >
-                            <Eye size={14} className="text-slate-400" /> View Order
-                          </button>
-                          
-                          {currentUserRole === "Admin" && (
-                            <button
-                              onClick={() => {
-                                if (window.confirm("Are you sure you want to delete this order?")) {
-                                  deleteOrder(order.id);
-                                }
-                                setOptionsOrderId(null);
-                              }}
-                              className="w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors border-t border-slate-100"
-                            >
-                              <Trash2 size={14} className="text-red-400" /> Delete Order
-                            </button>
-                          )}
-                        </div>
-                      )}
                     </td>
                   </tr>
                 );
@@ -419,7 +460,94 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
             </tbody>
           </table>
         </div>
+        </div>
+        
+        {/* Assignment Right Drawer */}
+        <div 
+          style={{ 
+            position: "fixed", 
+            top: 0, 
+            right: assignPanelOrderId ? 0 : "-400px", 
+            bottom: 0, 
+            width: "380px", 
+            background: "white", 
+            borderLeft: "1px solid #e2e8f0", 
+            zIndex: 100, 
+            display: "flex", 
+            flexDirection: "column", 
+            boxShadow: assignPanelOrderId ? "-10px 0 15px -3px rgba(0, 0, 0, 0.1)" : "none", 
+            transition: "right 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease" 
+          }}
+        >
+          {assignPanelOrderId && (() => {
+              const assignOrder = orders.find(o => o.id === assignPanelOrderId);
+              if (!assignOrder) return null;
+              
+              return (
+                <div style={{ display: "flex", flexDirection: "column", height: "100%", padding: "24px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                    <h3 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: 0 }}>Assign Team</h3>
+                    <button onClick={() => setAssignPanelOrderId(null)} style={{ background: "#f1f5f9", border: "none", cursor: "pointer", color: "#64748b", padding: "6px", borderRadius: "8px" }}>
+                      <X size={18} />
+                    </button>
+                  </div>
+                  
+                  <div style={{ padding: "16px", background: "#f8fafc", borderRadius: "8px", marginBottom: "24px" }}>
+                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a", marginBottom: "4px" }}>{assignOrder.projectName}</div>
+                    <div style={{ fontSize: "12px", color: "#64748b" }}>Order ID: {assignOrder.id}</div>
+                  </div>
+                  
+                  <div style={{ fontSize: "13px", fontWeight: "600", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "12px" }}>
+                    Select Staff Directory
+                  </div>
+                  
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", overflowY: "auto", flex: 1, paddingRight: "8px" }}>
+                    {employees.map(staff => {
+                      const isAssigned = assignOrder.assignedEmployees?.includes(staff.name);
+                      return (
+                        <label key={staff.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px", border: "1px solid", borderColor: isAssigned ? "#018F10" : "#e2e8f0", borderRadius: "8px", cursor: "pointer", transition: "all 0.2s", background: isAssigned ? "#f0fdf4" : "white" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={isAssigned || false}
+                            onChange={(e) => {
+                              let current = assignOrder.assignedEmployees || [];
+                              if (e.target.checked) current = [...current, staff.name];
+                              else current = current.filter(x => x !== staff.name);
+                              assignEmployeesToOrder(assignOrder.id, current);
+                            }}
+                            style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#018F10" }}
+                          />
+                          <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: isAssigned ? "#018F10" : "#f1f5f9", color: isAssigned ? "white" : "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "bold" }}>
+                              {staff.name.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <span style={{ fontSize: "14px", fontWeight: "600", color: "#0f172a" }}>{staff.name}</span>
+                              <span style={{ fontSize: "12px", color: "#64748b" }}>{staff.role} • {staff.email}</span>
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  
+                  <button 
+                    onClick={() => setAssignPanelOrderId(null)} 
+                    style={{ width: "100%", marginTop: "24px", padding: "14px", background: "#018F10", color: "white", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
+                  >
+                    Save Assignments
+                  </button>
+                </div>
+              );
+            })()}
+        </div>
       </div>
+      
+      <AddEnquiryModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => setIsAddModalOpen(false)} 
+        onSubmit={handleAddEnquiry} 
+      />
     </div>
   );
 }

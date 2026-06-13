@@ -6,9 +6,7 @@ This document outlines the core UI design rules and tokens for the Printec Order
 
 The application uses a strict two-color primary and secondary palette:
 
-*   **Primary Color:** `#003262` (Deep Blue)
-    *   Used for major UI accents, primary buttons, headers, active states, and focus rings.
-*   **Secondary Color:** `#006E2F` (Deep Green)
+*   **Primary Color:** `#018F10` *   **Secondary Color:** `#003568` (Deep Green)
     *   Used for success states, secondary highlights, completion stages, and positive metrics.
 
 ## CSS Variables (`src/app/globals.css`)
@@ -17,8 +15,8 @@ Always use the following CSS variables defined in Tailwind rather than hardcodin
 
 ```css
   /* Core Brand */
-  --color-primary: #003262;
-  --color-secondary: #006e2f;
+  --color-primary: #018F10;
+  --color-secondary: #003568;
 
   /* Backgrounds & Surfaces */
   --color-background: #f8f9ff;

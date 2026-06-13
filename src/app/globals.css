@@ -18,17 +18,19 @@
   --color-outline: #737780;
   --color-outline-variant: #c3c6d0;
   
-  --color-primary: #003262;
-  --color-primary-container: #00458a;
+  /* Primary = Green #018F10 (brand primary per UI_DESIGN_README) */
+  --color-primary: #018F10;
+  --color-primary-container: #01730c;
   --color-primary-foreground: #ffffff;
   --color-on-primary: #ffffff;
-  --color-on-primary-container: #dce9ff;
+  --color-on-primary-container: #a2f2b3;
   
-  --color-secondary: #006e2f;
-  --color-secondary-container: #008f3d;
+  /* Secondary = Navy Blue #003568 (brand secondary per UI_DESIGN_README) */
+  --color-secondary: #003568;
+  --color-secondary-container: #00458a;
   --color-secondary-foreground: #ffffff;
   --color-on-secondary: #ffffff;
-  --color-on-secondary-container: #a2f2b3;
+  --color-on-secondary-container: #dce9ff;
   
   --color-error: #ba1a1a;
   
@@ -38,7 +40,7 @@
   --color-muted-foreground: var(--color-on-surface-variant);
   --color-border: var(--color-outline-variant);
   --color-input: var(--color-outline-variant);
-  --color-ring: #003262;
+  --color-ring: #018F10;
   --color-accent: var(--color-surface-container-low);
   --color-accent-foreground: var(--color-on-surface);
   --color-destructive: #ba1a1a;
@@ -57,6 +59,38 @@
   --font-body-md: "Inter", sans-serif;
   --font-label-caps: "Inter", sans-serif;
   --font-data-tabular: "Inter", sans-serif;
+}
+
+/* ── LEGACY CSS VARIABLE ALIASES ──────────────────────────────────────────── */
+/* These bridge the gap between the @theme tokens and older inline-style code  */
+:root {
+  /* Brand colours */
+  --secondary-500: #003568;
+  --secondary-fixed: #dce9ff;
+  --secondary-container: rgba(0, 53, 104, 0.08);
+  --primary-900: #018F10;
+
+  /* Surfaces & backgrounds */
+  --background:               #f8f9ff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low:    #eff4ff;
+  --surface-container:        #e5eeff;
+  --surface-container-high:   #dce9ff;
+  --surface-hover:            rgba(0, 53, 104, 0.05);
+
+  /* Text */
+  --text-primary:   #0b1c30;
+  --text-secondary: #43474f;
+  --text-muted:     #737780;
+
+  /* Borders */
+  --border: #c3c6d0;
+
+  /* Radius extras */
+  --radius-2xl: 1rem;
+
+  /* Shadows */
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 @utility text-display-lg {
@@ -143,11 +177,21 @@ body {
 }
 
 .prt-btn-primary {
-  background: var(--color-primary-container);
+  background: #018F10;
   color: #ffffff;
+  border: none;
 }
 .prt-btn-primary:hover {
-  opacity: 0.9;
+  background: #01730c;
+}
+
+.prt-btn-inverted {
+  background: #003568;
+  color: #ffffff;
+  border: none;
+}
+.prt-btn-inverted:hover {
+  background: #002a50;
 }
 
 .prt-btn-secondary {
@@ -178,7 +222,7 @@ body {
 .prt-badge-quote-pending { background: rgba(249, 115, 22, 0.1); border: 1px solid rgba(249, 115, 22, 0.2); color: #c2410c; }
 .prt-badge-quotation     { background: rgba(249, 115, 22, 0.1); border: 1px solid rgba(249, 115, 22, 0.2); color: #c2410c; }
 .prt-badge-design        { background: rgba(236, 72, 153, 0.1); border: 1px solid rgba(236, 72, 153, 0.2); color: #be185d; }
-.prt-badge-production    { background: var(--color-secondary-container); border: 1px solid rgba(1, 110, 12, 0.2); color: var(--color-on-secondary-container); }
+.prt-badge-production    { background: var(--color-primary-container); border: 1px solid rgba(1, 110, 12, 0.2); color: var(--color-on-primary-container); }
 .prt-badge-installation  { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); color: #15803d; }
 .prt-badge-completed     { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2); color: #15803d; }
 .prt-badge-urgent        { background: var(--color-error); color: #ffffff; }
@@ -264,6 +308,11 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes prt-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .prt-animate-in {
   animation: prt-fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -272,3 +321,22 @@ body {
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 10px; }
+
+/* FORM INPUT */
+.prt-input {
+  width: 100%;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 9px 12px;
+  outline: none;
+  background: white;
+  color: var(--color-on-surface);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.prt-input:focus {
+  border-color: #018F10;
+  box-shadow: 0 0 0 3px rgba(1, 143, 16, 0.1);
+}
+

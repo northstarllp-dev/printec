@@ -9,6 +9,7 @@ import {
   LayoutDashboard, Camera, Bell, History
 } from "lucide-react";
 import { useDashboard, Order, PipelineStage, SiteVisitDetails, QuoteDetails, DesignDetails, ProductionDetails, InstallationDetails } from "@/context/DashboardContext";
+import { useRouter } from "next/navigation";
 
 interface OrderWorksheetModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ interface OrderWorksheetModalProps {
 }
 
 export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen, onClose, order }) => {
+  const router = useRouter();
   const { 
     updateSiteVisitDetails,
     updateQuoteDetails,
@@ -28,6 +30,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
     adminRejectStage,
     customers,
     currentUserRole,
+    currentEmployee,
     updateOrderStage,
     addChatMessage,
     setActivePage,
@@ -40,34 +43,53 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
   const [rejectNotes, setRejectNotes] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [showAuditHistory, setShowAuditHistory] = useState(false);
+  const [isChatPopupOpen, setIsChatPopupOpen] = useState(false);
   
   // Local state for photo link input simulation
   const [newPhotoUrl, setNewPhotoUrl] = useState("");
 
-  // Stepper definition
-  const steps: { stage: PipelineStage; label: string }[] = [
-    { stage: "Site Visit", label: "Site Visit Audit" },
-    { stage: "Quotation", label: "Product Quote" },
-    { stage: "Design", label: "Design Proof" },
-    { stage: "Production", label: "Fabrication Checklist" },
-    { stage: "Installation", label: "Field Installation" }
+  // Stepper definition — 5 visual tabs, mapped from 14 pipeline stages
+  const steps: { label: string }[] = [
+    { label: "Site Visit Audit" },
+    { label: "Product Quote" },
+    { label: "Design Proof" },
+    { label: "Fabrication Checklist" },
+    { label: "Field Installation" }
   ];
 
-  // Map order.stage to step index
-  let currentStageIndex = steps.findIndex(s => s.stage === order.stage);
-  if (order.stage === "Enquired") currentStageIndex = 0;
-  if (order.stage === "Order Completed") currentStageIndex = 4;
+  // Map the 14 pipeline stages to one of the 5 visual tab indexes
+  const stageToTabIndex = (stage: PipelineStage): number => {
+    switch (stage) {
+      case "Site Visit Pending":
+      case "Site Visit Scheduled":
+      case "Site Visit Completed":
+        return 0;
+      case "Quotation In Progress":
+      case "Quotation Sent":
+      case "Quotation Negotiation":
+      case "Quotation Approved":
+        return 1;
+      case "Design In Progress":
+      case "Design Approved":
+        return 2;
+      case "Production":
+      case "Ready For Installation":
+        return 3;
+      case "Installation Scheduled":
+      case "Completed":
+      case "Closed":
+        return 4;
+      default:
+        return 0;
+    }
+  };
 
-  const [activeStepTab, setActiveStepTab] = useState<number>(currentStageIndex >= 0 ? currentStageIndex : 0);
+  const currentStageIndex = stageToTabIndex(order.stage);
+  const [activeStepTab, setActiveStepTab] = useState<number>(currentStageIndex);
 
   // Sync tab with order stage transitions
   useEffect(() => {
-    let idx = steps.findIndex(s => s.stage === order.stage);
-    if (order.stage === "Enquired") idx = 0;
-    if (order.stage === "Order Completed") idx = 4;
-    if (idx >= 0) {
-      setActiveStepTab(idx);
-    }
+    setActiveStepTab(stageToTabIndex(order.stage));
   }, [order.stage]);
 
   if (!isOpen) return null;
@@ -76,14 +98,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
   const isEmployee = currentUserRole === "Employee";
   const createdTime = new Date(order.dateCreated).getTime();
   const diffHrs = (new Date().getTime() - createdTime) / (1000 * 60 * 60);
-  const isSlaOverdue = order.stage === "Site Visit" && 
+  const isSlaOverdue = (order.stage === "Site Visit Pending" || order.stage === "Site Visit Scheduled") && 
     (!order.siteVisitDetails || order.siteVisitDetails.width === 0) &&
     diffHrs > 24;
 
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-    const senderName = isEmployee ? "Amit Sharma" : "Rajesh K.";
+    const senderName = isEmployee ? (currentEmployee?.name || "Amit Sharma") : "Rajesh K.";
     addChatMessage(order.id, senderName, chatInput);
     setChatInput("");
   };
@@ -97,7 +119,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
     return order.siteVisitDetails || {
       width: 0, height: 0, depth: 0,
       auditDate: "2024-10-24", auditTime: "11:30 AM",
-      sitePersonnel: "Amit Sharma", photos: [], completed: false, notes: ""
+      sitePersonnel: currentEmployee?.name || "Amit Sharma", photos: [], completed: false, notes: ""
     };
   };
 
@@ -162,7 +184,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
   // Stage Advancement triggers
   const handleRequestAdvancement = () => {
     requestStageAdvancement(order.id);
-    addChatMessage(order.id, "System", `${isEmployee ? "Amit Sharma" : "Rajesh K."} requested admin approval to advance this order from the ${order.stage} stage.`);
+    addChatMessage(order.id, "System", `${isEmployee ? (currentEmployee?.name || "Amit Sharma") : "Rajesh K."} requested admin approval to advance this order from the ${order.stage} stage.`);
   };
 
   const handleAdminApprove = () => {
@@ -711,34 +733,36 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
   };
 
   return (
-    <div className="flex-1 w-full bg-[#f8fafc] flex flex-row min-h-screen text-slate-800 font-sans">
+    <div className="flex-1 w-full bg-[#f8fafc] flex flex-row h-screen text-slate-800 font-sans overflow-hidden">
       
       {/* 1. LEFT SIDEBAR */}
-      <aside className="w-[240px] bg-[#f0f4f8] border-r border-slate-200 flex flex-col select-none shrink-0">
+      <aside className="w-[240px] bg-[#f0f4f8] border-r border-slate-200 flex flex-col select-none shrink-0 h-full">
         
         {/* Logo Section */}
         <div className="p-6 border-b border-slate-200 flex items-center space-x-3">
-          <div className="bg-[#003366] text-white p-2 rounded-lg flex items-center justify-center">
-            <Printer size={18} />
+          <div className="bg-[#0F172A] text-white p-2 rounded-lg flex items-center justify-center">
+            <Printer size={18} className="text-[#018F10]" />
           </div>
           <div>
-            <h2 className="text-sm font-extrabold text-[#003366] leading-tight tracking-wider uppercase">PRINTEC</h2>
-            <p className="text-[10px] text-slate-500 font-medium">Management Portal</p>
+            <h2 className="text-sm font-extrabold text-[#0F172A] leading-tight tracking-wider uppercase">PRINTEC</h2>
+            <p className="text-[10px] text-[#018F10] font-bold uppercase tracking-wider">Worksheet</p>
           </div>
         </div>
 
         {/* Sidebar Navigation Items */}
         <nav className="flex-1 py-6 px-4 space-y-1">
-          <button
-            onClick={() => {
-              setSelectedOrderForWorksheet(null);
-              setActivePage("dashboard");
-            }}
-            className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-colors"
-          >
-            <ClipboardList size={16} className="text-slate-400" />
-            <span>Enquiries</span>
-          </button>
+          {currentUserRole !== "Employee" && (
+            <button
+              onClick={() => {
+                setSelectedOrderForWorksheet(null);
+                router.push("/admin/enquire");
+              }}
+              className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-colors"
+            >
+              <ClipboardList size={16} className="text-slate-400" />
+              <span>Enquiries</span>
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -747,7 +771,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
             }}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-xs font-bold transition-all ${
               activeStepTab === 0 && !showAuditHistory
-                ? "bg-[#003366] text-white shadow-sm"
+                ? "bg-[#018F10] text-white shadow-sm"
                 : "text-slate-600 hover:bg-slate-200/50"
             }`}
           >
@@ -764,7 +788,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
             }}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-xs font-bold transition-all ${
               activeStepTab === 1 && !showAuditHistory
-                ? "bg-[#003366] text-white shadow-sm"
+                ? "bg-[#018F10] text-white shadow-sm"
                 : "text-slate-600 hover:bg-slate-200/50"
             }`}
           >
@@ -781,7 +805,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
             }}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-xs font-bold transition-all ${
               activeStepTab === 2 && !showAuditHistory
-                ? "bg-[#003366] text-white shadow-sm"
+                ? "bg-[#018F10] text-white shadow-sm"
                 : "text-slate-600 hover:bg-slate-200/50"
             }`}
           >
@@ -798,7 +822,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
             }}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-xs font-bold transition-all ${
               activeStepTab === 3 && !showAuditHistory
-                ? "bg-[#003366] text-white shadow-sm"
+                ? "bg-[#018F10] text-white shadow-sm"
                 : "text-slate-600 hover:bg-slate-200/50"
             }`}
           >
@@ -815,7 +839,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
             }}
             className={`w-full flex items-center justify-between px-4 py-3 rounded-lg text-xs font-bold transition-all ${
               activeStepTab === 4 && !showAuditHistory
-                ? "bg-[#003366] text-white shadow-sm"
+                ? "bg-[#018F10] text-white shadow-sm"
                 : "text-slate-600 hover:bg-slate-200/50"
             }`}
           >
@@ -831,7 +855,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
           <button
             onClick={() => {
               setSelectedOrderForWorksheet(null);
-              setActivePage("settings");
+              router.push(currentUserRole === "Employee" ? "/staff/profile" : "/admin/settings");
             }}
             className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-colors"
           >
@@ -841,7 +865,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
           <button
             onClick={() => {
               setSelectedOrderForWorksheet(null);
-              setActivePage("settings");
+              router.push(currentUserRole === "Employee" ? "/staff/profile" : "/admin/settings");
             }}
             className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-200/50 transition-colors"
           >
@@ -852,7 +876,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
       </aside>
 
       {/* 2. RIGHT WORKSPACE CONTENT */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         
         {/* Workspace Top Header (Notification Bell & User profile) */}
         <header className="h-14 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0">
@@ -860,9 +884,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
             <button
               onClick={() => {
                 setSelectedOrderForWorksheet(null);
-                setActivePage("dashboard");
+                router.push(currentUserRole === "Employee" ? "/staff/orders" : "/admin/orders");
               }}
-              className="flex items-center space-x-2 text-xs font-bold text-[#003366] hover:underline"
+              className="flex items-center space-x-2 text-xs font-bold text-[#018F10] hover:underline"
             >
               <ArrowLeft size={14} />
               <span>Back to Dashboard</span>
@@ -876,13 +900,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
             </button>
             
             <div className="flex items-center space-x-3 border-l border-slate-200 pl-6">
-              <div className="w-9 h-9 rounded-full bg-[#003366] text-white flex items-center justify-center font-bold text-xs">
-                {isEmployee ? "AS" : "RK"}
+              <div className="w-9 h-9 rounded-full bg-[#018F10] text-white flex items-center justify-center font-bold text-xs">
+                {isEmployee ? (currentEmployee ? currentEmployee.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "AS") : "RK"}
               </div>
               <div className="text-left hidden sm:block">
-                <p className="text-xs font-bold leading-none text-slate-800">{isEmployee ? "Amit Sharma" : "Rajesh K."}</p>
+                <p className="text-xs font-bold leading-none text-slate-800">{isEmployee ? (currentEmployee?.name || "Amit Sharma") : "Rajesh K."}</p>
                 <p className="text-[9px] uppercase font-semibold text-slate-400 mt-1">
-                  {isEmployee ? "Field Agent" : "Project Admin"}
+                  {isEmployee ? (currentEmployee?.role || "Field Agent") : "Project Admin"}
                 </p>
               </div>
             </div>
@@ -890,49 +914,30 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
         </header>
 
         {/* Worksheet Main Content Container */}
-        <div className="flex-1 p-8 space-y-6">
+        <div className="flex-1 p-8 flex flex-col min-h-0 overflow-hidden space-y-6">
           
           {/* A. Breadcrumbs & Title Bar */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
             <div>
               {/* Breadcrumbs */}
               <div className="flex items-center space-x-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                <span className="hover:text-slate-600 cursor-pointer" onClick={() => { setSelectedOrderForWorksheet(null); setActivePage("dashboard"); }}>Projects</span>
+                <span className="hover:text-slate-600 cursor-pointer" onClick={() => { setSelectedOrderForWorksheet(null); router.push(currentUserRole === "Employee" ? "/staff/orders" : "/admin/orders"); }}>Projects</span>
                 <span>&gt;</span>
-                <span className="hover:text-slate-600 cursor-pointer" onClick={() => { setSelectedOrderForWorksheet(null); setActivePage("dashboard"); }}>Active Orders</span>
+                <span className="hover:text-slate-600 cursor-pointer" onClick={() => { setSelectedOrderForWorksheet(null); router.push(currentUserRole === "Employee" ? "/staff/orders" : "/admin/orders"); }}>Active Orders</span>
                 <span>&gt;</span>
-                <span className="text-[#003366]">{order.id}</span>
+                <span className="text-[#018F10]">{order.id}</span>
               </div>
               
               <h1 className="text-2xl font-black text-slate-800 mt-1 tracking-tight">
                 {order.projectName}
               </h1>
             </div>
-
-            {/* Print & Share buttons */}
-            <div className="flex items-center space-x-3 shrink-0">
-              <button
-                onClick={() => window.print()}
-                className="flex items-center space-x-2 px-4 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-600 bg-white hover:bg-slate-50 transition-all shadow-xs"
-              >
-                <Printer size={14} />
-                <span>Print Work Order</span>
-              </button>
-              <button
-                onClick={() => addNotification("Shared", "Project summary shared with team members.", "success")}
-                className="flex items-center space-x-2 px-4 py-2 bg-[#107C41] hover:bg-[#0e6b37] text-white rounded-lg text-xs font-bold transition-all shadow-sm"
-              >
-                <Share2 size={14} />
-                <span>Share with Team</span>
-              </button>
-            </div>
           </div>
 
           {/* B. Two-Column Content Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 flex-1 min-h-0 overflow-hidden">
             
-            {/* LEFT COLUMN: Stage Form + Internal logs (70% width or 2 cols) */}
-            <div className="lg:col-span-2 space-y-6 flex flex-col">
+            <div className="lg:col-span-3 space-y-6 flex flex-col overflow-y-auto flex-1 pr-4 pb-6">
               
               {/* Warning/Banners */}
               {isSlaOverdue && activeStepTab === 0 && (
@@ -1013,7 +1018,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                 
                 {/* Custom Card Header */}
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-[#003366] uppercase tracking-wider">
+                  <h3 className="text-sm font-bold text-[#018F10] uppercase tracking-wider">
                     {steps[activeStepTab]?.label || "Order Stage Details"}
                   </h3>
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -1031,11 +1036,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                           Step {activeStepTab + 1} - {steps[activeStepTab]?.label}
                         </h2>
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                          order.stage === steps[activeStepTab]?.stage
+                          stageToTabIndex(order.stage) === activeStepTab
                             ? "bg-blue-100 text-blue-800 border border-blue-200"
                             : "bg-slate-100 text-slate-400 border border-slate-200"
                         }`}>
-                          {order.stage === steps[activeStepTab]?.stage ? "ACTIVE / SCHEDULED" : "COMPLETED"}
+                          {stageToTabIndex(order.stage) === activeStepTab ? "ACTIVE" : "COMPLETED"}
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 mt-1 leading-normal">
@@ -1075,7 +1080,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                                 onChange={(e) => updateSiteVisitDetails(order.id, { width: parseFloat(e.target.value) || 0 })}
                                 placeholder="0.0"
                                 disabled={isEmployee && order.stageStatus?.includes("Pending")}
-                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold font-mono text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#003366]"
+                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold font-mono text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#018F10]"
                               />
                             </div>
                             <div>
@@ -1086,7 +1091,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                                 onChange={(e) => updateSiteVisitDetails(order.id, { height: parseFloat(e.target.value) || 0 })}
                                 placeholder="0.0"
                                 disabled={isEmployee && order.stageStatus?.includes("Pending")}
-                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold font-mono text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#003366]"
+                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold font-mono text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#018F10]"
                               />
                             </div>
                             <div>
@@ -1097,13 +1102,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                                 onChange={(e) => updateSiteVisitDetails(order.id, { depth: parseFloat(e.target.value) || 0 })}
                                 placeholder="0.0"
                                 disabled={isEmployee && order.stageStatus?.includes("Pending")}
-                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold font-mono text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#003366]"
+                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold font-mono text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#018F10]"
                               />
                             </div>
                           </div>
 
                           {/* Info Warning note box matching mockup */}
-                          <div className="bg-blue-50 border-l-4 border-[#003366] rounded-r-lg p-3 text-xs italic text-[#003366]">
+                          <div className="bg-emerald-50/50 border-l-4 border-[#018F10] rounded-r-lg p-3 text-xs italic text-[#01730c]">
                             Note: Check for wall structural integrity and existing electrical conduits.
                           </div>
                         </div>
@@ -1124,7 +1129,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                                 onChange={(e) => updateSiteVisitDetails(order.id, { auditDate: e.target.value })}
                                 placeholder="10/24/2024"
                                 disabled={isEmployee && order.stageStatus?.includes("Pending")}
-                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#003366]"
+                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#018F10]"
                               />
                             </div>
                             <div>
@@ -1135,7 +1140,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                                 onChange={(e) => updateSiteVisitDetails(order.id, { auditTime: e.target.value })}
                                 placeholder="11:30 AM"
                                 disabled={isEmployee && order.stageStatus?.includes("Pending")}
-                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#003366]"
+                                className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#018F10]"
                               />
                             </div>
                           </div>
@@ -1148,7 +1153,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                               onChange={(e) => updateSiteVisitDetails(order.id, { sitePersonnel: e.target.value })}
                               placeholder="Contact Name / Phone"
                               disabled={isEmployee && order.stageStatus?.includes("Pending")}
-                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#003366]"
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:ring-1.5 focus:ring-[#018F10]"
                             />
                           </div>
                         </div>
@@ -1181,9 +1186,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                           
                           {/* Slot 1: Front view upload dotted placeholder */}
-                          <div className="aspect-video sm:aspect-square bg-slate-50 border-2 border-dashed border-blue-200 rounded-lg flex flex-col items-center justify-center p-3 text-center cursor-pointer hover:bg-blue-50/20 transition-all">
-                            <Camera className="text-blue-400 mb-1.5" size={20} />
-                            <span className="text-[9px] font-extrabold text-[#003366] uppercase tracking-wider">Front View</span>
+                          <div className="aspect-video sm:aspect-square bg-slate-50 border-2 border-dashed border-emerald-200 rounded-lg flex flex-col items-center justify-center p-3 text-center cursor-pointer hover:bg-emerald-50/20 transition-all">
+                            <Camera className="text-emerald-500 mb-1.5" size={20} />
+                            <span className="text-[9px] font-extrabold text-[#018F10] uppercase tracking-wider">Front View</span>
                             <span className="text-[8px] text-slate-400 mt-0.5">Click to upload</span>
                           </div>
 
@@ -1207,7 +1212,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                                       e.currentTarget.src = pl.fallback;
                                     }}
                                   />
-                                  <div className="absolute bottom-2 right-2 bg-[#003366] text-white text-[8px] font-black uppercase px-2 py-0.5 rounded tracking-wide">
+                                  <div className="absolute bottom-2 right-2 bg-[#018F10] text-white text-[8px] font-black uppercase px-2 py-0.5 rounded tracking-wide">
                                     {pl.title}
                                   </div>
                                 </div>
@@ -1241,7 +1246,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                         }}
                         className="sr-only peer"
                       />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#003366]"></div>
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#018F10]"></div>
                       <span className="ml-3 text-xs font-bold text-slate-700">
                         Mark Site Visit as Completed <span className="text-[10px] text-slate-400 font-medium">(Triggers client SMS/Email)</span>
                       </span>
@@ -1254,24 +1259,168 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                         addNotification("Progress Saved", "Draft details written to worksheet.", "info");
                         // Simulating save
                       }}
-                      className="px-6 py-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                      className="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-all shadow-xs"
                     >
                       Save Progress
                     </button>
+                    {stageToTabIndex(order.stage) === activeStepTab && order.stageStatus === "Normal" && (
+                      isEmployee ? (
+                        isTabReadyForNext() && (
+                          <button
+                            type="button"
+                            onClick={handleRequestAdvancement}
+                            className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                          >
+                            Submit for Admin Approval
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleAdminApprove}
+                          className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                        >
+                          Advance to Next Stage
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
 
               </div>
 
-              {/* CARD 2: INTERNAL TEAM LOGS (underneath) */}
+              {/* CARD 2: SITE LOCATION MAP */}
               <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
-                <div className="px-6 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Internal Team Logs</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center space-x-2">
+                  <MapPin size={14} className="text-slate-400" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Site Location</span>
                 </div>
 
-                {/* Manoj K comments mockup style */}
-                <div className="p-6 space-y-4 flex-1">
+                <div className="p-6 space-y-4">
+                  {/* Grayscale map design matching mockup */}
+                  <div className="h-32 bg-slate-100 border border-slate-200 rounded-lg overflow-hidden relative flex items-center justify-center">
+                    <div className="absolute inset-0 bg-[linear-gradient(rgba(200,200,200,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(200,200,200,0.1)_1px,transparent_1px)] bg-[size:16px_16px]" />
+                    <div className="absolute top-1/4 left-1/3 w-24 h-0.5 bg-slate-300 transform -rotate-12" />
+                    <div className="absolute top-1/2 left-1/4 w-32 h-0.5 bg-slate-300 transform rotate-45" />
+                    <div className="absolute top-2/3 left-1/2 w-20 h-0.5 bg-slate-300 transform -rotate-45" />
+                    
+                    <div className="flex flex-col items-center z-10 relative">
+                      <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white shadow-md animate-bounce">
+                        <MapPin size={12} />
+                      </div>
+                      <span className="bg-white text-slate-800 text-[8px] font-black px-2 py-0.5 rounded shadow-xs border border-slate-100 mt-1 uppercase tracking-wider">
+                        MUMBAI BKC HUB
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-500 leading-normal font-semibold">
+                    {client?.shippingAddress || "Plot C-2, G Block, BKC, Bandra (E), Mumbai 400051."}
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="lg:col-span-1 flex flex-col h-full overflow-hidden space-y-6 pr-1">
+              
+              {/* CARD 1: PROJECT DETAILS */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
+                
+                {/* Dark Blue Header */}
+                <div className="bg-[#003568] px-6 py-4 flex items-center justify-between text-white">
+                  <span className="text-[10px] font-black uppercase tracking-widest">Project Details</span>
+                  <button className="text-white/80 hover:text-white transition-colors cursor-pointer" title="Edit Details">
+                    <Pencil size={13} />
+                  </button>
+                </div>
+
+                {/* Card Body */}
+                <div className="p-6 space-y-4 text-xs font-semibold text-slate-600">
+                  
+                  {/* CLIENT IDENTITY */}
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Client Identity</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-[#0c1a2d] rounded-lg flex items-center justify-center text-white shrink-0 font-bold">
+                        H
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-slate-800 text-sm leading-tight">{client?.name || "HDFC Bank Ltd."}</h4>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Regional HQ, Mumbai</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* SIGNAGE TYPE & EST BUDGET */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Signage Type</span>
+                      <p className="font-extrabold text-slate-800 text-xs">{qd.signageType || "ACP 3D Letters"}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Est. Budget</span>
+                      <p className="font-extrabold text-[#107C41] text-xs">₹ {order.budget?.toLocaleString("en-IN") || "2,45,000"}</p>
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* PRIMARY ASSIGNEE */}
+                  <div className="space-y-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Primary Assignee</span>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs shrink-0">
+                        {(sv.sitePersonnel || currentEmployee?.name || "Amit Sharma").split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-slate-800 text-xs leading-tight">{sv.sitePersonnel || currentEmployee?.name || "Amit Sharma"}</h4>
+                        <p className="text-[9px] text-slate-400 mt-0.5">Lead Fabrication Engineer</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* OVERALL PROGRESS */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                      <span>Overall Progress</span>
+                      <span className="text-[#107C41] font-extrabold">{Math.round(((currentStageIndex + 1) / 5) * 100)}%</span>
+                    </div>
+                    
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div 
+                        className="bg-[#107C41] h-full rounded-full transition-all duration-500" 
+                        style={{ width: `${((currentStageIndex + 1) / 5) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col flex-1 min-h-[350px]">
+                <div className="px-6 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between shrink-0">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Internal Team Logs</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsChatPopupOpen(true)}
+                    className="p-1 hover:bg-slate-200 rounded text-slate-500 transition-colors"
+                    title="Open chat in large popup view"
+                  >
+                    <Maximize2 size={13} />
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-4 flex-1 overflow-y-auto">
                   
                   {/* Mock Comment from Screenshot */}
                   <div className="flex items-start space-x-4">
@@ -1324,150 +1473,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     placeholder="Log internal update comment..."
-                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#003366]"
+                    className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#018F10]"
                   />
                   <button
                     type="submit"
-                    className="p-2 bg-[#003366] hover:bg-[#002244] text-white rounded-lg transition-colors cursor-pointer"
+                    className="p-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg transition-colors cursor-pointer"
                   >
                     <Send size={14} />
                   </button>
                 </form>
-              </div>
-
-            </div>
-
-            {/* RIGHT COLUMN: Project Details, Site Location, Quick Actions (30% width or 1 col) */}
-            <div className="space-y-6">
-              
-              {/* CARD 1: PROJECT DETAILS */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
-                
-                {/* Dark Blue Header */}
-                <div className="bg-[#003366] px-6 py-4 flex items-center justify-between text-white">
-                  <span className="text-[10px] font-black uppercase tracking-widest">Project Details</span>
-                  <button className="text-white/80 hover:text-white transition-colors cursor-pointer" title="Edit Details">
-                    <Pencil size={13} />
-                  </button>
-                </div>
-
-                {/* Card Body */}
-                <div className="p-6 space-y-4 text-xs font-semibold text-slate-600">
-                  
-                  {/* CLIENT IDENTITY */}
-                  <div className="space-y-2">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Client Identity</span>
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-[#0c1a2d] rounded-lg flex items-center justify-center text-white shrink-0 font-bold">
-                        H
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-slate-800 text-sm leading-tight">{client?.name || "HDFC Bank Ltd."}</h4>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Regional HQ, Mumbai</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <hr className="border-slate-100" />
-
-                  {/* SIGNAGE TYPE & EST BUDGET */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Signage Type</span>
-                      <p className="font-extrabold text-slate-800 text-xs">{qd.signageType || "ACP 3D Letters"}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Est. Budget</span>
-                      <p className="font-extrabold text-[#107C41] text-xs">₹ {order.budget?.toLocaleString("en-IN") || "2,45,000"}</p>
-                    </div>
-                  </div>
-
-                  <hr className="border-slate-100" />
-
-                  {/* PRIMARY ASSIGNEE */}
-                  <div className="space-y-2">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Primary Assignee</span>
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs shrink-0">
-                        AS
-                      </div>
-                      <div>
-                        <h4 className="font-extrabold text-slate-800 text-xs leading-tight">{sv.sitePersonnel || "Amit Sharma"}</h4>
-                        <p className="text-[9px] text-slate-400 mt-0.5">Lead Fabrication Engineer</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <hr className="border-slate-100" />
-
-                  {/* OVERALL PROGRESS */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                      <span>Overall Progress</span>
-                      <span className="text-[#107C41] font-extrabold">{Math.round(((currentStageIndex + 1) / 5) * 100)}%</span>
-                    </div>
-                    
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div 
-                        className="bg-[#107C41] h-full rounded-full transition-all duration-500" 
-                        style={{ width: `${((currentStageIndex + 1) / 5) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                </div>
-
-              </div>
-
-              {/* CARD 2: SITE LOCATION MAP */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center space-x-2">
-                  <MapPin size={14} className="text-slate-400" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Site Location</span>
-                </div>
-
-                <div className="p-6 space-y-4">
-                  {/* Grayscale map design matching mockup */}
-                  <div className="h-32 bg-slate-100 border border-slate-200 rounded-lg overflow-hidden relative flex items-center justify-center">
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(200,200,200,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(200,200,200,0.1)_1px,transparent_1px)] bg-[size:16px_16px]" />
-                    <div className="absolute top-1/4 left-1/3 w-24 h-0.5 bg-slate-300 transform -rotate-12" />
-                    <div className="absolute top-1/2 left-1/4 w-32 h-0.5 bg-slate-300 transform rotate-45" />
-                    <div className="absolute top-2/3 left-1/2 w-20 h-0.5 bg-slate-300 transform -rotate-45" />
-                    
-                    <div className="flex flex-col items-center z-10 relative">
-                      <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white shadow-md animate-bounce">
-                        <MapPin size={12} />
-                      </div>
-                      <span className="bg-white text-slate-800 text-[8px] font-black px-2 py-0.5 rounded shadow-xs border border-slate-100 mt-1 uppercase tracking-wider">
-                        MUMBAI BKC HUB
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-normal font-semibold">
-                    {client?.shippingAddress || "Plot C-2, G Block, BKC, Bandra (E), Mumbai 400051."}
-                  </p>
-                </div>
-
-              </div>
-
-              {/* CARD 3: SITE LOGS ACTION BUTTONS */}
-              <div className="space-y-3">
-                <button
-                  onClick={() => setShowAuditHistory(!showAuditHistory)}
-                  className="w-full flex items-center justify-center space-x-2 py-3 bg-[#EAF2FA] hover:bg-[#D5E5F5] text-[#003366] rounded-xl text-xs font-bold transition-all border border-[#D5E5F5] shadow-xs"
-                >
-                  <History size={14} />
-                  <span>View Audit History</span>
-                </button>
-                
-                <button
-                  onClick={() => addNotification("Exporting", "Downloading Site Brief PDF...", "info")}
-                  className="w-full flex items-center justify-center space-x-2 py-3 bg-[#EAF2FA] hover:bg-[#D5E5F5] text-[#003366] rounded-xl text-xs font-bold transition-all border border-[#D5E5F5] shadow-xs"
-                >
-                  <Download size={14} />
-                  <span>Download Site Brief</span>
-                </button>
               </div>
 
             </div>
@@ -1478,6 +1492,95 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
 
       </div>
 
+      {/* 3. BIG VIEW CHAT POPUP MODAL */}
+      {isChatPopupOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl h-[80vh] bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-150 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-lg bg-[#0F172A] text-white flex items-center justify-center font-bold text-xs">
+                  LOG
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
+                    Internal Team Chat Logs - {order.projectName}
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Order ID: {order.id}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsChatPopupOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body: Scrollable Comments Area */}
+            <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-50/50">
+              {/* Manoj K comments mockup style */}
+              <div className="flex items-start space-x-4">
+                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs shrink-0">
+                  MK
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-slate-700 leading-relaxed max-w-2xl">
+                    Spoke with client. They need the ACP to have a matte finish, not gloss. Update quotation accordingly.
+                  </div>
+                  <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider pl-1 mt-1">
+                    Manoj K. • 2 Hours Ago
+                  </div>
+                </div>
+              </div>
+
+              {/* Render context chat messages */}
+              {(order.chatHistory || []).map((chat) => {
+                const initials = chat.sender === "System" ? "SYS" : chat.sender.split(" ").map(n => n[0]).join("").toUpperCase();
+                return (
+                  <div key={chat.id} className="flex items-start space-x-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                      chat.sender === "System" ? "bg-slate-200 text-slate-700" : "bg-emerald-100 text-emerald-800"
+                    }`}>
+                      {initials}
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className={`border rounded-lg p-3 text-xs leading-relaxed max-w-2xl ${
+                        chat.sender === "System" 
+                          ? "bg-slate-50 text-slate-650 border-slate-200 italic" 
+                          : "bg-white text-slate-700 border-slate-200"
+                      }`}>
+                        {chat.message}
+                      </div>
+                      <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider pl-1 mt-1">
+                        {chat.sender} • {chat.time}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer: Comment Form */}
+            <form onSubmit={handleSendChat} className="p-4 bg-white border-t border-slate-150 flex items-center space-x-3 shrink-0">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Log internal update comment..."
+                className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#018F10]"
+              />
+              <button
+                type="submit"
+                className="p-2.5 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg transition-colors cursor-pointer font-bold text-xs flex items-center space-x-1.5"
+              >
+                <Send size={13} />
+                <span>Send</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

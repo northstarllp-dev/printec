@@ -175,7 +175,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, orderTo
   const [orderId, setOrderId] = useState("");
   const [projectName, setProjectName] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-  const [stage, setStage] = useState<PipelineStage>("Enquired");
+  const [stage, setStage] = useState<PipelineStage>("Site Visit Pending");
   const [budget, setBudget] = useState("");
   const [depositPaid, setDepositPaid] = useState("");
   const [dimensions, setDimensions] = useState("");
@@ -215,7 +215,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, orderTo
       setOrderId("");
       setProjectName("");
       setSelectedCustomerId("");
-      setStage("Enquired");
+      setStage("Site Visit Pending");
       setBudget("");
       setDepositPaid("");
       setDimensions("");
@@ -238,10 +238,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({ isOpen, onClose, orderTo
     c.phone.includes(custSearch)
   );
 
-  const handleQuickAddCustomer = (e: React.FormEvent) => {
+  const handleQuickAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCustName || !newCustPhone) return;
-    const added = addCustomer({
+    const added = await addCustomer({
       name: newCustName,
       phone: newCustPhone,
       whatsapp: newCustPhone,

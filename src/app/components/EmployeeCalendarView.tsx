@@ -5,15 +5,16 @@ import { Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRigh
 import { useDashboard } from "@/context/DashboardContext";
 
 export const EmployeeCalendarView: React.FC = () => {
-  const { orders, customers } = useDashboard();
+  const { orders, customers, currentEmployee } = useDashboard();
   const [currentMonth, setCurrentMonth] = useState("October 2023");
 
-  // Filter site visits and installations assigned to AK (Amit Sharma)
+  // Filter site visits and installations assigned to currently logged-in staff
+  const empName = currentEmployee?.name || "Amit Sharma";
   const mySchedule = orders
-    .filter(o => o.assignedEmployees.includes("AK") && o.stage !== "Order Completed")
+    .filter(o => o.assignedEmployees.includes(empName) && o.stage !== "Completed" && o.stage !== "Closed")
     .map(o => {
       const client = customers.find(c => c.id === o.customerId);
-      const isSiteVisit = o.stage === "Enquired" || o.stage === "Site Visit";
+      const isSiteVisit = o.stage === "Site Visit Pending" || o.stage === "Site Visit Scheduled" || o.stage === "Site Visit Completed";
       return {
         id: o.id,
         projectName: o.projectName,

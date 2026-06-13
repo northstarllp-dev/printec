@@ -28,14 +28,14 @@ export default function RootGateway() {
     }}>
       {/* Logo */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 48, userSelect: "none" }}>
-        <div style={{ width: 44, height: 44, background: "var(--primary-900)", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <svg viewBox="0 0 24 24" style={{ width: 22, height: 22, color: "var(--secondary-500)" }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <div style={{ width: 44, height: 44, background: "#0F172A", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <svg viewBox="0 0 24 24" style={{ width: 22, height: 22, color: "#018F10" }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 20h18" />
             <path d="M5 20l-1.5 2.5" /><path d="M9 20l-1.5 2.5" /><path d="M13 20l-1.5 2.5" /><path d="M17 20l-1.5 2.5" />
             <path d="M6 20V11" />
-            <circle cx="6" cy="11" r="1.2" fill="var(--secondary-500)" />
+            <circle cx="6" cy="11" r="1.2" fill="#018F10" />
             <path d="M6 11l6-4.5" />
-            <circle cx="12" cy="6.5" r="1.2" fill="var(--secondary-500)" />
+            <circle cx="12" cy="6.5" r="1.2" fill="#018F10" />
             <path d="M12 6.5l5 3.5" />
             <path d="M17 10l1.2-1.8" /><path d="M16.2 10.8l1.2-1.8" /><path d="M18 9l-2-2" />
           </svg>
@@ -76,7 +76,7 @@ export default function RootGateway() {
             boxShadow: "none",
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "var(--primary-900)";
+            e.currentTarget.style.borderColor = "#003568";
             e.currentTarget.style.transform = "translateY(-1px)";
           }}
           onMouseLeave={e => {
@@ -84,14 +84,14 @@ export default function RootGateway() {
             e.currentTarget.style.transform = "translateY(0)";
           }}
         >
-          <div style={{ width: 40, height: 40, background: "var(--primary-900)", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
-            <Shield size={18} color="var(--secondary-500)" />
+          <div style={{ width: 40, height: 40, background: "#003568", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+            <Shield size={18} color="white" />
           </div>
           <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Admin Portal</div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 20, flex: 1 }}>
             Manage orders, review enquiries, coordinate teams, and oversee billing.
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--secondary-500)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#018F10" }}>
             Go to Admin Login <ArrowRight size={13} />
           </div>
         </button>
@@ -113,7 +113,7 @@ export default function RootGateway() {
             boxShadow: "none",
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "var(--secondary-500)";
+            e.currentTarget.style.borderColor = "#018F10";
             e.currentTarget.style.transform = "translateY(-1px)";
           }}
           onMouseLeave={e => {
@@ -121,14 +121,14 @@ export default function RootGateway() {
             e.currentTarget.style.transform = "translateY(0)";
           }}
         >
-          <div style={{ width: 40, height: 40, background: "var(--secondary-500)", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, background: "#018F10", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
             <Users size={18} color="white" />
           </div>
           <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Staff Portal</div>
           <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 20, flex: 1 }}>
             View your assigned tasks, upload site measurements, and update job status.
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--secondary-500)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#018F10" }}>
             Go to Staff Login <ArrowRight size={13} />
           </div>
         </button>

@@ -1,27 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, Plus, MoreVertical, AlertCircle, CheckCircle, Clock, Phone } from "lucide-react";
+import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone } from "lucide-react";
 import { useDashboard } from "@/context/DashboardContext";
-
-const generateMockEnquiries = () => {
-  const sources = ["Phone Call", "Email", "Website", "Referral"];
-  const enquiries = [];
-  for (let i = 1; i <= 128; i++) {
-    enquiries.push({
-      id: String(i),
-      date: new Date(2023, 9, 25 - Math.floor(i / 5)).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }),
-      leadName: `Lead ${i} (Customer ${Math.floor(Math.random() * 50) + 1})`,
-      phone: `+91 ${String(Math.floor(Math.random() * 9000000000) + 1000000000).slice(0, 10)}`,
-      source: sources[i % sources.length],
-      status: ["Pending", "Contacted", "Quoted", "Converted"][i % 4],
-      notes: "Interested in signage solutions for their business",
-    });
-  }
-  return enquiries;
-};
-
-const mockEnquiries = generateMockEnquiries();
+import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
+import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -34,37 +17,64 @@ const getStatusColor = (status: string) => {
 };
 
 export function EnquiriesView() {
+  const { enquiries, convertEnquiryToOrder, addEnquiry } = useDashboard()!;
   const [searchTerm, setSearchTerm] = useState("");
-  const [enquiries] = useState(mockEnquiries);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [convertModalOpen, setConvertModalOpen] = useState(false);
+  const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, leadName: string} | null>(null);
+
+  const handleAddEnquiry = async (data: EnquiryFormData) => {
+    try {
+      await addEnquiry({
+        leadName: data.leadName,
+        phone: data.phone,
+        whatsapp: data.whatsappNumber,
+        email: data.email,
+        source: data.primaryMode === "whatsapp" ? "WhatsApp" : "Phone Call",
+        notes: data.notes,
+        primaryCommunicationMode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
+        location: data.location
+      });
+      setIsAddModalOpen(false);
+    } catch (error) {
+      console.error("Error adding enquiry:", error);
+      alert("Failed to add enquiry. Check console.");
+    }
+  };
+
+  const totalEnquiries = enquiries.length;
+  const pendingResponses = enquiries.filter(e => e.status === "Pending").length;
+  const convertedCount = enquiries.filter(e => e.status === "Converted").length;
+  const conversionRate = totalEnquiries > 0 ? Math.round((convertedCount / totalEnquiries) * 100) : 0;
 
   const stats = [
     {
       label: "TOTAL ENQUIRIES",
-      value: "347",
-      change: "+25 this week",
+      value: totalEnquiries.toString(),
+      change: "All time",
       icon: AlertCircle,
       color: "#3b82f6",
     },
     {
       label: "PENDING RESPONSES",
-      value: "12",
+      value: pendingResponses.toString(),
       change: "Requires action",
       icon: Clock,
       color: "#f59e0b",
     },
     {
-      label: "CONTACTED",
-      value: "85",
-      change: "+12 since yesterday",
-      icon: Phone,
+      label: "CONVERTED",
+      value: convertedCount.toString(),
+      change: "Total successful orders",
+      icon: CheckCircle,
       color: "#06b6d4",
     },
     {
       label: "CONVERSION RATE",
-      value: "34%",
-      change: "Above target (30%)",
+      value: `${conversionRate}%`,
+      change: "Based on all enquiries",
       icon: CheckCircle,
-      color: "#22c55e",
+      color: "#018F10",
     },
   ];
 
@@ -84,7 +94,7 @@ export function EnquiriesView() {
           <button
             style={{
               padding: "10px 16px",
-              background: "#22c55e",
+              background: "#018F10",
               border: "none",
               borderRadius: "8px",
               cursor: "pointer",
@@ -97,11 +107,12 @@ export function EnquiriesView() {
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#16a34a";
+              e.currentTarget.style.background = "#01730c";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#22c55e";
+              e.currentTarget.style.background = "#018F10";
             }}
+            onClick={() => setIsAddModalOpen(true)}
           >
             <Plus size={16} /> New Enquiry
           </button>
@@ -152,7 +163,7 @@ export function EnquiriesView() {
       </div>
 
       {/* Table Section */}
-      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible" }}>
         {/* Search & Filter Bar */}
         <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{ flex: 1, position: "relative" }}>
@@ -202,7 +213,7 @@ export function EnquiriesView() {
         </div>
 
         {/* Table with Scrollbar */}
-        <div style={{ overflowY: "auto", maxHeight: "600px", overflowX: "auto" }}>
+        <div style={{ overflow: "visible" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
@@ -210,34 +221,81 @@ export function EnquiriesView() {
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>LEAD NAME</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>SOURCE</th>
-                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>STATUS</th>
-                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIONS</th>
+                <th style={{ padding: "14px 20px", textAlign: "right", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
-              {enquiries.map((enq) => {
+              {enquiries.filter(e => e.leadName.toLowerCase().includes(searchTerm.toLowerCase()) || e.phone.includes(searchTerm)).map((enq) => {
                 const statusColor = getStatusColor(enq.status);
                 return (
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{enq.date}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{new Date(enq.dateReceived).toLocaleDateString()}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{enq.leadName}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{enq.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>{enq.source}</td>
-                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                      <span style={{ display: "inline-block", padding: "4px 12px", background: statusColor.bg, color: statusColor.text, borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>{statusColor.label}</span>
-                    </td>
-                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                      <button style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px 8px", transition: "all 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.color = "#475569"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; }}>
-                        <MoreVertical size={16} />
-                      </button>
+                    <td style={{ padding: "16px 20px", textAlign: "right" }}>
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                        <button 
+                          onClick={() => alert(`Sending Welcome Message via ${enq.primaryCommunicationMode === 'WHATSAPP' ? 'WhatsApp' : 'Email'} to ${enq.leadName}`)}
+                          style={{ padding: "6px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#475569", cursor: "pointer", transition: "all 0.2s" }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "#e2e8f0"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "#f1f5f9"}
+                        >
+                          Send Welcome Msg
+                        </button>
+                        {enq.status !== "Converted" ? (
+                          <button 
+                            onClick={() => {
+                              setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
+                              setConvertModalOpen(true);
+                            }}
+                            style={{ padding: "6px 12px", background: "#018F10", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "#01730c"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = "#018F10"}
+                          >
+                            Convert to Order
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: "12px", fontWeight: "600", color: "#16a34a", padding: "6px 12px" }}>Converted</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
               })}
+              {enquiries.length === 0 && (
+                <tr>
+                  <td colSpan={5} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
+                    No enquiries found matching your search.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
+      
+      <AddEnquiryModal 
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSubmit={handleAddEnquiry}
+      />
+
+      {selectedEnquiry && (
+        <ConvertEnquiryModal
+          isOpen={convertModalOpen}
+          onClose={() => {
+            setConvertModalOpen(false);
+            setSelectedEnquiry(null);
+          }}
+          defaultProjectName={`New Project for ${selectedEnquiry.leadName}`}
+          onSubmit={async (projectName, budget) => {
+            await convertEnquiryToOrder(selectedEnquiry.id, [], projectName, budget);
+            setConvertModalOpen(false);
+            setSelectedEnquiry(null);
+          }}
+        />
+      )}
     </div>
   );
 }

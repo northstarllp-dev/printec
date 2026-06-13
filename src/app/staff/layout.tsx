@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   Bell, CheckCircle, AlertCircle, Info, LogOut,
   Calendar, ClipboardList, PhoneCall, User, History,
-  RotateCcw, Menu
+  RotateCcw, Menu, Key, Lock, Loader2
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { useDashboard } from "@/context/DashboardContext";
@@ -16,51 +16,61 @@ export default function StaffLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isWorksheetPage = pathname.startsWith("/staff/orders/") && pathname !== "/staff/orders";
   const { 
     notifications, 
     markAllNotificationsRead, 
     clearNotifications,
     isAuthenticated, 
+    isAuthLoading,
     logout, 
     currentUserRole,
+    currentEmployee,
     activities, 
     undoActivity,
-    selectedOrderForWorksheet
+    selectedOrderForWorksheet,
+    changePassword
   } = useDashboard();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+
+  useEffect(() => {
+    if (!isAuthLoading && pathname !== "/staff/login") {
+      if (!isAuthenticated || currentUserRole !== "Employee") {
+        router.push("/staff/login");
+      }
+    }
+  }, [isAuthenticated, currentUserRole, pathname, router, isAuthLoading]);
 
   // If we are on the login page, don't show the layout header
   if (pathname === "/staff/login") {
     return <>{children}</>;
   }
 
-  if (!isAuthenticated || currentUserRole !== "Employee") {
+  if (isAuthLoading || !isAuthenticated || currentUserRole !== "Employee") {
     return (
       <div style={{ minHeight:"100vh", background:"#0F172A", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
-        <div style={{ width:36, height:36, border:"3px solid #22C55E", borderTopColor:"transparent", borderRadius:"50%", animation:"prt-spin 0.8s linear infinite" }} />
+        <div style={{ width:36, height:36, border:"3px solid #018F10", borderTopColor:"transparent", borderRadius:"50%", animation:"prt-spin 0.8s linear infinite" }} />
         <span style={{ fontSize:13, color:"#64748B" }}>Redirecting to Staff Portal…</span>
       </div>
     );
   }
 
-  if (selectedOrderForWorksheet) {
-    return (
-      <div style={{ display: "flex", minHeight: "100vh", background: "var(--color-background)", width: "100%" }}>
-        {children}
-      </div>
-    );
-  }
+
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const navItems = [
     { id: "/staff/orders", label: "Tasks" },
-    { id: "/staff/enquire", label: "Enquire" },
-    { id: "/staff/team", label: "Team" },
   ] as const;
 
   const isActivePath = (itemPath: string) => {
@@ -71,12 +81,29 @@ export default function StaffLayout({
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "var(--color-background)" }}>
+    <div style={{ display: "flex", height: isWorksheetPage ? "100vh" : "auto", minHeight: "100vh", background: "var(--color-background)", overflow: isWorksheetPage ? "hidden" : "visible" }}>
       {/* ── MAIN WORKSPACE ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         
         {/* Workspace Top Row */}
+        {!isWorksheetPage && (
         <header style={{ display: "flex", alignItems: "center", width: "100%", height: "56px", background: "white", borderBottom: "1px solid #e2e8f0", paddingLeft: "32px", paddingRight: "32px", position: "sticky", top: 0, zIndex: 40 }}>
+          {/* Logo & Portal Role Indicator */}
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginRight: "32px", flexShrink: 0 }}>
+            <div style={{ width: "28px", height: "28px", background: "#0F172A", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", color: "#018F10" }} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 20h18" /><path d="M6 20V11" />
+                <circle cx="6" cy="11" r="1" fill="#018F10" />
+                <path d="M6 11l6-4.5" />
+                <circle cx="12" cy="6.5" r="1" fill="#018F10" />
+                <path d="M12 6.5l5 3.5" />
+              </svg>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", lineHeight: "1" }}>
+              <span style={{ fontSize: "13px", fontWeight: "800", color: "#0F172A", letterSpacing: "0.03em" }}>PRINTEC</span>
+              <span style={{ fontSize: "9px", color: "#018F10", fontWeight: "700", textTransform: "uppercase", marginTop: "1px" }}>Staff Portal</span>
+            </div>
+          </div>
           <nav style={{ display: "flex", gap: "24px", height: "100%", alignItems: "center" }}>
             {navItems.map(item => {
               const isActive = isActivePath(item.id);
@@ -87,8 +114,8 @@ export default function StaffLayout({
                   style={{
                     background: "none",
                     border: "none",
-                    borderBottom: isActive ? "3px solid #22c55e" : "none",
-                    color: isActive ? "#22c55e" : "#64748b",
+                    borderBottom: isActive ? "3px solid #018F10" : "none",
+                    color: isActive ? "#018F10" : "#64748b",
                     fontSize: "14px",
                     fontWeight: isActive ? "700" : "600",
                     cursor: "pointer",
@@ -217,17 +244,27 @@ export default function StaffLayout({
                 className="flex items-center gap-3 bg-transparent border-none cursor-pointer"
               >
                 <div className="w-10 h-10 rounded-full border-2 border-[var(--color-primary-container)] bg-[var(--color-surface-container-high)] flex items-center justify-center font-bold text-[var(--color-primary)]">
-                  AS
+                  {currentEmployee ? currentEmployee.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "AS"}
                 </div>
                 <div className="hidden lg:block text-left">
-                  <p className="text-body-md font-bold leading-tight">Amit S.</p>
-                  <p className="text-[10px] uppercase font-bold text-[var(--color-on-surface-variant)]">Field Agent</p>
+                  <p className="text-body-md font-bold leading-tight">{currentEmployee?.name || "Amit Sharma"}</p>
+                  <p className="text-[10px] uppercase font-bold text-[var(--color-on-surface-variant)]">{currentEmployee?.role || "Field Agent"}</p>
                 </div>
               </button>
               {isProfileOpen && (
                 <>
                   <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsProfileOpen(false)} />
                   <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 180, background: "white", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-pop)", zIndex: 50, overflow: "hidden", padding: 4 }}>
+                    <button
+                      onClick={() => { setIsChangePasswordModalOpen(true); setIsProfileOpen(false); setPasswordError(""); setPasswordSuccess(""); setNewPassword(""); setConfirmPassword(""); }}
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}
+                      onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-hover)")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "none")}
+                    >
+                      <Key size={14} />
+                      Change Password
+                    </button>
+                    <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
                     <button
                       onClick={() => { logout(); router.push("/staff/login"); }}
                       style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: 13, fontWeight: 600, color: "#EF4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}
@@ -243,9 +280,10 @@ export default function StaffLayout({
             </div>
           </div>
         </header>
+        )}
 
         {/* Mobile Dropdown Menu */}
-        {isMobileMenuOpen && (
+        {!isWorksheetPage && isMobileMenuOpen && (
           <div style={{ background: "white", borderBottom: "1px solid var(--border)", padding: "12px 24px", display: "flex", flexDirection: "column", gap: 2 }} className="show-mobile">
             {navItems.map(item => {
               const isActive = isActivePath(item.id);
@@ -270,12 +308,111 @@ export default function StaffLayout({
         )}
 
         {/* Main Workspace Scroll Area */}
-        <main style={{ flex: 1, overflowY: "auto", background: "var(--background)" }}>
-          <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        <main style={isWorksheetPage ? { flex: 1, background: "var(--color-background)" } : { flex: 1, overflowY: "auto", background: "var(--background)" }}>
+          <div style={isWorksheetPage ? { width: "100%" } : { maxWidth: 1280, margin: "0 auto" }}>
             {children}
           </div>
         </main>
       </div>
+
+      {isChangePasswordModalOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: "white", width: "100%", maxWidth: "400px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)", padding: "24px" }} className="prt-animate-in">
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#018F10" }}>
+                <Lock size={16} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: "16px", fontWeight: "800", color: "#0F172A", margin: 0 }}>Change Password</h3>
+                <p style={{ fontSize: "11px", color: "#64748B", margin: 0 }}>Update your staff portal password credentials</p>
+              </div>
+            </div>
+
+            {passwordError && (
+              <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: "6px", fontSize: "12px", color: "#BE123C", fontWeight: "600" }}>
+                {passwordError}
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#DCFCE7", border: "1px solid #BBF7D0", borderRadius: "6px", fontSize: "12px", color: "#16A34A", fontWeight: "600" }}>
+                {passwordSuccess}
+              </div>
+            )}
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setPasswordError("");
+              setPasswordSuccess("");
+              if (newPassword.length < 6) {
+                setPasswordError("Password must be at least 6 characters long.");
+                return;
+              }
+              if (newPassword !== confirmPassword) {
+                setPasswordError("Passwords do not match.");
+                return;
+              }
+
+              setIsSubmittingPassword(true);
+              const res = await changePassword(newPassword);
+              setIsSubmittingPassword(false);
+
+              if (res.success) {
+                setPasswordSuccess(res.message);
+                setTimeout(() => {
+                  setIsChangePasswordModalOpen(false);
+                  setNewPassword("");
+                  setConfirmPassword("");
+                }, 1500);
+              } else {
+                setPasswordError(res.message);
+              }
+            }} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: "#475569", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", padding: "8px 12px", outline: "none" }}
+                  placeholder="Minimum 6 characters"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: "#475569", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Confirm New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", padding: "8px 12px", outline: "none" }}
+                  placeholder="Repeat new password"
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordModalOpen(false)}
+                  disabled={isSubmittingPassword}
+                  style={{ flex: 1, padding: "8px 16px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: "700", color: "#475569", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPassword}
+                  style={{ flex: 1, padding: "8px 16px", background: "#018F10", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                >
+                  {isSubmittingPassword ? <Loader2 size={14} style={{ animation: "prt-spin 1s linear infinite" }} /> : "Update Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @media (max-width: 768px) {
