@@ -733,10 +733,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
   };
 
   return (
-    <div className="flex-1 w-full bg-[#f8fafc] flex flex-row h-full text-slate-800 font-sans overflow-hidden" style={{ height: "100%" }}>
+    <div className="flex-1 w-full bg-[#f8fafc] flex flex-row text-slate-800 font-sans">
       
       {/* 1. LEFT SIDEBAR */}
-      <aside className="w-[240px] bg-[#f0f4f8] border-r border-slate-200 flex flex-col select-none shrink-0 h-full" style={{ height: "100%" }}>
+      <aside className="w-[240px] bg-[#f0f4f8] border-r border-slate-200 flex flex-col select-none shrink-0 sticky top-0 h-screen">
         
         {/* Logo Section */}
         <div className="p-6 border-b border-slate-200 flex items-center space-x-3">
@@ -876,10 +876,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
       </aside>
 
       {/* 2. RIGHT WORKSPACE CONTENT */}
-      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0">
         
         {/* Workspace Top Header (Notification Bell & User profile) */}
-        <header className="h-14 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0">
+        <header className="h-14 bg-white border-b border-slate-200 px-8 flex items-center justify-between shrink-0 sticky top-0 z-30 shadow-xs">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => {
@@ -914,7 +914,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
         </header>
 
         {/* Worksheet Main Content Container */}
-        <div className="flex-1 p-8 flex flex-col min-h-0 overflow-hidden space-y-6">
+        <div className="p-8 flex flex-col space-y-6">
           
           {/* A. Breadcrumbs & Title Bar */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
@@ -935,9 +935,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
           </div>
 
           {/* B. Two-Column Content Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 flex-1 min-h-0 overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             
-            <div className="lg:col-span-3 space-y-6 flex flex-col overflow-y-auto h-full pr-4 pb-6">
+            <div className="lg:col-span-3 space-y-6 flex flex-col pr-1">
               
               {/* Warning/Banners */}
               {isSlaOverdue && activeStepTab === 0 && (
@@ -1265,22 +1265,31 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                     </button>
                     {stageToTabIndex(order.stage) === activeStepTab && order.stageStatus === "Normal" && (
                       isEmployee ? (
-                        isTabReadyForNext() && (
+                        isTabReadyForNext() ? (
                           <button
                             type="button"
                             onClick={handleRequestAdvancement}
-                            className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                            className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
                           >
                             Submit for Admin Approval
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled
+                            className="px-6 py-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold cursor-not-allowed"
+                            title="Complete all required fields in this stage to submit."
+                          >
+                            Submit for Admin Approval (Pending Fields)
                           </button>
                         )
                       ) : (
                         <button
                           type="button"
                           onClick={handleAdminApprove}
-                          className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs"
+                          className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
                         >
-                          Advance to Next Stage
+                          Approve & Advance Stage
                         </button>
                       )
                     )}
@@ -1289,40 +1298,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
 
               </div>
 
-              {/* CARD 2: SITE LOCATION MAP */}
-              <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center space-x-2">
-                  <MapPin size={14} className="text-slate-400" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Site Location</span>
-                </div>
-
-                <div className="p-6 space-y-4">
-                  {/* Grayscale map design matching mockup */}
-                  <div className="h-32 bg-slate-100 border border-slate-200 rounded-lg overflow-hidden relative flex items-center justify-center">
-                    <div className="absolute inset-0 bg-[linear-gradient(rgba(200,200,200,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(200,200,200,0.1)_1px,transparent_1px)] bg-[size:16px_16px]" />
-                    <div className="absolute top-1/4 left-1/3 w-24 h-0.5 bg-slate-300 transform -rotate-12" />
-                    <div className="absolute top-1/2 left-1/4 w-32 h-0.5 bg-slate-300 transform rotate-45" />
-                    <div className="absolute top-2/3 left-1/2 w-20 h-0.5 bg-slate-300 transform -rotate-45" />
-                    
-                    <div className="flex flex-col items-center z-10 relative">
-                      <div className="w-6 h-6 rounded-full bg-red-600 flex items-center justify-center text-white shadow-md animate-bounce">
-                        <MapPin size={12} />
-                      </div>
-                      <span className="bg-white text-slate-800 text-[8px] font-black px-2 py-0.5 rounded shadow-xs border border-slate-100 mt-1 uppercase tracking-wider">
-                        MUMBAI BKC HUB
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-500 leading-normal font-semibold">
-                    {client?.shippingAddress || "Plot C-2, G Block, BKC, Bandra (E), Mumbai 400051."}
-                  </p>
-                </div>
-              </div>
-
             </div>
 
-            <div className="lg:col-span-1 flex flex-col h-full overflow-hidden space-y-6 pr-1">
+            <div className="lg:col-span-1 flex flex-col space-y-6 pr-1">
               
               {/* CARD 1: PROJECT DETAILS */}
               <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden flex flex-col">
@@ -1350,6 +1328,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                         <p className="text-[10px] text-slate-400 mt-0.5">Regional HQ, Mumbai</p>
                       </div>
                     </div>
+                  </div>
+
+                  <hr className="border-slate-100" />
+
+                  {/* SITE ADDRESS */}
+                  <div className="space-y-1">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Site Address</span>
+                    <p className="font-semibold text-slate-700 text-xs leading-normal">
+                      {client?.shippingAddress || "Plot C-2, G Block, BKC, Bandra (E), Mumbai 400051."}
+                    </p>
                   </div>
 
                   <hr className="border-slate-100" />

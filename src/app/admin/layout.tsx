@@ -83,7 +83,7 @@ export default function AdminLayout({
   };
 
   return (
-    <div style={{ display: "flex", height: isWorksheetPage ? "100vh" : "auto", minHeight: "100vh", background: "var(--color-background)", overflow: isWorksheetPage ? "hidden" : "visible" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "var(--color-background)" }}>
       {/* ── MAIN WORKSPACE ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         
@@ -299,8 +299,8 @@ export default function AdminLayout({
           </div>
         )}
 
-        <main style={isWorksheetPage ? { flex: 1, display: "flex", flexDirection: "column", height: "100%", background: "var(--color-background)", overflow: "hidden" } : { flex: 1, overflowY: "auto", background: "var(--background)" }}>
-          <div style={isWorksheetPage ? { width: "100%", height: "100%", display: "flex", flexDirection: "column", flex: 1 } : { maxWidth: 1280, margin: "0 auto" }}>
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--color-background)" }}>
+          <div style={isWorksheetPage ? { width: "100%", display: "flex", flexDirection: "column", flex: 1 } : { maxWidth: 1280, margin: "0 auto" }}>
             {children}
           </div>
         </main>
