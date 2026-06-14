@@ -1,14 +1,18 @@
 "use client";
 
 import React, { useState } from "react";
-import { Calendar as CalendarIcon, Clock, MapPin, User, ChevronLeft, ChevronRight, Phone } from "lucide-react";
-import { useDashboard } from "@/context/DashboardContext";
+import { Clock, MapPin, ChevronLeft, ChevronRight, Phone } from "lucide-react";
+import { Order, Customer, Employee } from "@/types";
 
-export const EmployeeCalendarView: React.FC = () => {
-  const { orders, customers, currentEmployee } = useDashboard();
+interface EmployeeCalendarViewProps {
+  orders: Order[];
+  customers: Customer[];
+  currentEmployee: Employee;
+}
+
+export const EmployeeCalendarView: React.FC<EmployeeCalendarViewProps> = ({ orders, customers, currentEmployee }) => {
   const [currentMonth, setCurrentMonth] = useState("October 2023");
 
-  // Filter site visits and installations assigned to currently logged-in staff
   const empName = currentEmployee?.name || "Amit Sharma";
   const mySchedule = orders
     .filter(o => o.assignedEmployees.includes(empName) && o.stage !== "Completed" && o.stage !== "Closed")

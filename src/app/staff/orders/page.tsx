@@ -42,13 +42,17 @@ export default async function StaffOrdersPage() {
     assignedEmployees: o.assigned_employees || [],
     dateCreated: o.date_created,
     deadlineStatus: o.deadline_status,
-    customerName: o.customer_name || ""
+    customerName: o.customer_name || "",
+    orderCode: o.order_id || o.id,
+    orderId: o.order_id || o.id
   })) || [];
 
   const mappedCustomers = customers?.map(c => ({
     id: c.id,
     name: c.name,
-    phone: c.phone
+    phone: c.phone,
+    customerCode: c.customer_id || c.id,
+    customerId: c.customer_id || c.id
   })) || [];
 
   const mappedEmployees = employeesData?.map(e => ({

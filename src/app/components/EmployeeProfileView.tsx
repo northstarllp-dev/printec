@@ -1,11 +1,14 @@
 "use client";
 
 import React from "react";
-import { User, Phone, Mail, Award, CheckCircle, ShieldAlert } from "lucide-react";
-import { useDashboard } from "@/context/DashboardContext";
+import { Phone, Mail, Award, CheckCircle, ShieldAlert } from "lucide-react";
+import { Employee } from "@/types";
 
-export const EmployeeProfileView: React.FC = () => {
-  const { currentEmployee } = useDashboard();
+interface EmployeeProfileViewProps {
+  currentEmployee: Employee;
+}
+
+export const EmployeeProfileView: React.FC<EmployeeProfileViewProps> = ({ currentEmployee }) => {
   const getInitials = (name: string) => {
     return name.split(" ").map(n => n[0]).join("").toUpperCase();
   };

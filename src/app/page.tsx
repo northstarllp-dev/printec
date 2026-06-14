@@ -1,19 +1,19 @@
-"use client";
-
-import React, { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { useDashboard } from "@/context/DashboardContext";
+import React from "react";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/app/actions/authActions";
 import { Shield, Users, ArrowRight, BarChart3, ClipboardList } from "lucide-react";
+import Link from "next/link";
 
-export default function RootGateway() {
-  const router = useRouter();
-  const { isAuthenticated, currentUserRole } = useDashboard();
+export default async function RootGateway() {
+  const profile = await getCurrentUser();
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.push(currentUserRole === "Admin" ? "/admin" : "/staff");
+  if (profile) {
+    if (profile.role === "admin") {
+      redirect("/admin/orders");
+    } else {
+      redirect("/staff/orders");
     }
-  }, [isAuthenticated, currentUserRole, router]);
+  }
 
   return (
     <div style={{
@@ -60,8 +60,8 @@ export default function RootGateway() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, width: "100%", maxWidth: 600 }}>
 
         {/* Admin Card */}
-        <button
-          onClick={() => router.push("/admin/login")}
+        <Link
+          href="/admin/login"
           style={{
             background: "var(--surface-container-lowest)",
             border: "1px solid var(--border)",
@@ -73,15 +73,8 @@ export default function RootGateway() {
             display: "flex",
             flexDirection: "column",
             gap: 0,
-            boxShadow: "none",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "#003568";
-            e.currentTarget.style.transform = "translateY(-1px)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "var(--border)";
-            e.currentTarget.style.transform = "translateY(0)";
+            textDecoration: "none",
+            color: "inherit",
           }}
         >
           <div style={{ width: 40, height: 40, background: "#003568", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
@@ -94,11 +87,11 @@ export default function RootGateway() {
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#018F10" }}>
             Go to Admin Login <ArrowRight size={13} />
           </div>
-        </button>
+        </Link>
 
         {/* Staff Card */}
-        <button
-          onClick={() => router.push("/staff/login")}
+        <Link
+          href="/staff/login"
           style={{
             background: "var(--surface-container-lowest)",
             border: "1px solid var(--border)",
@@ -110,15 +103,8 @@ export default function RootGateway() {
             display: "flex",
             flexDirection: "column",
             gap: 0,
-            boxShadow: "none",
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.borderColor = "#018F10";
-            e.currentTarget.style.transform = "translateY(-1px)";
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.borderColor = "var(--border)";
-            e.currentTarget.style.transform = "translateY(0)";
+            textDecoration: "none",
+            color: "inherit",
           }}
         >
           <div style={{ width: 40, height: 40, background: "#018F10", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
@@ -131,7 +117,7 @@ export default function RootGateway() {
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#018F10" }}>
             Go to Staff Login <ArrowRight size={13} />
           </div>
-        </button>
+        </Link>
       </div>
 
       {/* Stats row */}

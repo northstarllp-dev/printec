@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, Plus, MoreVertical, MapPin, Mail, Phone } from "lucide-react";
-
-// Using real data from Server Components
+import { Search, Filter, MapPin, Mail, Phone, X, ShoppingBag, ExternalLink, Share2 } from "lucide-react";
 
 const getStatusColor = (status: string | undefined) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -14,12 +12,36 @@ const getStatusColor = (status: string | undefined) => {
   return colors[status || "Active"] || colors["Active"];
 };
 
-export function CustomersViewNew({ initialCustomers }: { initialCustomers: any[] }) {
+const getHealthBadgeColor = (health: string) => {
+  const colors: Record<string, string> = {
+    "Active": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    "On Hold": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    "Lost": "bg-rose-500/10 text-rose-600 border-rose-500/20",
+    "Cancelled": "bg-slate-500/10 text-slate-600 border-slate-500/20",
+    "Completed": "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
+  };
+  return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
+};
+
+export function CustomersViewNew({ 
+  initialCustomers, 
+  initialOrders = [] 
+}: { 
+  initialCustomers: any[], 
+  initialOrders?: any[] 
+}) {
   const [customers, setCustomers] = useState(initialCustomers);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [copiedCustomerId, setCopiedCustomerId] = useState<string | null>(null);
+  const [copiedOrderId, setCopiedOrderId] = useState<string | null>(null);
 
-  const handleCopyLink = async (customerId: string) => {
+  const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+  const customerOrders = selectedCustomer ? initialOrders.filter(o => o.customerId === selectedCustomer.id) : [];
+  const totalSpend = customerOrders.reduce((sum, o) => sum + (Number(o.budget) || 0), 0);
+
+  const handleCopyLink = async (customerId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent row selection when copying portal link
     try {
       const res = await fetch(`/api/portal-token?customer_id=${customerId}`);
       const data = await res.json();
@@ -31,6 +53,22 @@ export function CustomersViewNew({ initialCustomers }: { initialCustomers: any[]
     } catch (err) {
       console.error("Error fetching portal token:", err);
       alert("Failed to retrieve customer portal link");
+    }
+  };
+
+  const handleCopyOrderLink = async (customerId: string, orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch(`/api/portal-token?customer_id=${customerId}&order_id=${orderId}`);
+      const data = await res.json();
+      if (data.url) {
+        await navigator.clipboard.writeText(data.url);
+        setCopiedOrderId(orderId);
+        setTimeout(() => setCopiedOrderId(null), 2000);
+      }
+    } catch (err) {
+      console.error("Error fetching portal token:", err);
+      alert("Failed to retrieve order portal link");
     }
   };
 
@@ -63,12 +101,19 @@ export function CustomersViewNew({ initialCustomers }: { initialCustomers: any[]
     },
     {
       label: "YTD REVENUE",
-      value: "₹4.2M",
-      change: "+22% from last year",
+      value: "₹" + (initialOrders.reduce((acc, curr) => acc + (Number(curr.budget) || 0), 0) / 100000).toFixed(1) + "L",
+      change: "Based on active pipeline",
       icon: MapPin,
       color: "#06b6d4",
     },
   ];
+
+  const filteredCustomers = customers.filter(c => 
+    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    c.phone.includes(searchTerm) || 
+    c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.customerCode.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
@@ -77,13 +122,12 @@ export function CustomersViewNew({ initialCustomers }: { initialCustomers: any[]
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
           <div>
             <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 8px" }}>
-              Customers
+              Customers Database
             </h1>
             <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
-              Browse and manage customer database entries and contact information
+              Browse customer contact details, profile info, and linked project orders
             </p>
           </div>
-
         </div>
 
         {/* Stats Cards */}
@@ -99,15 +143,6 @@ export function CustomersViewNew({ initialCustomers }: { initialCustomers: any[]
                   borderRadius: "12px",
                   padding: "20px",
                   transition: "all 0.3s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
-                  e.currentTarget.style.transform = "translateY(-2px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = "none";
-                  e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
@@ -130,113 +165,227 @@ export function CustomersViewNew({ initialCustomers }: { initialCustomers: any[]
         </div>
       </div>
 
-      {/* Table Section */}
-      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
-        {/* Search & Filter Bar */}
-        <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
-          <div style={{ flex: 1, position: "relative" }}>
-            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-            <input
-              type="text"
-              placeholder="Search by customer name, phone or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px 10px 36px",
-                border: "1px solid #e2e8f0",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontFamily: "inherit",
-                transition: "all 0.2s",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#94a3b8";
-                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "#e2e8f0";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            />
+      {/* Main Grid View */}
+      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+        
+        {/* Left Hand: Customers List Table */}
+        <div style={{ flex: selectedCustomerId ? "7" : "10", transition: "all 0.3s", background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+          {/* Search & Filter Bar */}
+          <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
+            <div style={{ flex: 1, position: "relative" }}>
+              <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+              <input
+                type="text"
+                placeholder="Search by customer ID, name, phone or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px 10px 36px",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  fontFamily: "inherit",
+                  transition: "all 0.2s",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "#94a3b8";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "#e2e8f0";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              />
+            </div>
           </div>
-          <button
-            style={{
-              padding: "10px 16px",
-              background: "#f1f5f9",
-              border: "1px solid #cbd5e1",
-              borderRadius: "8px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: "600",
-              color: "#475569",
-              transition: "all 0.2s",
-            }}
-          >
-            <Filter size={16} /> Filters
-          </button>
-        </div>
 
-        {/* Table with Scrollbar */}
-        <div style={{ overflowY: "auto", maxHeight: "600px", overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
-              <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CUSTOMER ID</th>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>COMPANY NAME</th>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>EMAIL</th>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CITY</th>
-                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>STATUS</th>
-                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PORTAL LINK</th>
-                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((cust) => {
-                const statusColor = getStatusColor(cust.status);
-                return (
-                  <tr key={cust.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b", fontWeight: "600" }}>{cust.id}</td>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{cust.name}</td>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{cust.phone}</td>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b" }}>{cust.email}</td>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{cust.city}</td>
-                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                      <span style={{ display: "inline-block", padding: "4px 12px", background: statusColor.bg, color: statusColor.text, borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>{statusColor.label}</span>
-                    </td>
-                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                      <button
-                        onClick={() => handleCopyLink(cust.id)}
-                        style={{
-                          padding: "6px 12px",
-                          background: copiedCustomerId === cust.id ? "#dcfce7" : "#003568",
-                          border: "none",
-                          borderRadius: "6px",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          color: copiedCustomerId === cust.id ? "#16a34a" : "white",
-                          cursor: "pointer",
-                          transition: "all 0.2s"
-                        }}
-                      >
-                        {copiedCustomerId === cust.id ? "Copied!" : "Copy Magic Link"}
-                      </button>
-                    </td>
-                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
-                      <button style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px 8px", transition: "all 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.color = "#475569"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; }}>
-                        <MoreVertical size={16} />
-                      </button>
+          {/* Table */}
+          <div style={{ overflowY: "auto", maxHeight: "650px", overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
+                <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                  <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CUSTOMER ID</th>
+                  <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>COMPANY NAME</th>
+                  <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
+                  <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ORDERS</th>
+                  <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>STATUS</th>
+                  <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PORTAL LINK</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCustomers.map((cust) => {
+                  const statusColor = getStatusColor(cust.status);
+                  const isSelected = selectedCustomerId === cust.id;
+                  const count = initialOrders.filter(o => o.customerId === cust.id).length;
+                  return (
+                    <tr 
+                      key={cust.id} 
+                      onClick={() => setSelectedCustomerId(isSelected ? null : cust.id)}
+                      style={{ 
+                        borderBottom: "1px solid #e2e8f0", 
+                        transition: "all 0.2s",
+                        background: isSelected ? "rgba(1, 143, 16, 0.05)" : "transparent",
+                        cursor: "pointer"
+                      }} 
+                      onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "#f8fafc"; }} 
+                      onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b", fontWeight: "700" }}>{cust.customerCode || cust.id}</td>
+                      <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{cust.name}</td>
+                      <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{cust.phone}</td>
+                      <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                          <ShoppingBag size={12} />
+                          {count}
+                        </span>
+                      </td>
+                      <td style={{ padding: "16px 20px", textAlign: "center" }}>
+                        <span style={{ display: "inline-block", padding: "4px 12px", background: statusColor.bg, color: statusColor.text, borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>{statusColor.label}</span>
+                      </td>
+                      <td style={{ padding: "16px 20px", textAlign: "center" }}>
+                        <button
+                          onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
+                          style={{
+                            padding: "6px 12px",
+                            background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "#003568",
+                            border: "none",
+                            borderRadius: "6px",
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            color: copiedCustomerId === (cust.customerId || cust.id) ? "#16a34a" : "white",
+                            cursor: "pointer",
+                            transition: "all 0.2s"
+                          }}
+                        >
+                          {copiedCustomerId === (cust.customerId || cust.id) ? "Copied!" : "Copy Magic Link"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {filteredCustomers.length === 0 && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
+                      No customers found.
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {/* Right Hand: Selected Customer Detail Panel */}
+        {selectedCustomer && (
+          <div className="w-full md:w-[420px] shrink-0 bg-white border border-slate-200 rounded-xl shadow-lg p-6 sticky top-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="flex justify-between items-start border-b border-slate-100 pb-4 mb-4">
+              <div>
+                <span className="text-xs font-bold text-slate-400 block uppercase tracking-wider">{selectedCustomer.customerCode || selectedCustomer.id}</span>
+                <h2 className="text-xl font-extrabold text-slate-800 mt-1">{selectedCustomer.name}</h2>
+              </div>
+              <button 
+                onClick={() => setSelectedCustomerId(null)}
+                className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Profile Info */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center gap-3 text-sm text-slate-600">
+                <Mail size={16} className="text-slate-400 shrink-0" />
+                <span className="truncate">{selectedCustomer.email}</span>
+              </div>
+              <div className="flex items-center gap-3 text-sm text-slate-600">
+                <Phone size={16} className="text-slate-400 shrink-0" />
+                <span>{selectedCustomer.phone}</span>
+              </div>
+              <div className="flex items-start gap-3 text-sm text-slate-600 pt-2 border-t border-slate-100">
+                <MapPin size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-xs text-slate-400 block uppercase tracking-wide">Billing Address</strong>
+                  <span>{selectedCustomer.billingAddress || "Not Provided"}</span>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 text-sm text-slate-600">
+                <MapPin size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-xs text-slate-400 block uppercase tracking-wide">Shipping Address</strong>
+                  <span>{selectedCustomer.shippingAddress || "Not Provided"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats Breakdown */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-center">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Orders</span>
+                <span className="text-2xl font-black text-slate-800 mt-1 block">{customerOrders.length}</span>
+              </div>
+              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3.5 text-center">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Total Spend</span>
+                <span className="text-xl font-black text-emerald-600 mt-1.5 block">₹{totalSpend.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+
+            {/* Orders List for Customer */}
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wider">Linked Signage Orders</h3>
+              <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1">
+                {customerOrders.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-6 border border-dashed border-slate-200 rounded-lg">No orders associated yet.</p>
+                ) : (
+                  customerOrders.map(o => (
+                    <div key={o.id} className="border border-slate-100 hover:border-slate-200 bg-slate-50/50 hover:bg-slate-50 rounded-xl p-3 flex flex-col justify-between gap-2 transition">
+                      <div className="flex justify-between items-start gap-2">
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 block">{o.orderCode || o.id}</span>
+                          <span className="text-xs font-bold text-slate-800 mt-0.5 block truncate max-w-[180px]">{o.projectName}</span>
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={(e) => handleCopyOrderLink(selectedCustomer.customerId || selectedCustomer.id, o.orderId || o.id, e)}
+                            className={`p-1 rounded border transition ${
+                              copiedOrderId === (o.orderId || o.id)
+                                ? "bg-emerald-50 border-emerald-250 text-[#018F10]"
+                                : "bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50"
+                            }`}
+                            title={copiedOrderId === (o.orderId || o.id) ? "Copied!" : "Copy Order Magic Link"}
+                          >
+                            <Share2 size={12} />
+                          </button>
+                          <a 
+                            href={`/admin/orders/${o.orderId || o.id}`}
+                            className="p-1 rounded bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition"
+                            title="Open Worksheet"
+                          >
+                            <ExternalLink size={12} />
+                          </a>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center gap-2 pt-2 border-t border-slate-100/50">
+                        <span className="text-xs text-slate-500 font-semibold">₹{(Number(o.budget) || 0).toLocaleString("en-IN")}</span>
+                        <div className="flex gap-1.5 items-center">
+                          <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full border border-slate-200 max-w-[100px] truncate">
+                            {o.stage}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getHealthBadgeColor(o.health)}`}>
+                            {o.health}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
+
       </div>
     </div>
   );

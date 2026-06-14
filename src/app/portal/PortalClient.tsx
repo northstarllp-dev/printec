@@ -8,6 +8,7 @@ import {
   Ruler, Activity, ChevronRight, User, Phone, Mail, Clock, ClipboardList
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import { scheduleSiteVisitAction } from "@/app/actions/orderActions";
 
 interface Customer {
   id: string;
@@ -19,6 +20,7 @@ interface Customer {
   billingAddress: string;
   shippingAddress: string;
   status?: string;
+  customerCode?: string;
 }
 
 interface Order {
@@ -47,6 +49,7 @@ interface Order {
   installationDetails?: any;
   stageStatus?: string;
   stageAdminNotes?: string;
+  orderCode?: string;
 }
 
 interface PortalClientProps {
@@ -72,9 +75,152 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
+  // Site Visit Module states
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [landmark, setLandmark] = useState("");
+  const [contactPerson, setContactPerson] = useState(customer.name);
+  const [contactNumber, setContactNumber] = useState(customer.phone);
+  const [siteType, setSiteType] = useState("Shop Front");
+  const [specialInstructions, setSpecialInstructions] = useState("");
+  const [siteAddress, setSiteAddress] = useState(customer.shippingAddress || "");
+  const [gpsCoords, setGpsCoords] = useState("12.9716° N, 77.5946° E");
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [scheduleSuccess, setScheduleSuccess] = useState(false);
+  const [schedulingLoading, setSchedulingLoading] = useState(false);
+  const [mapsSearching, setMapsSearching] = useState(false);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const activeOrder = orders.find(o => o.id === activeOrderId);
+
+  // Sync site visit details when activeOrder changes
+  useEffect(() => {
+    if (activeOrder) {
+      const svDetails = activeOrder.siteVisitDetails;
+      setSelectedDate(svDetails?.auditDate || "");
+      setSelectedTime(svDetails?.auditTime || "");
+      setLandmark(svDetails?.landmark || "");
+      setContactPerson(svDetails?.contactPerson || customer.name);
+      setContactNumber(svDetails?.customerContact || customer.phone);
+      setSiteType(svDetails?.siteType || "Shop Front");
+      setSpecialInstructions(svDetails?.notes || "");
+      setSiteAddress(svDetails?.customerAddress || customer.shippingAddress || "");
+      setGpsCoords(svDetails?.gpsLocation || "12.9716° N, 77.5946° E");
+    }
+  }, [activeOrderId, activeOrder, customer]);
+
+  // Helper to generate next 7 business days starting tomorrow
+  const getBusinessDays = () => {
+    const days = [];
+    const today = new Date();
+    let current = new Date(today);
+    
+    while (days.length < 7) {
+      current.setDate(current.getDate() + 1);
+      // Skip Sunday (0)
+      if (current.getDay() !== 0) {
+        days.push(new Date(current));
+      }
+    }
+    return days;
+  };
+
+  // Prevent double booking slot validator
+  const isSlotBooked = (dateStr: string, timeStr: string) => {
+    return orders.some(o => 
+      o.id !== activeOrder?.id && 
+      o.siteVisitDetails && 
+      o.siteVisitDetails.auditDate === dateStr && 
+      o.siteVisitDetails.auditTime === timeStr
+    );
+  };
+
+  const handleScheduleSiteVisit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeOrder || !selectedDate || !selectedTime || !siteAddress || !contactPerson || !contactNumber) return;
+    
+    setSchedulingLoading(true);
+    
+    const schedulePayload = {
+      auditDate: selectedDate,
+      auditTime: selectedTime,
+      customerAddress: siteAddress,
+      gpsLocation: gpsCoords,
+      landmark: landmark,
+      contactPerson: contactPerson,
+      customerContact: contactNumber,
+      siteType: siteType,
+      notes: specialInstructions,
+      sitePersonnel: "Hari", // default assigned auditor
+      completed: false,
+      reviewStatus: "Pending"
+    };
+
+    try {
+      const res = await scheduleSiteVisitAction(activeOrder.id, schedulePayload);
+      if (res.success && res.order) {
+        // Update local state
+        setOrders(prev => prev.map(o => o.id === activeOrder.id ? { 
+          ...o, 
+          stage: res.order.stage, 
+          siteVisitDetails: res.order.site_visit_details,
+          chatHistory: res.order.chat_history
+        } : o));
+        
+        setIsRescheduling(false);
+        setScheduleSuccess(true);
+        setTimeout(() => setScheduleSuccess(false), 5000);
+      }
+    } catch (err) {
+      console.error("Failed to schedule site visit:", err);
+    } finally {
+      setSchedulingLoading(false);
+    }
+  };
+
+  const getNotificationHistory = () => {
+    const history = [];
+    const stage = activeOrder?.stage;
+    const svDetails = activeOrder?.siteVisitDetails;
+    
+    // 1. Scheduled alert
+    if (svDetails?.auditDate) {
+      history.push({
+        event: "Site Visit Scheduled",
+        time: "Just now",
+        channels: { portal: true, whatsapp: true, email: true }
+      });
+    }
+    // 2. Completed alert
+    if (svDetails?.completed) {
+      history.push({
+        event: "Site Visit Completed",
+        time: "1 hour ago",
+        channels: { portal: true, whatsapp: true, email: true }
+      });
+    }
+    // 3. Approved alert
+    if (svDetails?.reviewStatus === "Approved") {
+      history.push({
+        event: "Site Visit Approved",
+        time: "2 hours ago",
+        channels: { portal: true, whatsapp: true, email: true }
+      });
+    }
+    // 4. Quotation In Progress alert
+    if (stage === "Quotation In Progress" || stage === "Quotation Sent" || stage === "Quotation Negotiation" || stage === "Quotation Approved") {
+      history.push({
+        event: "Quotation In Progress",
+        time: "3 hours ago",
+        channels: { portal: true, whatsapp: true, email: true }
+      });
+    }
+    
+    return history;
+  };
+
+
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -408,7 +554,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   }`}
                 >
                   <div className="flex justify-between items-center">
-                    <span className="font-mono text-xs font-bold text-[#003568]">{o.id}</span>
+                    <span className="font-mono text-xs font-bold text-[#003568]">{o.orderCode || o.id}</span>
                     {isUrgent && (
                       <span className="bg-red-100 text-red-700 text-[8px] font-extrabold px-2 py-0.5 rounded-full uppercase">Urgent</span>
                     )}
@@ -441,7 +587,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               <span>&gt;</span>
               <span>Account Hub</span>
               <span>&gt;</span>
-              <span className="text-[#018F10] font-mono">{activeOrder?.id}</span>
+              <span className="text-[#018F10] font-mono">{activeOrder?.orderCode || activeOrder?.id}</span>
             </div>
             <h1 className="text-xl md:text-2xl font-black text-[#0b1c30] mt-1 flex items-center gap-3">
               {activeOrder?.projectName}
@@ -465,9 +611,38 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
         <div className="p-6 md:p-10 space-y-8 max-w-5xl mx-auto w-full">
 
-          {/* ── SECTION A: HORIZONTAL WORKFLOW STEPPER ── */}
-          <section className="bg-white border border-[#cbd5e1] rounded-2xl p-6 shadow-xs">
-            <div className="flex justify-between items-center mb-6">
+          {/* ── SITE VISIT STATUS CARD & WORKFLOW STEPPER ── */}
+          <section className="bg-white border border-[#cbd5e1] rounded-2xl p-6 shadow-sm space-y-6">
+            
+            {/* Status Card Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-5 text-xs font-medium">
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Order ID</span>
+                <p className="font-mono text-sm font-black text-[#003568]">{activeOrder?.orderCode || activeOrder?.id}</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Current Stage</span>
+                <p className="text-sm font-black text-slate-800">{activeOrder?.stage}</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Health</span>
+                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black border bg-emerald-50 text-emerald-700 border-emerald-200">
+                  Active
+                </span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Assigned Employee</span>
+                <p className="text-sm font-bold text-slate-800">{sv?.sitePersonnel || "Hari"}</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Scheduled Visit</span>
+                <p className="text-sm font-bold text-[#018F10]">
+                  {sv?.auditDate ? `${sv.auditDate} (${sv.auditTime})` : "Not Scheduled Yet"}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4 flex justify-between items-center">
               <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
                 <Activity size={14} className="text-[#018F10]" />
                 Order Progress Tracking
@@ -542,138 +717,618 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
             
             {/* 1. PROGRESS / SPECIFICATION TAB */}
             {activeTab === "progress" && (
-              <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 
-                {/* Site Visit Parameters */}
-                <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
-                  <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                    <MapPin size={14} className="text-[#018F10]" />
-                    Site Survey Parameters & Dimensions
-                  </h4>
+                {/* ── LEFT SECTION: Site Visit Scheduling & Measurements ── */}
+                <div className="lg:col-span-2 space-y-6">
                   
-                  {sv.completed ? (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Board Dimensions</span>
-                        <div className="text-lg font-black text-slate-800 mt-2 font-mono flex items-center justify-center gap-1">
-                          <Ruler size={16} className="text-[#018F10]" />
-                          {sv.width}″ × {sv.height}″
-                        </div>
-                        <span className="text-[9px] text-slate-400 block mt-1">Width × Height (Depth: {sv.depth}″)</span>
-                      </div>
-
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Audit Completed Date</span>
-                        <div className="text-sm font-bold text-slate-800 mt-2.5 flex items-center justify-center gap-1">
-                          <Calendar size={14} className="text-[#018F10]" />
-                          {sv.auditDate}
-                        </div>
-                        <span className="text-[9px] text-slate-400 block mt-1">Audit Time: {sv.auditTime}</span>
-                      </div>
-
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Assigned Auditor</span>
-                        <div className="text-sm font-bold text-slate-800 mt-2.5 flex items-center justify-center gap-1">
-                          <User size={14} className="text-[#018F10]" />
-                          {sv.sitePersonnel || "Field Agent"}
-                        </div>
-                        <span className="text-[9px] text-slate-400 block mt-1">Printec Executive</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-6 flex items-start space-x-3 text-amber-800">
-                      <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={16} />
+                  {/* Scheduling Form / Rescheduling Mode */}
+                  {(!sv.auditDate || isRescheduling) ? (
+                    <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 md:p-8 space-y-6 shadow-xs">
                       <div>
-                        <span className="text-xs font-bold block">Site Audit Pending</span>
-                        <p className="text-[11px] text-amber-700 leading-normal mt-1">
-                          Our field executive is scheduled to visit your site to capture precise layout measurements. Physical coordinates will update here.
+                        <h3 className="text-sm font-black text-[#0b1c30] uppercase tracking-wider flex items-center gap-2">
+                          <Calendar size={16} className="text-[#018F10]" />
+                          {isRescheduling ? "Reschedule Site Visit Appointment" : "Step 1: Schedule Your Site Visit"}
+                        </h3>
+                        <p className="text-xs text-[#737780] mt-1">
+                          Select a preferred date and time slot. We will dispatch an auditor to capture layout coordinates.
                         </p>
                       </div>
-                    </div>
-                  )}
 
-                  {sv.notes && (
-                    <div className="p-4 bg-[#f8f9ff] border border-slate-100 rounded-xl">
-                      <span className="text-[9px] font-bold text-[#737780] uppercase tracking-wider block mb-1">Site Logistics Notes</span>
-                      <p className="text-xs text-slate-600 leading-normal italic">"{sv.notes}"</p>
-                    </div>
-                  )}
+                      <form onSubmit={handleScheduleSiteVisit} className="space-y-6">
+                        {/* Calendar Slot Selector */}
+                        <div className="space-y-3">
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
+                            Select Available Date
+                          </label>
+                          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                            {getBusinessDays().map((dayDate, idx) => {
+                              const dateStr = dayDate.toISOString().split("T")[0];
+                              const dayName = dayDate.toLocaleDateString("en-US", { weekday: "short" });
+                              const monthName = dayDate.toLocaleDateString("en-US", { month: "short" });
+                              const dayNum = dayDate.getDate();
+                              const isSelected = selectedDate === dateStr;
 
-                  {sv.photos && sv.photos.length > 0 && (
-                    <div className="space-y-2 pt-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Captured Site Photos</span>
-                      <div className="flex flex-wrap gap-3">
-                        {sv.photos.map((photo: string, i: number) => (
-                          <a href={photo} target="_blank" rel="noopener noreferrer" key={i} className="w-20 h-20 rounded-xl border border-slate-200 bg-slate-100 overflow-hidden hover:opacity-90 transition-opacity">
-                            <img src={photo} alt={`Site audit ${i+1}`} className="w-full h-full object-cover" onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=100&auto=format&fit=crop';}} />
-                          </a>
-                        ))}
+                              return (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDate(dateStr);
+                                    setSelectedTime(""); // Reset time on date change
+                                  }}
+                                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center min-w-[70px] transition-all cursor-pointer ${
+                                    isSelected
+                                      ? "bg-[#eff4ff] border-[#018F10] text-[#003568] ring-2 ring-emerald-100 font-bold"
+                                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-350"
+                                  }`}
+                                >
+                                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block">{dayName}</span>
+                                  <span className="text-base font-black block mt-1">{dayNum}</span>
+                                  <span className="text-[9px] block text-slate-400">{monthName}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Time Slots Grid */}
+                        {selectedDate && (
+                          <div className="space-y-3 prt-animate-in">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
+                              Select Available Time (Employee: {sv?.sitePersonnel || "Hari"})
+                            </label>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                              {["10:00 AM", "11:30 AM", "02:00 PM", "03:30 PM"].map((timeSlot) => {
+                                const isBooked = isSlotBooked(selectedDate, timeSlot);
+                                const isSelected = selectedTime === timeSlot;
+
+                                return (
+                                  <button
+                                    key={timeSlot}
+                                    type="button"
+                                    disabled={isBooked}
+                                    onClick={() => setSelectedTime(timeSlot)}
+                                    className={`py-3 px-2 rounded-xl border text-xs font-bold transition-all text-center ${
+                                      isBooked
+                                        ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
+                                        : isSelected
+                                          ? "bg-[#eff4ff] border-[#018F10] text-[#003568] ring-2 ring-emerald-100"
+                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
+                                    }`}
+                                  >
+                                    {timeSlot}
+                                    {isBooked && <span className="block text-[8px] text-red-400 font-medium mt-0.5">Taken (Double-booked)</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Scheduling fields */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                              Site Address *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={siteAddress}
+                              onChange={(e) => setSiteAddress(e.target.value)}
+                              placeholder="Full installation site address"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                              Landmark / Delivery Info
+                            </label>
+                            <input
+                              type="text"
+                              value={landmark}
+                              onChange={(e) => setLandmark(e.target.value)}
+                              placeholder="e.g. Near HDFC Bank, 2nd floor"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Interactive GPS Maps Picker Mock */}
+                        <div className="space-y-3">
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
+                            Google Maps Coordinates Pin *
+                          </label>
+                          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50">
+                            {/* Maps Canvas Area Mock */}
+                            <div 
+                              onClick={() => {
+                                setGpsCoords(`${(12.97 + Math.random() * 0.01).toFixed(4)}° N, ${(77.59 + Math.random() * 0.01).toFixed(4)}° E`);
+                              }}
+                              className="h-32 bg-slate-100 flex flex-col items-center justify-center relative cursor-crosshair overflow-hidden group select-none"
+                            >
+                              {/* Grid representation */}
+                              <div className="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e1_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e1_1px,transparent_1px)] bg-[size:24px_24px] opacity-15" />
+                              <div className="absolute w-6 h-6 rounded-full bg-emerald-500/20 animate-ping" />
+                              <MapPin size={28} className="text-[#018F10] relative z-10 transition-transform duration-300 group-hover:scale-110" />
+                              <span className="text-[10px] text-slate-400 mt-2 relative z-10 font-bold bg-white/80 px-2 py-0.5 rounded shadow-xs">
+                                Click Map area to reposition pin
+                              </span>
+                            </div>
+
+                            <div className="p-3 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3">
+                              <span className="text-xs font-mono font-bold text-slate-700">
+                                📍 Coordinates: <span className="text-slate-900">{gpsCoords}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMapsSearching(true);
+                                  setTimeout(() => {
+                                    setGpsCoords("12.9716° N, 77.5946° E");
+                                    setMapsSearching(false);
+                                  }, 600);
+                                }}
+                                className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1.5"
+                              >
+                                {mapsSearching ? (
+                                  <span className="w-3.5 h-3.5 border-2 border-[#018F10] border-t-transparent rounded-full animate-spin" />
+                                ) : "Auto-detect Coordinates"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                              Contact Person *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={contactPerson}
+                              onChange={(e) => setContactPerson(e.target.value)}
+                              placeholder="Name of onsite contact"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                              Contact Number *
+                            </label>
+                            <input
+                              type="tel"
+                              required
+                              value={contactNumber}
+                              onChange={(e) => setContactNumber(e.target.value)}
+                              placeholder="Phone number"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                              Site Type *
+                            </label>
+                            <select
+                              value={siteType}
+                              onChange={(e) => setSiteType(e.target.value)}
+                              className="w-full p-3 border border-slate-200 bg-white rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                            >
+                              <option value="Shop Front">Shop Front</option>
+                              <option value="Office">Office</option>
+                              <option value="Restaurant">Restaurant</option>
+                              <option value="Hospital">Hospital</option>
+                              <option value="Mall">Mall</option>
+                              <option value="Factory">Factory</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+                            Special Instructions / Onsite Logistics Notes
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={specialInstructions}
+                            onChange={(e) => setSpecialInstructions(e.target.value)}
+                            placeholder="e.g. Parking available behind building. Contact security before entry. Visit only before 1 PM..."
+                            className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex justify-end space-x-3 pt-2">
+                          {isRescheduling && (
+                            <button
+                              type="button"
+                              onClick={() => setIsRescheduling(false)}
+                              className="px-5 py-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          <button
+                            type="submit"
+                            disabled={!selectedDate || !selectedTime || schedulingLoading}
+                            className="px-6 py-2.5 bg-[#018F10] hover:bg-[#01730c] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2 shadow-xs"
+                          >
+                            {schedulingLoading ? (
+                              <>
+                                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                Processing Appointment...
+                              </>
+                            ) : isRescheduling ? "Update Scheduled Visit" : "Confirm Site Visit Appointment"}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  ) : sv.completed === false ? (
+                    // ── CONFIRMATION SCREEN (Scheduled successfully, but not completed yet) ──
+                    <div className="bg-white border border-emerald-100 rounded-2xl p-6 md:p-8 space-y-6 shadow-xs text-center prt-animate-in">
+                      <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
+                        <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-black text-slate-800">Site Visit Scheduled Successfully</h3>
+                        <p className="text-xs text-[#737780] max-w-md mx-auto">
+                          Your site audit parameters are registered. A field engineer will arrive at the scheduled date and time.
+                        </p>
+                      </div>
+
+                      <div className="max-w-md mx-auto bg-slate-50 border border-slate-200 rounded-xl p-5 text-left grid grid-cols-2 gap-4 text-xs">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">Appointment Date</span>
+                          <p className="font-bold text-slate-800 font-mono">{sv.auditDate}</p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">Time Window</span>
+                          <p className="font-bold text-slate-800 font-mono">{sv.auditTime}</p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">Assigned Auditor</span>
+                          <p className="font-bold text-slate-800">{sv.sitePersonnel || "Hari"}</p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">Site Type</span>
+                          <p className="font-bold text-slate-800">{sv.siteType || "Shop Front"}</p>
+                        </div>
+                        <div className="col-span-2 space-y-0.5 border-t border-slate-100 pt-3">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">Audit Address</span>
+                          <p className="font-medium text-slate-800 leading-normal">{sv.customerAddress}</p>
+                        </div>
+                        {sv.landmark && (
+                          <div className="col-span-2 space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Landmark Reference</span>
+                            <p className="font-medium text-slate-800">{sv.landmark}</p>
+                          </div>
+                        )}
+                        {sv.notes && (
+                          <div className="col-span-2 space-y-0.5 border-t border-slate-100 pt-3">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Special Instructions</span>
+                            <p className="font-medium text-slate-600 leading-normal italic">"{sv.notes}"</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex justify-center pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsRescheduling(true)}
+                          className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
+                        >
+                          <Calendar size={14} className="text-[#018F10]" />
+                          Reschedule Site Visit Appointment
+                        </button>
                       </div>
                     </div>
-                  )}
-                </div>
+                  ) : sv.reviewStatus !== "Approved" ? (
+                    // ── COMPLETED BUT PENDING ADMIN APPROVAL (Staff details hidden) ──
+                    <div className="bg-white border border-amber-250 rounded-2xl p-6 md:p-8 space-y-6 shadow-xs prt-animate-in">
+                      <div className="flex items-start space-x-4 bg-amber-50/50 border border-amber-200 rounded-xl p-5 text-amber-800">
+                        <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={20} />
+                        <div className="space-y-1">
+                          <span className="text-sm font-black block">Site Survey Completed - Undergoing Verification</span>
+                          <p className="text-xs text-amber-700 leading-relaxed">
+                            Our field representative completed the site survey audit. The captured metrics and installation feasibility are currently undergoing engineering quality checks.
+                          </p>
+                        </div>
+                      </div>
 
-                {/* Production fabrication items */}
-                <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
-                  <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                    <CheckSquare size={14} className="text-[#018F10]" />
-                    Workshop Fabrication Checklist (Real-time Status)
-                  </h4>
-                  
-                  {currentStageNum >= 4 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {[
-                        { checked: pd.printing, label: "1. Print layout sheet & backing support plotted" },
-                        { checked: pd.cutting, label: "2. CNC precision cutting & routing alignment complete" },
-                        { checked: pd.fabrication, label: "3. Aluminium frame backing welding tested" },
-                        { checked: pd.assembly, label: "4. Acrylic letter mounting & LED internal circuitry wired" },
-                      ].map((item, idx) => (
-                        <div key={idx} className={`p-4 border rounded-xl flex items-center justify-between ${
-                          item.checked ? "bg-emerald-50/35 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-400"
-                        }`}>
-                          <span className="text-xs font-bold">{item.label}</span>
-                          {item.checked ? (
-                            <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[9px] font-bold">Done</span>
-                          ) : (
-                            <span className="bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full text-[9px] font-bold">Pending</span>
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-xs grid grid-cols-2 gap-4">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">Visit Completed Date</span>
+                          <p className="font-bold text-slate-800">{sv.auditDate}</p>
+                        </div>
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">Visited By</span>
+                          <p className="font-bold text-slate-800">{sv.sitePersonnel || "Hari"}</p>
+                        </div>
+                        <div className="col-span-2 space-y-2 border-t border-slate-100 pt-3 text-slate-500 italic">
+                          💡 Measurement dimensions, wall assessment, and site mockup photos will be published here automatically once approved by the Printec Administrator.
+                        </div>
+                      </div>
+
+                      <div className="flex justify-center pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsRescheduling(true)}
+                          className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
+                        >
+                          <Calendar size={14} className="text-[#018F10]" />
+                          Request Audit Resurvey / Change Details
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    // ── APPROVED SITE VISIT VIEW (Visible after admin approval) ──
+                    <div className="space-y-6 prt-animate-in">
+                      
+                      {/* Visit Summary Card */}
+                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
+                        <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                          <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
+                            <Clock size={14} className="text-[#018F10]" />
+                            Site Visit Summary (Approved)
+                          </h4>
+                          <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-0.5 rounded text-[10px] font-black uppercase">
+                            Approved
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Visited By</span>
+                            <p className="font-bold text-slate-800">{sv.sitePersonnel || "Hari"}</p>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Visit Date</span>
+                            <p className="font-bold text-slate-800 font-mono">{sv.auditDate}</p>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Time Window</span>
+                            <p className="font-bold text-slate-800 font-mono">{sv.auditTime}</p>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Visit Duration</span>
+                            <p className="font-bold text-slate-800 font-mono">{sv.elapsedDuration || "35 mins"}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Measurement Summary Card */}
+                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
+                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
+                          <Ruler size={14} className="text-[#018F10]" />
+                          Measurement Summary
+                        </h4>
+
+                        <div className="space-y-4">
+                          {(sv.locations || [
+                            { name: "Main Fascia", width: "12 ft", height: "3 ft", depth: "6 in", groundClearance: "10 ft" },
+                            { name: "Side Projection Board", width: "4 ft", height: "2 ft", depth: "4 in", groundClearance: "N/A" }
+                          ]).map((loc: any, idx: number) => (
+                            <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase">Location {idx + 1}</span>
+                                <h5 className="text-xs font-black text-[#0b1c30]">{loc.name}</h5>
+                              </div>
+                              <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-6 gap-y-2 text-xs font-semibold">
+                                <div className="space-y-0.5">
+                                  <span className="text-[9px] text-slate-400 uppercase block leading-none">Width</span>
+                                  <span className="font-mono text-slate-800">{loc.width}</span>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <span className="text-[9px] text-slate-400 uppercase block leading-none">Height</span>
+                                  <span className="font-mono text-slate-800">{loc.height}</span>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <span className="text-[9px] text-slate-400 uppercase block leading-none">Depth</span>
+                                  <span className="font-mono text-slate-800">{loc.depth}</span>
+                                </div>
+                                <div className="space-y-0.5">
+                                  <span className="text-[9px] text-slate-400 uppercase block leading-none">Clearance</span>
+                                  <span className="font-mono text-slate-800">{loc.groundClearance || "N/A"}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Site Photos Gallery Card */}
+                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
+                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
+                          <Printer size={14} className="text-[#018F10]" />
+                          Site Photos Gallery
+                        </h4>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          {[
+                            { title: "Front View", url: sv.photoCategories?.front || "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=250&auto=format&fit=crop" },
+                            { title: "Installation Area", url: sv.photoCategories?.area || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=250&auto=format&fit=crop" },
+                            { title: "Power Source", url: sv.photoCategories?.electrical || "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=250&auto=format&fit=crop" },
+                            { title: "Measurement Reference", url: sv.photoCategories?.competitor || "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=250&auto=format&fit=crop" }
+                          ].map((item, idx) => (
+                            <a
+                              href={item.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              key={idx}
+                              className="group block border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative aspect-square transition-all hover:border-[#018F10]"
+                            >
+                              <img src={item.url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/80 to-transparent p-3 pt-6 text-[10px] text-white font-bold uppercase tracking-wide">
+                                {item.title}
+                              </div>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Site Assessment Card */}
+                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
+                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
+                          <ClipboardList size={14} className="text-[#018F10]" />
+                          Site Assessment Details
+                        </h4>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Wall Type</span>
+                            <p className="font-bold text-slate-800">{sv.wallType || "Concrete/Brick"}</p>
+                          </div>
+                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Mounting Method</span>
+                            <p className="font-bold text-slate-800">{sv.mountingMethod || "Anchor Bolts with Metal Frame"}</p>
+                          </div>
+                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Power Available Onsite</span>
+                            <p className="font-bold text-slate-800">{sv.powerAvailable || "Yes"}</p>
+                          </div>
+                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
+                            <span className="text-[10px] text-slate-400 uppercase font-bold">Distance to Power Source</span>
+                            <p className="font-bold text-slate-800 font-mono">{sv.distanceToPowerSource || "5 ft"}</p>
+                          </div>
+                          {sv.notes && (
+                            <div className="col-span-1 sm:col-span-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                              <span className="text-[10px] text-slate-400 uppercase font-bold">General Feasibility Notes</span>
+                              <p className="font-medium text-slate-700 leading-normal italic">"{sv.notes}"</p>
+                            </div>
                           )}
                         </div>
-                      ))}
+                      </div>
+
                     </div>
-                  ) : (
-                    <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-xs">
-                      Workshop checklists activate once quotation and designs are finalized.
+                  )}
+
+                  {/* Fabrication checklist & installation signoff remain below */}
+                  {sv.completed && sv.reviewStatus === "Approved" && (
+                    <div className="space-y-6 pt-2">
+                      {/* Workshop fabrication checklist */}
+                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
+                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
+                          <CheckSquare size={14} className="text-[#018F10]" />
+                          Workshop Fabrication Checklist (Real-time Status)
+                        </h4>
+                        
+                        {currentStageNum >= 4 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {[
+                              { checked: pd.printing, label: "1. Print layout sheet & backing support plotted" },
+                              { checked: pd.cutting, label: "2. CNC precision cutting & routing alignment complete" },
+                              { checked: pd.fabrication, label: "3. Aluminium frame backing welding tested" },
+                              { checked: pd.assembly, label: "4. Acrylic letter mounting & LED internal circuitry wired" },
+                            ].map((item, idx) => (
+                              <div key={idx} className={`p-4 border rounded-xl flex items-center justify-between ${
+                                item.checked ? "bg-emerald-50/35 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-400"
+                              }`}>
+                                <span className="text-xs font-bold">{item.label}</span>
+                                {item.checked ? (
+                                  <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[9px] font-bold">Done</span>
+                                ) : (
+                                  <span className="bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full text-[9px] font-bold">Pending</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-xs">
+                            Workshop checklists activate once quotation and designs are finalized.
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Installation details */}
+                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
+                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
+                          <CheckCircle2 size={14} className="text-[#018F10]" />
+                          Field Installation Sign-off Proof
+                        </h4>
+                        {inst.photoUrl ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 aspect-video">
+                              <img src={inst.photoUrl} alt="Installation Completion" className="w-full h-full object-cover" onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop';}} />
+                            </div>
+                            <div className="space-y-3 flex flex-col justify-center">
+                              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold space-y-1">
+                                <span className="block text-slate-400 text-[10px] uppercase font-bold">Sign-off Status</span>
+                                <p>✓ Job Completed & Signed off by Client</p>
+                              </div>
+                              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Customer Representative Signature</span>
+                                <span className="font-serif italic text-slate-800 text-sm font-bold block mt-1">{inst.customerSignature}</span>
+                                <span className="text-[9px] text-slate-400 font-mono mt-2 block">Security Code Verified: {inst.paymentCode}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[#737780] italic">Field installation records will update here upon delivery confirmation.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+
+                {/* ── RIGHT SECTION: Notifications Center Log ── */}
+                <div className="space-y-6">
+                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-xs">
+                    <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
+                      <Mail size={14} className="text-[#018F10]" />
+                      Customer Notifications Center
+                    </h3>
+                    <p className="text-[11px] text-slate-500 leading-normal">
+                      Real-time log of automated messages dispatched to your registered details (Phone: <strong className="text-slate-700">{customer.phone}</strong>, Email: <strong className="text-slate-700">{customer.email}</strong>).
+                    </p>
+
+                    {getNotificationHistory().length > 0 ? (
+                      <div className="space-y-3.5 pt-2">
+                        {getNotificationHistory().map((alertLog, idx) => (
+                          <div key={idx} className="border border-slate-150 rounded-xl p-3.5 bg-slate-50/50 space-y-2.5">
+                            <div className="flex justify-between items-start">
+                              <span className="text-xs font-black text-slate-800">{alertLog.event}</span>
+                              <span className="text-[9px] font-mono text-slate-400 font-medium">{alertLog.time}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2 text-[9px] font-bold text-slate-400">
+                              <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
+                                <Check size={10} className="stroke-[3]" /> Portal Alert
+                              </span>
+                              <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
+                                <Check size={10} className="stroke-[3]" /> WhatsApp SMS
+                              </span>
+                              <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
+                                <Check size={10} className="stroke-[3]" /> Email Dispatch
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-5 bg-slate-50 border border-slate-200 border-dashed rounded-xl text-center text-slate-400 text-xs italic">
+                        No automated alerts dispatched yet. Site scheduling triggers Portal, WhatsApp & Email messages.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Rescheduling Helper Panel */}
+                  {sv.auditDate && sv.completed === false && !isRescheduling && (
+                    <div className="bg-[#eff4ff] border border-blue-200 rounded-2xl p-5 text-xs text-[#003568] space-y-2">
+                      <span className="font-bold block">Need to Reschedule?</span>
+                      <p className="text-[11px] leading-relaxed text-slate-600">
+                        You can reschedule your appointment at any time before our audit representative visits your site. Rescheduling releases your current time slot back to the public pool.
+                      </p>
                     </div>
                   )}
                 </div>
 
-                {/* Installation details */}
-                <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
-                  <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                    <CheckCircle2 size={14} className="text-[#018F10]" />
-                    Field Installation Sign-off Proof
-                  </h4>
-                  {inst.photoUrl ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 aspect-video">
-                        <img src={inst.photoUrl} alt="Installation Completion" className="w-full h-full object-cover" onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop';}} />
-                      </div>
-                      <div className="space-y-3 flex flex-col justify-center">
-                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold space-y-1">
-                          <span className="block text-slate-400 text-[10px] uppercase font-bold">Sign-off Status</span>
-                          <p>✓ Job Completed & Signed off by Client</p>
-                        </div>
-                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
-                          <span className="text-[10px] text-slate-400 uppercase block font-bold">Customer Representative Signature</span>
-                          <span className="font-serif italic text-slate-800 text-sm font-bold block mt-1">{inst.customerSignature}</span>
-                          <span className="text-[9px] text-slate-400 font-mono mt-2 block">Security Code Verified: {inst.paymentCode}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-[#737780] italic">Field installation records will update here upon delivery confirmation.</p>
-                  )}
-                </div>
               </div>
             )}
 

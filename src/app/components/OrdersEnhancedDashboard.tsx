@@ -35,6 +35,7 @@ interface Order {
   revenue?: number;
   isOutstanding?: boolean;
   isDelayed?: boolean;
+  orderCode?: string;
 }
 
 const generateMockOrders = (): Order[] => {
@@ -428,7 +429,7 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
                   return (
                     <tr key={order.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
                       <td style={{ padding: "12px 16px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>
-                        {order.id}
+                        {order.orderCode || order.id}
                       </td>
                       <td style={{ padding: "12px 16px", fontSize: "13px", color: "#0f172a", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {order.projectName}

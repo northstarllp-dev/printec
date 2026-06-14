@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = searchParams.get("customer_id");
+  const orderId = searchParams.get("order_id");
 
   if (!customerId) {
     return NextResponse.json(
@@ -19,7 +20,11 @@ export async function GET(request: NextRequest) {
 
   // Get base URL / origin dynamically from request
   const origin = request.nextUrl.origin;
-  const url = `${origin}/portal?customer_id=${customerId}&token=${token}`;
+  let url = `${origin}/portal?customer_id=${customerId}&token=${token}`;
+  if (orderId) {
+    url += `&order_id=${orderId}`;
+  }
 
   return NextResponse.json({ token, url });
 }
+

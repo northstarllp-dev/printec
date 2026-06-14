@@ -2,20 +2,20 @@
 
 import React, { useState } from "react";
 import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2 } from "lucide-react";
-import { useDashboard, Employee } from "@/context/DashboardContext";
+import { Employee } from "@/types";
 import { EmployeeModal } from "./EmployeeModal";
+import { 
+  createEmployee as createEmployeeAction, 
+  updateEmployee as updateEmployeeAction, 
+  deleteEmployee as deleteEmployeeAction 
+} from "@/app/actions/employeeActions";
 
-const getStatusColor = (status: string) => {
-  const colors: Record<string, { bg: string; text: string; label: string }> = {
-    "Active": { bg: "#dcfce7", text: "#16a34a", label: "ACTIVE" },
-    "On Site": { bg: "#dbeafe", text: "#0284c7", label: "ON SITE" },
-    "Off Duty": { bg: "#fee2e2", text: "#dc2626", label: "OFF DUTY" },
-  };
-  return colors[status] || colors["Active"];
-};
+interface EmployeesViewNewProps {
+  initialEmployees: Employee[];
+}
 
-export function EmployeesViewNew() {
-  const { employees, deleteEmployee, addEmployee, updateEmployee } = useDashboard()!;
+export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
+  const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
@@ -32,18 +32,67 @@ export function EmployeesViewNew() {
     setActionDropdownId(null);
   };
 
-  const handleDeleteEmployee = (id: string) => {
+  const handleDeleteEmployee = async (id: string) => {
     if (confirm("Are you sure you want to delete this employee?")) {
-      deleteEmployee(id);
+      try {
+        await deleteEmployeeAction(id);
+        setEmployees(prev => prev.filter(e => e.id !== id));
+      } catch (err) {
+        console.error(err);
+        alert("Failed to delete employee.");
+      }
     }
     setActionDropdownId(null);
   };
 
-  const handleModalSubmit = (emp: Omit<Employee, "id">) => {
-    if (editingEmployee) {
-      updateEmployee({ ...emp, id: editingEmployee.id });
-    } else {
-      addEmployee(emp);
+  const handleModalSubmit = async (empData: Omit<Employee, "id">) => {
+    try {
+      if (editingEmployee) {
+        const updates = {
+          name: empData.name,
+          staff_role: empData.role, // database uses column staff_role
+          phone: empData.phone,
+          email: empData.email
+        };
+        const result = await updateEmployeeAction(editingEmployee.id, updates);
+        if (result && result[0]) {
+          const mapped = {
+            id: result[0].id,
+            name: result[0].name,
+            role: result[0].staff_role || "",
+            phone: result[0].phone || "",
+            email: result[0].email || "",
+            status: result[0].status || "Active",
+            rating: Number(result[0].rating) || 5.0,
+            workload: Number(result[0].workload) || 0
+          };
+          setEmployees(prev => prev.map(e => e.id === editingEmployee.id ? mapped : e));
+        }
+      } else {
+        const payload = {
+          name: empData.name,
+          staff_role: empData.role,
+          phone: empData.phone,
+          email: empData.email
+        };
+        const result = await createEmployeeAction(payload);
+        if (result && result[0]) {
+          const mapped = {
+            id: result[0].id,
+            name: result[0].name,
+            role: result[0].staff_role || "",
+            phone: result[0].phone || "",
+            email: result[0].email || "",
+            status: result[0].status || "Active",
+            rating: Number(result[0].rating) || 5.0,
+            workload: Number(result[0].workload) || 0
+          };
+          setEmployees(prev => [mapped, ...prev]);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save employee details.");
     }
     setIsModalOpen(false);
   };
@@ -51,7 +100,6 @@ export function EmployeesViewNew() {
   const totalEmployees = employees.length;
   const activeEmployees = employees.length;
   const activePercentage = totalEmployees > 0 ? Math.round((activeEmployees / totalEmployees) * 100) : 0;
-  const newThisMonth = 0;
   const avgRating = "N/A";
   const avgWorkload = "N/A";
 
@@ -85,6 +133,12 @@ export function EmployeesViewNew() {
       color: "#06b6d4",
     },
   ];
+
+  const filteredEmployees = employees.filter(emp => 
+    emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    emp.id.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
@@ -190,14 +244,6 @@ export function EmployeesViewNew() {
                 fontFamily: "inherit",
                 transition: "all 0.2s",
               }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#94a3b8";
-                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "#e2e8f0";
-                e.currentTarget.style.boxShadow = "none";
-              }}
             />
           </div>
           <button
@@ -234,7 +280,7 @@ export function EmployeesViewNew() {
               </tr>
             </thead>
             <tbody>
-              {employees.map((emp) => {
+              {filteredEmployees.map((emp) => {
                 return (
                   <tr key={emp.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b", fontWeight: "600" }}>{emp.id}</td>
@@ -246,8 +292,7 @@ export function EmployeesViewNew() {
                       <button 
                         onClick={() => setActionDropdownId(actionDropdownId === emp.id ? null : emp.id)}
                         style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px 8px", transition: "all 0.2s" }} 
-                        onMouseEnter={(e) => { e.currentTarget.style.color = "#475569"; }} 
-                        onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; }}>
+                      >
                         <MoreVertical size={16} />
                       </button>
                       
@@ -260,17 +305,13 @@ export function EmployeesViewNew() {
                           <div style={{ position: "absolute", right: "40px", top: "50%", transform: "translateY(-50%)", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)", zIndex: 50, overflow: "hidden", minWidth: "120px" }}>
                             <button 
                               onClick={() => handleEditEmployee(emp)}
-                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#475569", textAlign: "left", transition: "background 0.2s" }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
-                              onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "13px", color: "#475569", textAlign: "left" }}
                             >
                               <Edit size={14} /> Edit
                             </button>
                             <button 
                               onClick={() => handleDeleteEmployee(emp.id)}
-                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#ef4444", textAlign: "left", transition: "background 0.2s" }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = "#fef2f2"}
-                              onMouseLeave={(e) => e.currentTarget.style.background = "none"}
+                              style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "10px 16px", background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "#ef4444", textAlign: "left" }}
                             >
                               <Trash2 size={14} /> Delete
                             </button>

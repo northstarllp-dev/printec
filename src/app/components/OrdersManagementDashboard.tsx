@@ -41,6 +41,17 @@ const getStatusColor = (status: string) => {
   return colors[status] || { bg: "#f1f5f9", text: "#64748b", label: status.toUpperCase() };
 };
 
+const getHealthBadgeColor = (health: string) => {
+  const colors: Record<string, string> = {
+    "Active": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    "On Hold": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    "Lost": "bg-rose-500/10 text-rose-600 border-rose-500/20",
+    "Cancelled": "bg-slate-500/10 text-slate-600 border-slate-500/20",
+    "Completed": "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
+  };
+  return colors[health] || "bg-slate-100 text-slate-600 border-slate-200";
+};
+
 export function OrdersManagementDashboard({ 
   initialOrders,
   initialCustomers,
@@ -59,6 +70,8 @@ export function OrdersManagementDashboard({
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [orders, setOrders] = useState(initialOrders);
+  const [stageFilter, setStageFilter] = useState("ALL");
+  const [healthFilter, setHealthFilter] = useState("ALL");
   
   const currentUserRole = userRole;
   const employeeName = currentEmployeeName;
@@ -169,9 +182,12 @@ export function OrdersManagementDashboard({
   const filteredOrders = orders.filter(order => {
     const matchesSearch = 
       order.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.id.toLowerCase().includes(searchTerm.toLowerCase());
+      (order.orderCode || order.id).toLowerCase().includes(searchTerm.toLowerCase());
       
     if (!matchesSearch) return false;
+
+    if (stageFilter !== "ALL" && order.stage !== stageFilter) return false;
+    if (healthFilter !== "ALL" && (order.health || "Active") !== healthFilter) return false;
 
     if (currentUserRole === "Employee") {
       return order.assignedEmployees?.includes(employeeName);
@@ -326,9 +342,62 @@ export function OrdersManagementDashboard({
               }}
             />
           </div>
-          <button style={{ padding: "10px 16px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer" }}>
-            <Filter size={16} /> All Statuses <ChevronDown size={14} />
-          </button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                background: "white",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: "500",
+                color: "#475569",
+                cursor: "pointer",
+                outline: "none"
+              }}
+            >
+              <option value="ALL">All Stages</option>
+              <option value="Site Visit Pending">Site Visit Pending</option>
+              <option value="Site Visit Scheduled">Site Visit Scheduled</option>
+              <option value="Site Visit Completed">Site Visit Completed</option>
+              <option value="Quotation In Progress">Quotation In Progress</option>
+              <option value="Quotation Sent">Quotation Sent</option>
+              <option value="Quotation Negotiation">Quotation Negotiation</option>
+              <option value="Quotation Approved">Quotation Approved</option>
+              <option value="Design In Progress">Design In Progress</option>
+              <option value="Design Approved">Design Approved</option>
+              <option value="Production">Production</option>
+              <option value="Ready For Installation">Ready For Installation</option>
+              <option value="Installation Scheduled">Installation Scheduled</option>
+              <option value="Completed">Completed</option>
+              <option value="Closed">Closed</option>
+            </select>
+
+            <select
+              value={healthFilter}
+              onChange={(e) => setHealthFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                background: "white",
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                fontSize: "13px",
+                fontWeight: "500",
+                color: "#475569",
+                cursor: "pointer",
+                outline: "none"
+              }}
+            >
+              <option value="ALL">All Health States</option>
+              <option value="Active">Active</option>
+              <option value="On Hold">On Hold</option>
+              <option value="Lost">Lost</option>
+              <option value="Cancelled">Cancelled</option>
+              <option value="Completed">Completed</option>
+            </select>
+          </div>
         </div>
 
         {/* Table View */}
@@ -349,7 +418,10 @@ export function OrdersManagementDashboard({
                   CUSTOMER
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  STATUS
+                  STAGE
+                </th>
+                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  HEALTH
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   TEAM
@@ -380,7 +452,7 @@ export function OrdersManagementDashboard({
                     }}
                   >
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "600" }}>
-                      {order.id}
+                      {order.orderCode || order.id}
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>
                       {dateStr}
@@ -406,6 +478,13 @@ export function OrdersManagementDashboard({
                         }}
                       >
                         {statusColor.label}
+                      </span>
+                    </td>
+                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
+                      <span
+                        className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${getHealthBadgeColor(order.health || "Active")}`}
+                      >
+                        {order.health || "Active"}
                       </span>
                     </td>
                     <td 
@@ -454,7 +533,7 @@ export function OrdersManagementDashboard({
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <button
                         onClick={() => {
-                          router.push(`${currentUserRole === "Admin" ? "/admin" : "/staff"}/orders/${order.id}`);
+                          router.push(`${currentUserRole === "Admin" ? "/admin" : "/staff"}/orders/${order.orderId || order.id}`);
                         }}
                         style={{
                           padding: "6px 12px",

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
-import { createEnquiry, updateEnquiry } from "@/app/actions/enquiryActions";
+import { createEnquiry, updateEnquiry, convertEnquiryToOrderAction } from "@/app/actions/enquiryActions";
 import { createOrder } from "@/app/actions/orderActions";
 import { createCustomer } from "@/app/actions/customerActions";
 
@@ -28,7 +28,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
 
   // Welcome message states
   const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
-  const [welcomeCustomerInfo, setWelcomeCustomerInfo] = useState<{ customerId: string; customerName: string; phone: string; email: string } | null>(null);
+  const [welcomeCustomerInfo, setWelcomeCustomerInfo] = useState<{ customerId: string; customerName: string; phone: string; email: string; orderId?: string } | null>(null);
 
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
@@ -67,44 +67,23 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
     }
   };
   
-  const convertEnquiryToOrderLocal = async (enquiryId: string, assignedEmployees: string[], projectName: string, budget: number) => {
-    const enq = enquiries.find(e => e.id === enquiryId);
-    if (!enq) return;
-
+  const convertEnquiryToOrderLocal = async (enquiryId: string, projectName: string, budget: number) => {
     try {
-      let customer = customers.find(c => c.phone === enq.phone);
-      if (!customer) {
-        const custResult = await createCustomer({
-          name: enq.leadName,
-          phone: enq.phone,
-          whatsapp: enq.whatsapp,
-          email: enq.email,
-          billing_address: "Address Details Pending Intake",
-          shipping_address: "Installation Address Pending Survey"
-        });
-        if (custResult && custResult[0]) {
-          customer = { id: custResult[0].id, name: custResult[0].name, phone: custResult[0].phone, email: custResult[0].email };
-          setCustomers(prev => [...prev, customer!]);
-        }
+      const res = await convertEnquiryToOrderAction(enquiryId, projectName, budget);
+      if (res && res.success) {
+        setEnquiries(prev => prev.map(e => e.id === enquiryId ? { 
+          ...e, 
+          status: "Converted",
+          customerId: res.customerId,
+          orderId: res.orderId
+        } : e));
+        return res;
       }
-
-      if (customer) {
-        await createOrder({
-          project_name: projectName,
-          customer_id: customer.id,
-          stage: "Site Visit Pending",
-          budget,
-          deposit_paid: 0,
-          customer_name: customer.name
-        });
-      }
-
-      await updateEnquiry(enquiryId, { status: "Converted" });
-      setEnquiries(prev => prev.map(e => e.id === enquiryId ? { ...e, status: "Converted" } : e));
-    } catch (err) {
+    } catch (err: any) {
       console.error("Conversion failed", err);
-      alert("Failed to convert enquiry to order.");
+      alert(err.message || "Failed to convert enquiry to order.");
     }
+    return null;
   };
 
   const totalEnquiries = enquiries.length;
@@ -282,6 +261,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CODE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>DATE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>LEAD NAME</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
@@ -294,50 +274,71 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                 const statusColor = getStatusColor(enq.status);
                 return (
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>{enq.enquireId || enq.id}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{new Date(enq.dateReceived).toLocaleDateString()}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{enq.leadName}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{enq.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>{enq.source}</td>
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                        <button 
-                          onClick={() => {
-                            const customer = customers.find(c => c.phone === enq.phone || c.email === enq.email);
-                            if (customer) {
-                              setWelcomeCustomerInfo({
-                                customerId: customer.id,
-                                customerName: customer.name,
-                                phone: customer.phone,
-                                email: customer.email
-                              });
-                              setWelcomeModalOpen(true);
-                            } else {
-                              if (confirm(`This lead (${enq.leadName}) has not been converted to an order/customer profile yet. Would you like to convert it to an order now to generate a portal link?`)) {
+                      <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
+                        {enq.status !== "Converted" ? (
+                          <>
+                            <button 
+                              onClick={() => {
+                                const customer = customers.find(c => c.phone === enq.phone || c.email === enq.email);
+                                if (customer) {
+                                  setWelcomeCustomerInfo({
+                                    customerId: customer.id,
+                                    customerName: customer.name,
+                                    phone: customer.phone,
+                                    email: customer.email
+                                  });
+                                  setWelcomeModalOpen(true);
+                                } else {
+                                  if (confirm(`This lead (${enq.leadName}) has not been converted to an order/customer profile yet. Would you like to convert it to an order now to generate a portal link?`)) {
+                                    setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
+                                    setConvertModalOpen(true);
+                                  }
+                                }
+                              }}
+                              style={{ padding: "6px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#475569", cursor: "pointer", transition: "all 0.2s" }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = "#e2e8f0"}
+                              onMouseLeave={(e) => e.currentTarget.style.background = "#f1f5f9"}
+                            >
+                              Send Welcome Msg
+                            </button>
+                            <button 
+                              onClick={() => {
                                 setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
                                 setConvertModalOpen(true);
-                              }
-                            }
-                          }}
-                          style={{ padding: "6px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#475569", cursor: "pointer", transition: "all 0.2s" }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = "#e2e8f0"}
-                          onMouseLeave={(e) => e.currentTarget.style.background = "#f1f5f9"}
-                        >
-                          Send Welcome Msg
-                        </button>
-                        {enq.status !== "Converted" ? (
-                          <button 
-                            onClick={() => {
-                              setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
-                              setConvertModalOpen(true);
-                            }}
-                            style={{ padding: "6px 12px", background: "#018F10", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = "#01730c"}
-                            onMouseLeave={(e) => e.currentTarget.style.background = "#018F10"}
-                          >
-                            Convert to Order
-                          </button>
+                              }}
+                              style={{ padding: "6px 12px", background: "#018F10", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = "#01730c"}
+                              onMouseLeave={(e) => e.currentTarget.style.background = "#018F10"}
+                            >
+                              Convert to Order
+                            </button>
+                          </>
                         ) : (
-                          <span style={{ fontSize: "12px", fontWeight: "600", color: "#16a34a", padding: "6px 12px" }}>Converted</span>
+                          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                            {enq.customerId && (
+                              <a 
+                                href={`/admin/customers`}
+                                style={{ fontSize: "12px", fontWeight: "600", color: "#003568", textDecoration: "underline" }}
+                              >
+                                Customer ({enq.customerId})
+                              </a>
+                            )}
+                            {enq.orderId && (
+                              <a 
+                                href={`/admin/orders/${enq.orderId}`}
+                                style={{ fontSize: "12px", fontWeight: "600", color: "#018F10", textDecoration: "underline" }}
+                              >
+                                Order ({enq.orderId})
+                              </a>
+                            )}
+                            <span style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a" }}>Converted</span>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -372,35 +373,18 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           defaultProjectName={`New Project for ${selectedEnquiry.leadName}`}
           onSubmit={async (projectName, budget) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
-            await convertEnquiryToOrderLocal(selectedEnquiry.id, [], projectName, budget);
+            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, projectName, budget);
             setConvertModalOpen(false);
             
-            if (enq) {
-              // Retrieve the newly created customer profile by searching for phone match
-              setTimeout(() => {
-                const latestCustomer = customers.find(c => c.phone === enq.phone);
-                if (latestCustomer) {
-                  setWelcomeCustomerInfo({
-                    customerId: latestCustomer.id,
-                    customerName: latestCustomer.name,
-                    phone: latestCustomer.phone,
-                    email: latestCustomer.email
-                  });
-                  setWelcomeModalOpen(true);
-                } else {
-                  // Fallback to name match or most recent customer in state
-                  const fallbackCustomer = customers.find(c => c.name === enq.leadName) || customers[0];
-                  if (fallbackCustomer) {
-                    setWelcomeCustomerInfo({
-                      customerId: fallbackCustomer.id,
-                      customerName: fallbackCustomer.name,
-                      phone: fallbackCustomer.phone,
-                      email: fallbackCustomer.email
-                    });
-                    setWelcomeModalOpen(true);
-                  }
-                }
-              }, 600);
+            if (res && res.success) {
+              setWelcomeCustomerInfo({
+                customerId: res.customerId,
+                customerName: enq?.leadName || "Customer",
+                phone: enq?.phone || "",
+                email: enq?.email || "",
+                orderId: res.orderId
+              });
+              setWelcomeModalOpen(true);
             }
             setSelectedEnquiry(null);
           }}
@@ -424,7 +408,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
 interface WelcomeMessageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  customerInfo: { customerId: string; customerName: string; phone: string; email: string };
+  customerInfo: { customerId: string; customerName: string; phone: string; email: string; orderId?: string };
 }
 
 export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMessageModalProps) {
@@ -435,7 +419,11 @@ export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMe
   useEffect(() => {
     if (isOpen && customerInfo.customerId) {
       setLoading(true);
-      fetch(`/api/portal-token?customer_id=${customerInfo.customerId}`)
+      const params = new URLSearchParams({ customer_id: customerInfo.customerId });
+      if (customerInfo.orderId) {
+        params.append("order_id", customerInfo.orderId);
+      }
+      fetch(`/api/portal-token?${params.toString()}`)
         .then((res) => res.json())
         .then((data) => {
           if (data.url) {
@@ -448,7 +436,7 @@ export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMe
           setLoading(false);
         });
     }
-  }, [isOpen, customerInfo.customerId]);
+  }, [isOpen, customerInfo.customerId, customerInfo.orderId]);
 
   if (!isOpen) return null;
 

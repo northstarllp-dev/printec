@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { DashboardProvider } from "@/context/DashboardContext";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -28,9 +27,7 @@ export default function RootLayout({
         `}</style>
       </head>
       <body className={`${inter.variable} font-sans min-h-full bg-[var(--color-background)] antialiased`}>
-        <DashboardProvider>
-          {children}
-        </DashboardProvider>
+        {children}
       </body>
     </html>
   );

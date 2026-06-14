@@ -34,22 +34,22 @@ export default async function PortalPage({
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
 
-  // Fetch customer
+  // Fetch customer using friendly customer_id
   const { data: customerData, error: customerError } = await supabase
     .from("customers")
     .select("*")
-    .eq("id", customerId)
+    .eq("customer_id", customerId)
     .single();
 
   if (customerError || !customerData) {
     return <PortalError title="Customer Not Found" message={`Could not locate a customer profile for ID ${customerId}.`} />;
   }
 
-  // Fetch orders
+  // Fetch orders using customer's UUID id
   const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
     .select("*")
-    .eq("customer_id", customerId)
+    .eq("customer_id", customerData.id)
     .order("date_created", { ascending: false });
 
   if (ordersError) {
@@ -59,7 +59,7 @@ export default async function PortalPage({
   // If orderId is provided, perform an explicit IDOR verification check:
   // ensure the requested order_id belongs to the validated customer_id.
   if (orderId) {
-    const hasOrder = ordersData.some((o) => o.id === orderId);
+    const hasOrder = ordersData.some((o) => o.order_id === orderId);
     if (!hasOrder) {
       return <PortalError title="Access Denied" message="You do not have permission to view the requested order details." />;
     }
@@ -76,6 +76,8 @@ export default async function PortalPage({
     billingAddress: customerData.billing_address,
     shippingAddress: customerData.shipping_address,
     status: customerData.status,
+    customerCode: customerData.customer_id || customerData.id,
+    customerId: customerData.customer_id || customerData.id
   };
 
   const orders = ordersData.map((o: any) => ({
@@ -104,6 +106,8 @@ export default async function PortalPage({
     installationDetails: o.installation_details,
     stageStatus: o.stage_status,
     stageAdminNotes: o.stage_admin_notes,
+    orderCode: o.order_id || o.id,
+    orderId: o.order_id || o.id
   }));
 
   return (

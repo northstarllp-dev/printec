@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { 
   X, ZoomIn, ZoomOut, Maximize2, Move, Send, CheckCircle2, 
   ShieldCheck, Download, ExternalLink, ArrowLeft, Calendar, 
@@ -8,35 +9,252 @@ import {
   Clock, User, FileText, CheckSquare, RefreshCw, Printer, Share2, Pencil, Settings, HelpCircle, Ruler,
   LayoutDashboard, Camera, Bell, History
 } from "lucide-react";
-import { useDashboard, Order, PipelineStage, SiteVisitDetails, QuoteDetails, DesignDetails, ProductionDetails, InstallationDetails } from "@/context/DashboardContext";
-import { useRouter } from "next/navigation";
+import { 
+  Order, PipelineStage, SiteVisitDetails, QuoteDetails, 
+  DesignDetails, ProductionDetails, InstallationDetails, Customer, Employee 
+} from "@/types";
+import { 
+  updateSiteVisitDetailsAction,
+  updateQuoteDetailsAction,
+  updateDesignDetailsAction,
+  updateProductionDetailsAction,
+  updateInstallationDetailsAction,
+  requestStageAdvancementAction,
+  adminApproveStageAction,
+  adminRejectStageAction,
+  updateOrderStageAction,
+  addChatMessageAction,
+  updateOrderHealthAction,
+  reopenOrderAction
+} from "@/app/actions/orderActions";
 
 interface OrderWorksheetModalProps {
   isOpen: boolean;
   onClose: () => void;
   order: Order;
+  customers: Customer[];
+  employees: Employee[];
+  currentUserRole: "Admin" | "Employee";
+  currentEmployee: Employee | null;
 }
 
-export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen, onClose, order }) => {
+const getHealthBadgeColor = (health: string) => {
+  const colors: Record<string, string> = {
+    "Active": "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    "On Hold": "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    "Lost": "bg-rose-500/10 text-rose-600 border-rose-500/20",
+    "Cancelled": "bg-slate-500/10 text-slate-600 border-slate-500/20",
+    "Completed": "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",
+  };
+  return colors[health] || "bg-slate-100 text-slate-650 border-slate-200";
+};
+
+export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  order: initialOrder, 
+  customers, 
+  employees, 
+  currentUserRole, 
+  currentEmployee 
+}) => {
   const router = useRouter();
-  const { 
-    updateSiteVisitDetails,
-    updateQuoteDetails,
-    updateDesignDetails,
-    updateProductionDetails,
-    updateInstallationDetails,
-    requestStageAdvancement,
-    adminApproveStage,
-    adminRejectStage,
-    customers,
-    currentUserRole,
-    currentEmployee,
-    updateOrderStage,
-    addChatMessage,
-    setActivePage,
-    setSelectedOrderForWorksheet,
-    addNotification
-  } = useDashboard();
+  const [order, setOrder] = useState<Order>(initialOrder);
+  const [localAlert, setLocalAlert] = useState<{ message: string; type: "info" | "success" | "warning" | "error" } | null>(null);
+
+  const [showLostReasonDropdown, setShowLostReasonDropdown] = useState(false);
+  const [selectedLostReason, setSelectedLostReason] = useState("");
+
+  const handleUpdateHealth = async (health: string, reason?: string) => {
+    try {
+      const res = await updateOrderHealthAction(order.id, health, reason);
+      if (res && res.length > 0) {
+        setOrder(prev => ({
+          ...prev,
+          health: res[0].health,
+          lost_reason: res[0].lost_reason,
+          chatHistory: res[0].chat_history
+        }));
+        triggerLocalAlert(`Order health set to ${health}.`, "success");
+        router.refresh();
+      }
+    } catch (err: any) {
+      console.error(err);
+      triggerLocalAlert(err.message || "Failed to update order health.", "error");
+    }
+  };
+
+  const handleReopen = async () => {
+    try {
+      const res = await reopenOrderAction(order.id);
+      if (res && res.length > 0) {
+        setOrder(prev => ({
+          ...prev,
+          health: res[0].health,
+          lost_reason: res[0].lost_reason,
+          chatHistory: res[0].chat_history
+        }));
+        triggerLocalAlert("Order reopened.", "success");
+        router.refresh();
+      }
+    } catch (err: any) {
+      console.error(err);
+      triggerLocalAlert(err.message || "Failed to reopen order.", "error");
+    }
+  };
+
+  useEffect(() => {
+    setOrder(initialOrder);
+  }, [initialOrder]);
+
+  const triggerLocalAlert = (message: string, type: "info" | "success" | "warning" | "error") => {
+    setLocalAlert({ message, type });
+    setTimeout(() => setLocalAlert(null), 3500);
+  };
+
+  const addNotification = (title: string, message: string, type: "info" | "success" | "warning" | "error") => {
+    triggerLocalAlert(`${title}: ${message}`, type);
+  };
+
+  const setSelectedOrderForWorksheet = (order: any) => {};
+
+  const updateSiteVisitDetails = async (orderId: string, details: Partial<SiteVisitDetails>) => {
+    setOrder(prev => ({
+      ...prev,
+      siteVisitDetails: {
+        ...(prev.siteVisitDetails || {}),
+        ...details
+      } as SiteVisitDetails
+    }));
+    try {
+      await updateSiteVisitDetailsAction(orderId, details);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateQuoteDetails = async (orderId: string, details: Partial<QuoteDetails>) => {
+    setOrder(prev => ({
+      ...prev,
+      quoteDetails: {
+        ...(prev.quoteDetails || {}),
+        ...details
+      } as QuoteDetails
+    }));
+    try {
+      await updateQuoteDetailsAction(orderId, details);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateDesignDetails = async (orderId: string, details: Partial<DesignDetails>) => {
+    setOrder(prev => ({
+      ...prev,
+      designDetails: {
+        ...(prev.designDetails || {}),
+        ...details
+      } as DesignDetails
+    }));
+    try {
+      await updateDesignDetailsAction(orderId, details);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateProductionDetails = async (orderId: string, details: Partial<ProductionDetails>) => {
+    setOrder(prev => ({
+      ...prev,
+      productionDetails: {
+        ...(prev.productionDetails || {}),
+        ...details
+      } as ProductionDetails
+    }));
+    try {
+      await updateProductionDetailsAction(orderId, details);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateInstallationDetails = async (orderId: string, details: Partial<InstallationDetails>) => {
+    setOrder(prev => ({
+      ...prev,
+      installationDetails: {
+        ...(prev.installationDetails || {}),
+        ...details
+      } as InstallationDetails
+    }));
+    try {
+      await updateInstallationDetailsAction(orderId, details);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const requestStageAdvancement = async (orderId: string) => {
+    try {
+      await requestStageAdvancementAction(orderId);
+      router.refresh();
+      triggerLocalAlert("Stage advancement requested.", "success");
+    } catch (err) {
+      console.error(err);
+      triggerLocalAlert("Failed to request stage advancement.", "error");
+    }
+  };
+
+  const adminApproveStage = async (orderId: string) => {
+    try {
+      await adminApproveStageAction(orderId);
+      router.refresh();
+      triggerLocalAlert("Stage approved.", "success");
+    } catch (err) {
+      console.error(err);
+      triggerLocalAlert("Failed to approve stage.", "error");
+    }
+  };
+
+  const adminRejectStage = async (orderId: string, notes: string) => {
+    try {
+      await adminRejectStageAction(orderId, notes);
+      router.refresh();
+      triggerLocalAlert("Stage progression request sent back with notes.", "info");
+    } catch (err) {
+      console.error(err);
+      triggerLocalAlert("Failed to submit rejection feedback.", "error");
+    }
+  };
+
+  const updateOrderStage = async (id: string, stage: PipelineStage) => {
+    setOrder(prev => ({
+      ...prev,
+      stage
+    }));
+    try {
+      await updateOrderStageAction(id, stage);
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addChatMessage = async (orderId: string, sender: string, message: string) => {
+    setOrder(prev => ({
+      ...prev,
+      chatHistory: [
+        ...(prev.chatHistory || []),
+        { id: Date.now().toString(), sender, time: "Just now", message }
+      ]
+    }));
+    try {
+      await addChatMessageAction(orderId, sender, message);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const updateOrderStageLocal = updateOrderStage;
 
   const [zoomLevel, setZoomLevel] = useState(85);
   const [chatInput, setChatInput] = useState("");
@@ -47,6 +265,25 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
   
   // Local state for photo link input simulation
   const [newPhotoUrl, setNewPhotoUrl] = useState("");
+
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleCopyMagicLink = async () => {
+    if (!client) return;
+    try {
+      const res = await fetch(`/api/portal-token?customer_id=${client.customerId || client.id}&order_id=${order.orderId || order.id}`);
+      const data = await res.json();
+      if (data.url) {
+        await navigator.clipboard.writeText(data.url);
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2000);
+        triggerLocalAlert("Magic portal link copied to clipboard!", "success");
+      }
+    } catch (err) {
+      console.error("Error fetching portal token:", err);
+      triggerLocalAlert("Failed to copy customer portal link.", "error");
+    }
+  };
 
   // Stepper definition — 5 visual tabs, mapped from 14 pipeline stages
   const steps: { label: string }[] = [
@@ -915,6 +1152,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
 
         {/* Worksheet Main Content Container */}
         <div className="p-8 flex flex-col space-y-6">
+          {localAlert && (
+            <div className={`p-4 rounded-lg border text-xs font-bold ${
+              localAlert.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" :
+              localAlert.type === "warning" ? "bg-amber-50 border-amber-200 text-amber-800" :
+              localAlert.type === "error" ? "bg-red-50 border-red-200 text-red-800" :
+              "bg-blue-50 border-blue-200 text-blue-800"
+            }`}>
+              <span>{localAlert.message}</span>
+            </div>
+          )}
           
           {/* A. Breadcrumbs & Title Bar */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
@@ -925,12 +1172,22 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                 <span>&gt;</span>
                 <span className="hover:text-slate-600 cursor-pointer" onClick={() => { setSelectedOrderForWorksheet(null); router.push(currentUserRole === "Employee" ? "/staff/orders" : "/admin/orders"); }}>Active Orders</span>
                 <span>&gt;</span>
-                <span className="text-[#018F10]">{order.id}</span>
+                <span className="text-[#018F10]">{order.orderCode || order.id}</span>
               </div>
               
-              <h1 className="text-2xl font-black text-slate-800 mt-1 tracking-tight">
-                {order.projectName}
-              </h1>
+              <div className="flex flex-wrap items-center gap-3 mt-1">
+                <h1 className="text-2xl font-black text-slate-800 tracking-tight">
+                  {order.projectName}
+                </h1>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${getHealthBadgeColor(order.health || "Active")}`}>
+                  {order.health || "Active"}
+                </span>
+                {order.lost_reason && (
+                  <span className="text-xs font-medium text-rose-600 bg-rose-50 px-2.5 py-0.5 rounded border border-rose-100">
+                    Reason: {order.lost_reason}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -952,7 +1209,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                 </div>
               )}
 
-              {order.stageStatus && order.stageStatus !== "Normal" && (
+              {order.stageStatus && order.stageStatus !== "Normal" && (order.health || "Active") === "Active" && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-800">
                   <div className="flex items-start space-x-3">
                     <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={16} />
@@ -1254,44 +1511,121 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                   </div>
 
                   <div className="flex items-center space-x-3 self-end sm:self-auto">
-                    <button
-                      onClick={() => {
-                        addNotification("Progress Saved", "Draft details written to worksheet.", "info");
-                        // Simulating save
-                      }}
-                      className="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-all shadow-xs"
-                    >
-                      Save Progress
-                    </button>
-                    {stageToTabIndex(order.stage) === activeStepTab && order.stageStatus === "Normal" && (
-                      isEmployee ? (
-                        isTabReadyForNext() ? (
-                          <button
-                            type="button"
-                            onClick={handleRequestAdvancement}
-                            className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
-                          >
-                            Submit for Admin Approval
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled
-                            className="px-6 py-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold cursor-not-allowed"
-                            title="Complete all required fields in this stage to submit."
-                          >
-                            Submit for Admin Approval (Pending Fields)
-                          </button>
-                        )
-                      ) : (
+                    {order.health && order.health !== "Active" ? (
+                      <div className="flex items-center space-x-3">
+                        <span className="text-xs font-bold text-slate-500">
+                          This project is currently <strong className="text-rose-600">{order.health}</strong>.
+                        </span>
                         <button
                           type="button"
-                          onClick={handleAdminApprove}
-                          className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                          onClick={handleReopen}
+                          className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
                         >
-                          Approve & Advance Stage
+                          <RefreshCw size={14} />
+                          Reopen Order
                         </button>
-                      )
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => {
+                            addNotification("Progress Saved", "Draft details written to worksheet.", "info");
+                          }}
+                          className="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition-all shadow-xs"
+                        >
+                          Save Progress
+                        </button>
+
+                        {(order.stage === "Site Visit Pending" || order.stage === "Quotation Negotiation") && (
+                          <div className="relative">
+                            {!showLostReasonDropdown ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowLostReasonDropdown(true);
+                                  setSelectedLostReason(order.stage === "Site Visit Pending" ? "No Response" : "Price Too High");
+                                }}
+                                className="px-4 py-2 border border-rose-200 hover:border-rose-350 text-rose-600 bg-rose-50/20 hover:bg-rose-50/50 rounded-lg text-xs font-bold transition-all"
+                              >
+                                Mark as Lost
+                              </button>
+                            ) : (
+                              <div className="absolute bottom-full mb-2 right-0 bg-white border border-slate-200 rounded-xl p-3 shadow-lg z-50 w-64 space-y-2.5 text-left">
+                                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">Select Lost Reason</span>
+                                <select
+                                  value={selectedLostReason}
+                                  onChange={(e) => setSelectedLostReason(e.target.value)}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-rose-500"
+                                >
+                                  {order.stage === "Site Visit Pending" ? (
+                                    <>
+                                      <option value="No Response">No Response</option>
+                                      <option value="Other">Other</option>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <option value="Price Too High">Price Too High</option>
+                                      <option value="Competitor">Competitor</option>
+                                      <option value="Budget Issue">Budget Issue</option>
+                                      <option value="Other">Other</option>
+                                    </>
+                                  )}
+                                </select>
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowLostReasonDropdown(false)}
+                                    className="px-2.5 py-1 text-[10px] font-bold text-slate-500 bg-slate-50 rounded"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      handleUpdateHealth("Lost", selectedLostReason);
+                                      setShowLostReasonDropdown(false);
+                                    }}
+                                    className="px-2.5 py-1 text-[10px] font-bold text-white bg-rose-650 rounded hover:bg-rose-700"
+                                  >
+                                    Confirm
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {stageToTabIndex(order.stage) === activeStepTab && order.stageStatus === "Normal" && (
+                          isEmployee ? (
+                            isTabReadyForNext() ? (
+                              <button
+                                type="button"
+                                onClick={handleRequestAdvancement}
+                                className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                              >
+                                Submit for Admin Approval
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                className="px-6 py-2 bg-slate-100 text-slate-400 border border-slate-200 rounded-lg text-xs font-bold cursor-not-allowed"
+                                title="Complete all required fields in this stage to submit."
+                              >
+                                Submit for Admin Approval (Pending Fields)
+                              </button>
+                            )
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={handleAdminApprove}
+                              className="px-6 py-2 bg-[#018F10] hover:bg-[#01730c] text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                            >
+                              Approve & Advance Stage
+                            </button>
+                          )
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -1316,18 +1650,30 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                 {/* Card Body */}
                 <div className="p-6 space-y-4 text-xs font-semibold text-slate-600">
                   
-                  {/* CLIENT IDENTITY */}
                   <div className="space-y-2">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Client Identity</span>
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-[#0c1a2d] rounded-lg flex items-center justify-center text-white shrink-0 font-bold">
-                        H
+                        {client?.name ? client.name.slice(0, 1).toUpperCase() : "H"}
                       </div>
                       <div>
                         <h4 className="font-extrabold text-slate-800 text-sm leading-tight">{client?.name || "HDFC Bank Ltd."}</h4>
-                        <p className="text-[10px] text-slate-400 mt-0.5">Regional HQ, Mumbai</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Client Code: {client?.customerCode || client?.id || "N/A"}</p>
                       </div>
                     </div>
+                    {client && (
+                      <button
+                        onClick={handleCopyMagicLink}
+                        className={`w-full flex items-center justify-center gap-2 mt-2 py-2 px-3 rounded-lg text-xs font-bold transition border ${
+                          copiedLink
+                            ? "bg-emerald-50 border-emerald-250 text-[#018F10]"
+                            : "bg-slate-50 border-slate-200 text-slate-650 hover:bg-slate-100 hover:text-slate-800"
+                        }`}
+                      >
+                        <Share2 size={13} />
+                        <span>{copiedLink ? "Link Copied!" : "Copy Magic Portal Link"}</span>
+                      </button>
+                    )}
                   </div>
 
                   <hr className="border-slate-100" />
@@ -1494,7 +1840,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({ isOpen
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
                     Internal Team Chat Logs - {order.projectName}
                   </h3>
-                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Order ID: {order.id}</p>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Order ID: {order.orderCode || order.id}</p>
                 </div>
               </div>
               <button 

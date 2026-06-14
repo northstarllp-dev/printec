@@ -26,36 +26,48 @@ async function getSupabase() {
   );
 }
 
-export async function getCustomers() {
+export async function getEmployees() {
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from("customers").select("*").order("name", { ascending: true });
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("role", "staff");
   if (error) throw new Error(error.message);
   return data;
 }
 
-export async function createCustomer(formData: any) {
+export async function createEmployee(employeeData: any) {
   const supabase = await getSupabase();
-  const customerWithDefaults = {
-    company_id: "11111111-1111-1111-1111-111111111111",
-    ...formData
-  };
-  const { data, error } = await supabase.from("customers").insert([customerWithDefaults]).select();
+  const { data, error } = await supabase
+    .from("users")
+    .insert([
+      {
+        company_id: "11111111-1111-1111-1111-111111111111",
+        ...employeeData,
+        role: "staff",
+      },
+    ])
+    .select();
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/customers");
+  revalidatePath("/admin/employees");
   return data;
 }
 
-export async function updateCustomer(id: string, updates: any) {
+export async function updateEmployee(id: string, updates: any) {
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from("customers").update(updates).eq("id", id).select();
+  const { data, error } = await supabase
+    .from("users")
+    .update(updates)
+    .eq("id", id)
+    .select();
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/customers");
+  revalidatePath("/admin/employees");
   return data;
 }
 
-export async function deleteCustomer(id: string) {
+export async function deleteEmployee(id: string) {
   const supabase = await getSupabase();
-  const { error } = await supabase.from("customers").delete().eq("id", id);
+  const { error } = await supabase.from("users").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  revalidatePath("/admin/customers");
+  revalidatePath("/admin/employees");
 }
