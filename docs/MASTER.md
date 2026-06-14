@@ -186,6 +186,29 @@
 
 ---
 
+## Architecture & Security Best Practices
+
+As part of the v2 Production Grade refactor, all new development must adhere to the following standards:
+
+### 1. Database & Schema
+- **UUID Primary Keys:** All tables (`users`, `orders`, `customers`, `enquiries`, etc.) must use secure UUIDs (`gen_random_uuid()`) instead of auto-incrementing integers or strings to prevent enumeration attacks.
+- **Multi-Tenancy:** All major tables must include a `company_id` (UUID) column with an appropriate foreign key index to ensure data isolation.
+- **Row Level Security (RLS):** All tables must have strict RLS policies enabled (`TO authenticated USING (true)`) to completely block unauthenticated database access.
+
+### 2. Next.js Server Components & Data Fetching
+- **No Global Client Context for Data:** Do NOT use `DashboardContext` or similar global React Providers to fetch and store sensitive database arrays on the client side.
+- **Server Components First:** Always fetch data asynchronously on the server (`page.tsx` as an `async function`) using Supabase SSR (`@supabase/ssr`).
+- **Props Drilling for Initial State:** Pass the securely fetched data down to Client Components via props (e.g., `initialOrders`, `initialCustomers`).
+
+### 3. Server Actions (Mutations)
+- **Secure Mutations:** All database mutations (INSERT, UPDATE, DELETE) must occur securely on the server using Next.js Server Actions (e.g., functions in `src/app/actions/` marked with `"use server"`).
+- **Cache Invalidation:** Always use `revalidatePath('/route')` within Server Actions to automatically trigger UI updates after a successful mutation.
+
+### 4. Route Protection
+- **Middleware Check:** The Next.js `middleware.ts` must actively intercept requests to protected routes (like `/admin/*` and `/staff/*`), verify the Supabase JWT via `supabase.auth.getUser()`, and redirect unauthenticated requests to `/login`.
+
+---
+
 ## Pre-Delivery Checklist
 
 Before delivering any UI code, verify:

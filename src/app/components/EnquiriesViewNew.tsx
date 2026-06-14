@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X } from "lucide-react";
-import { useDashboard } from "@/context/DashboardContext";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
+import { createEnquiry, updateEnquiry } from "@/app/actions/enquiryActions";
+import { createOrder } from "@/app/actions/orderActions";
+import { createCustomer } from "@/app/actions/customerActions";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -16,8 +18,9 @@ const getStatusColor = (status: string) => {
   return colors[status] || colors["Pending"];
 };
 
-export function EnquiriesView() {
-  const { enquiries, customers, convertEnquiryToOrder, addEnquiry } = useDashboard()!;
+export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initialEnquiries: any[], initialCustomers: any[] }) {
+  const [enquiries, setEnquiries] = useState(initialEnquiries);
+  const [customers, setCustomers] = useState(initialCustomers);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [convertModalOpen, setConvertModalOpen] = useState(false);
@@ -29,20 +32,78 @@ export function EnquiriesView() {
 
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
-      await addEnquiry({
-        leadName: data.leadName,
+      const newEnq = {
+        lead_name: data.leadName,
         phone: data.phone,
         whatsapp: data.whatsappNumber,
         email: data.email,
         source: data.primaryMode === "whatsapp" ? "WhatsApp" : "Phone Call",
         notes: data.notes,
-        primaryCommunicationMode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
-        location: data.location
-      });
+        primary_communication_mode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
+        location: data.location,
+        status: "Pending"
+      };
+      const result = await createEnquiry(newEnq);
+      if (result && result[0]) {
+        const mapped = {
+          id: result[0].id,
+          dateReceived: result[0].date_received,
+          leadName: result[0].lead_name,
+          phone: result[0].phone,
+          whatsapp: result[0].whatsapp,
+          email: result[0].email,
+          source: result[0].source,
+          status: result[0].status,
+          notes: result[0].notes,
+          primaryCommunicationMode: result[0].primary_communication_mode,
+          location: result[0].location
+        };
+        setEnquiries([mapped, ...enquiries]);
+      }
       setIsAddModalOpen(false);
     } catch (error) {
       console.error("Error adding enquiry:", error);
       alert("Failed to add enquiry. Check console.");
+    }
+  };
+  
+  const convertEnquiryToOrderLocal = async (enquiryId: string, assignedEmployees: string[], projectName: string, budget: number) => {
+    const enq = enquiries.find(e => e.id === enquiryId);
+    if (!enq) return;
+
+    try {
+      let customer = customers.find(c => c.phone === enq.phone);
+      if (!customer) {
+        const custResult = await createCustomer({
+          name: enq.leadName,
+          phone: enq.phone,
+          whatsapp: enq.whatsapp,
+          email: enq.email,
+          billing_address: "Address Details Pending Intake",
+          shipping_address: "Installation Address Pending Survey"
+        });
+        if (custResult && custResult[0]) {
+          customer = { id: custResult[0].id, name: custResult[0].name, phone: custResult[0].phone, email: custResult[0].email };
+          setCustomers(prev => [...prev, customer!]);
+        }
+      }
+
+      if (customer) {
+        await createOrder({
+          project_name: projectName,
+          customer_id: customer.id,
+          stage: "Site Visit Pending",
+          budget,
+          deposit_paid: 0,
+          customer_name: customer.name
+        });
+      }
+
+      await updateEnquiry(enquiryId, { status: "Converted" });
+      setEnquiries(prev => prev.map(e => e.id === enquiryId ? { ...e, status: "Converted" } : e));
+    } catch (err) {
+      console.error("Conversion failed", err);
+      alert("Failed to convert enquiry to order.");
     }
   };
 
@@ -311,7 +372,7 @@ export function EnquiriesView() {
           defaultProjectName={`New Project for ${selectedEnquiry.leadName}`}
           onSubmit={async (projectName, budget) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
-            await convertEnquiryToOrder(selectedEnquiry.id, [], projectName, budget);
+            await convertEnquiryToOrderLocal(selectedEnquiry.id, [], projectName, budget);
             setConvertModalOpen(false);
             
             if (enq) {

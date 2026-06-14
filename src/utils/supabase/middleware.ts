@@ -41,7 +41,27 @@ export const updateSession = async (request: NextRequest) => {
 
     // IMPORTANT: Avoid writing any logic between createServerClient and
     // supabase.auth.getUser(). A simple mistake can write a secure cookie.
-    await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Route Protection Logic
+    const isProtectedRoute = request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/staff');
+    const isLoginPage = request.nextUrl.pathname === '/admin/login' || request.nextUrl.pathname === '/staff/login' || request.nextUrl.pathname === '/login';
+
+    // If trying to access a protected route without being logged in
+    if (isProtectedRoute && !isLoginPage && !user) {
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = '/admin/login'; // Default to admin login
+      return NextResponse.redirect(loginUrl);
+    }
+
+    // If trying to access login page while already logged in
+    if (isLoginPage && user) {
+      const dashboardUrl = request.nextUrl.clone();
+      // Simple logic: if they are staff, go to staff, else go to admin
+      // For MVP, just redirect to /admin/orders
+      dashboardUrl.pathname = '/admin/orders'; 
+      return NextResponse.redirect(dashboardUrl);
+    }
   } catch (error) {
     console.error("Failed to update supabase session in middleware:", error);
   }

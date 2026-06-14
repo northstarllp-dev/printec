@@ -2,9 +2,8 @@
 
 import React, { useState } from "react";
 import { Search, Filter, Plus, MoreVertical, MapPin, Mail, Phone } from "lucide-react";
-import { useDashboard } from "@/context/DashboardContext";
 
-// Using real data from DashboardContext
+// Using real data from Server Components
 
 const getStatusColor = (status: string | undefined) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -15,8 +14,8 @@ const getStatusColor = (status: string | undefined) => {
   return colors[status || "Active"] || colors["Active"];
 };
 
-export function CustomersViewNew() {
-  const { customers } = useDashboard()!;
+export function CustomersViewNew({ initialCustomers }: { initialCustomers: any[] }) {
+  const [customers, setCustomers] = useState(initialCustomers);
   const [searchTerm, setSearchTerm] = useState("");
   const [copiedCustomerId, setCopiedCustomerId] = useState<string | null>(null);
 

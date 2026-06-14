@@ -689,14 +689,9 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Customers Actions
   const addCustomer = async (custData: Omit<Customer, "id">) => {
-    const numericIds = customers.map(c => {
-      const match = c.id.match(/\d+/);
-      return match ? parseInt(match[0], 10) : 0;
-    });
-    const nextNum = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 1;
     const newCust: Customer = {
       ...custData,
-      id: `A${String(nextNum).padStart(3, "0")}`
+      id: crypto.randomUUID()
     };
     setCustomers(prev => [newCust, ...prev]);
     
@@ -759,7 +754,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addEmployee = async (empData: Omit<Employee, "id">) => {
     const newEmp: Employee = {
       ...empData,
-      id: `EMP-${String(employees.length + 1).padStart(4, "0")}`
+      id: crypto.randomUUID()
     };
     setEmployees(prev => [newEmp, ...prev]);
 
@@ -814,15 +809,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addOrder = async (orderData: Omit<Order, "id" | "dateCreated" | "versionHistory" | "chatHistory"> & { id?: string }) => {
     let newId = orderData.id;
     if (!newId) {
-      // Order ID format: Axxx-xxx (e.g. A001-001, A001-002)
-      // Customer ID already uses format Axxx (e.g. A001)
-      const custId = orderData.customerId; // e.g. A001
-      
-      // Sequential order number for that specific customer
-      const custOrders = orders.filter(o => o.customerId === orderData.customerId);
-      const seqNum = String(custOrders.length + 1).padStart(3, "0");
-
-      newId = `${custId}-${seqNum}`; // e.g. A001-001
+      newId = crypto.randomUUID();
     }
     
     let customerName = orderData.customerName;
@@ -1229,7 +1216,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const addEnquiry = async (enquiryData: Omit<Enquiry, "id" | "dateReceived" | "status">) => {
     const newEnq: Enquiry = {
       ...enquiryData,
-      id: `ENQ${String(enquiries.length + 1).padStart(3, "0")}`,
+      id: crypto.randomUUID(),
       dateReceived: new Date().toISOString(),
       status: "Pending"
     };

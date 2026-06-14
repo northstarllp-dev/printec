@@ -18,8 +18,8 @@ import {
   AlertTriangle,
   CheckCircle
 } from "lucide-react";
-import { useDashboard } from "@/context/DashboardContext";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
+import { updateOrder } from "@/app/actions/orderActions";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -41,10 +41,30 @@ const getStatusColor = (status: string) => {
   return colors[status] || { bg: "#f1f5f9", text: "#64748b", label: status.toUpperCase() };
 };
 
-export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?: () => void }) {
+export function OrdersManagementDashboard({ 
+  initialOrders,
+  initialCustomers,
+  initialEmployees,
+  initialEnquiries,
+  userRole,
+  currentEmployeeName
+}: { 
+  initialOrders: any[];
+  initialCustomers: any[];
+  initialEmployees: any[];
+  initialEnquiries: any[];
+  userRole: "Admin" | "Employee";
+  currentEmployeeName: string;
+}) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
-  const { orders, customers, employees, enquiries, addNotification, currentUserRole, currentEmployee, assignEmployeesToOrder, setSelectedOrderForWorksheet, deleteOrder } = useDashboard()!;
+  const [orders, setOrders] = useState(initialOrders);
+  
+  const currentUserRole = userRole;
+  const employeeName = currentEmployeeName;
+  const customers = initialCustomers;
+  const employees = initialEmployees;
+  const enquiries = initialEnquiries;
   
   // State for right assignment panel
   const [assignPanelOrderId, setAssignPanelOrderId] = useState<string | null>(null);
@@ -57,8 +77,18 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
     console.log("New Enquiry Data:", data);
     setIsAddModalOpen(false);
   };
-
-  const employeeName = currentEmployee?.name || "";
+  
+  const assignEmployeesToOrderLocal = async (orderId: string, assigned: string[]) => {
+    // Optimistic UI update
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, assignedEmployees: assigned } : o));
+    // Server mutation
+    try {
+      await updateOrder(orderId, { assigned_employees: assigned });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to assign employees.");
+    }
+  };
 
   // Calculations for Admin
   const activeOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
@@ -133,7 +163,7 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
   ];
 
   const handleExportCSV = () => {
-    addNotification("Export Started", "Downloading orders.csv...", "success");
+    alert("Export Started: Downloading orders.csv...");
   };
 
   const filteredOrders = orders.filter(order => {
@@ -144,8 +174,7 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
     if (!matchesSearch) return false;
 
     if (currentUserRole === "Employee") {
-      const employeeName = currentEmployee?.name || "Amit Sharma";
-      return order.assignedEmployees.includes(employeeName);
+      return order.assignedEmployees?.includes(employeeName);
     }
 
     return true;
@@ -403,16 +432,20 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
                       }}
                     >
                       <div className="flex items-center gap-1 relative">
-                        {order.assignedEmployees && order.assignedEmployees.map((emp, i) => (
-                          <div
-                            key={i}
-                            title={emp}
-                            className="w-7 h-7 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white"
-                            style={{ marginLeft: i > 0 ? "-8px" : "0" }}
-                          >
-                            {emp.substring(0, 2).toUpperCase()}
-                          </div>
-                        ))}
+                        {order.assignedEmployees && order.assignedEmployees.map((empId: string, i: number) => {
+                          const staff = employees.find(e => e.id === empId);
+                          const name = staff ? staff.name : "Un";
+                          return (
+                            <div
+                              key={i}
+                              title={name}
+                              className="w-7 h-7 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center text-[10px] font-bold border-2 border-white"
+                              style={{ marginLeft: i > 0 ? "-8px" : "0" }}
+                            >
+                              {name.substring(0, 2).toUpperCase()}
+                            </div>
+                          );
+                        })}
                         {(!order.assignedEmployees || order.assignedEmployees.length === 0) && (
                           <span className="text-xs text-slate-400 italic">Unassigned</span>
                         )}
@@ -503,7 +536,7 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
                   
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px", overflowY: "auto", flex: 1, paddingRight: "8px" }}>
                     {employees.map(staff => {
-                      const isAssigned = assignOrder.assignedEmployees?.includes(staff.name);
+                      const isAssigned = assignOrder.assignedEmployees?.includes(staff.id);
                       return (
                         <label key={staff.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px", border: "1px solid", borderColor: isAssigned ? "#018F10" : "#e2e8f0", borderRadius: "8px", cursor: "pointer", transition: "all 0.2s", background: isAssigned ? "#f0fdf4" : "white" }}>
                           <input 
@@ -511,9 +544,9 @@ export function OrdersManagementDashboard({ onOpenAddOrder }: { onOpenAddOrder?:
                             checked={isAssigned || false}
                             onChange={(e) => {
                               let current = assignOrder.assignedEmployees || [];
-                              if (e.target.checked) current = [...current, staff.name];
-                              else current = current.filter(x => x !== staff.name);
-                              assignEmployeesToOrder(assignOrder.id, current);
+                              if (e.target.checked) current = [...current, staff.id];
+                              else current = current.filter((x: string) => x !== staff.id);
+                              assignEmployeesToOrderLocal(assignOrder.id, current);
                             }}
                             style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#018F10" }}
                           />
