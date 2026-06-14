@@ -18,6 +18,22 @@ const getStatusColor = (status: string | undefined) => {
 export function CustomersViewNew() {
   const { customers } = useDashboard()!;
   const [searchTerm, setSearchTerm] = useState("");
+  const [copiedCustomerId, setCopiedCustomerId] = useState<string | null>(null);
+
+  const handleCopyLink = async (customerId: string) => {
+    try {
+      const res = await fetch(`/api/portal-token?customer_id=${customerId}`);
+      const data = await res.json();
+      if (data.url) {
+        await navigator.clipboard.writeText(data.url);
+        setCopiedCustomerId(customerId);
+        setTimeout(() => setCopiedCustomerId(null), 2000);
+      }
+    } catch (err) {
+      console.error("Error fetching portal token:", err);
+      alert("Failed to retrieve customer portal link");
+    }
+  };
 
   const totalCustomers = customers.length;
   const activeCustomers = customers.filter(c => c.status === "Active").length;
@@ -72,7 +88,7 @@ export function CustomersViewNew() {
         </div>
 
         {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
           {stats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
@@ -176,6 +192,7 @@ export function CustomersViewNew() {
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>EMAIL</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CITY</th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>STATUS</th>
+                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PORTAL LINK</th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIONS</th>
               </tr>
             </thead>
@@ -191,6 +208,24 @@ export function CustomersViewNew() {
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{cust.city}</td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <span style={{ display: "inline-block", padding: "4px 12px", background: statusColor.bg, color: statusColor.text, borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>{statusColor.label}</span>
+                    </td>
+                    <td style={{ padding: "16px 20px", textAlign: "center" }}>
+                      <button
+                        onClick={() => handleCopyLink(cust.id)}
+                        style={{
+                          padding: "6px 12px",
+                          background: copiedCustomerId === cust.id ? "#dcfce7" : "#003568",
+                          border: "none",
+                          borderRadius: "6px",
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          color: copiedCustomerId === cust.id ? "#16a34a" : "white",
+                          cursor: "pointer",
+                          transition: "all 0.2s"
+                        }}
+                      >
+                        {copiedCustomerId === cust.id ? "Copied!" : "Copy Magic Link"}
+                      </button>
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <button style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: "4px 8px", transition: "all 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.color = "#475569"; }} onMouseLeave={(e) => { e.currentTarget.style.color = "#94a3b8"; }}>

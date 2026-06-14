@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X } from "lucide-react";
 import { useDashboard } from "@/context/DashboardContext";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
@@ -17,11 +17,15 @@ const getStatusColor = (status: string) => {
 };
 
 export function EnquiriesView() {
-  const { enquiries, convertEnquiryToOrder, addEnquiry } = useDashboard()!;
+  const { enquiries, customers, convertEnquiryToOrder, addEnquiry } = useDashboard()!;
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, leadName: string} | null>(null);
+
+  // Welcome message states
+  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
+  const [welcomeCustomerInfo, setWelcomeCustomerInfo] = useState<{ customerId: string; customerName: string; phone: string; email: string } | null>(null);
 
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
@@ -119,7 +123,7 @@ export function EnquiriesView() {
         </div>
 
         {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
           {stats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
@@ -236,7 +240,23 @@ export function EnquiriesView() {
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                         <button 
-                          onClick={() => alert(`Sending Welcome Message via ${enq.primaryCommunicationMode === 'WHATSAPP' ? 'WhatsApp' : 'Email'} to ${enq.leadName}`)}
+                          onClick={() => {
+                            const customer = customers.find(c => c.phone === enq.phone || c.email === enq.email);
+                            if (customer) {
+                              setWelcomeCustomerInfo({
+                                customerId: customer.id,
+                                customerName: customer.name,
+                                phone: customer.phone,
+                                email: customer.email
+                              });
+                              setWelcomeModalOpen(true);
+                            } else {
+                              if (confirm(`This lead (${enq.leadName}) has not been converted to an order/customer profile yet. Would you like to convert it to an order now to generate a portal link?`)) {
+                                setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
+                                setConvertModalOpen(true);
+                              }
+                            }
+                          }}
                           style={{ padding: "6px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#475569", cursor: "pointer", transition: "all 0.2s" }}
                           onMouseEnter={(e) => e.currentTarget.style.background = "#e2e8f0"}
                           onMouseLeave={(e) => e.currentTarget.style.background = "#f1f5f9"}
@@ -290,12 +310,278 @@ export function EnquiriesView() {
           }}
           defaultProjectName={`New Project for ${selectedEnquiry.leadName}`}
           onSubmit={async (projectName, budget) => {
+            const enq = enquiries.find(e => e.id === selectedEnquiry.id);
             await convertEnquiryToOrder(selectedEnquiry.id, [], projectName, budget);
             setConvertModalOpen(false);
+            
+            if (enq) {
+              // Retrieve the newly created customer profile by searching for phone match
+              setTimeout(() => {
+                const latestCustomer = customers.find(c => c.phone === enq.phone);
+                if (latestCustomer) {
+                  setWelcomeCustomerInfo({
+                    customerId: latestCustomer.id,
+                    customerName: latestCustomer.name,
+                    phone: latestCustomer.phone,
+                    email: latestCustomer.email
+                  });
+                  setWelcomeModalOpen(true);
+                } else {
+                  // Fallback to name match or most recent customer in state
+                  const fallbackCustomer = customers.find(c => c.name === enq.leadName) || customers[0];
+                  if (fallbackCustomer) {
+                    setWelcomeCustomerInfo({
+                      customerId: fallbackCustomer.id,
+                      customerName: fallbackCustomer.name,
+                      phone: fallbackCustomer.phone,
+                      email: fallbackCustomer.email
+                    });
+                    setWelcomeModalOpen(true);
+                  }
+                }
+              }, 600);
+            }
             setSelectedEnquiry(null);
           }}
         />
       )}
+
+      {welcomeCustomerInfo && (
+        <WelcomeMessageModal
+          isOpen={welcomeModalOpen}
+          onClose={() => {
+            setWelcomeModalOpen(false);
+            setWelcomeCustomerInfo(null);
+          }}
+          customerInfo={welcomeCustomerInfo}
+        />
+      )}
+    </div>
+  );
+}
+
+interface WelcomeMessageModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  customerInfo: { customerId: string; customerName: string; phone: string; email: string };
+}
+
+export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMessageModalProps) {
+  const [loading, setLoading] = useState(true);
+  const [portalUrl, setPortalUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && customerInfo.customerId) {
+      setLoading(true);
+      fetch(`/api/portal-token?customer_id=${customerInfo.customerId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.url) {
+            setPortalUrl(data.url);
+          }
+          setLoading(false);
+        })
+        .catch((err) => {
+          console.error("Error fetching portal token:", err);
+          setLoading(false);
+        });
+    }
+  }, [isOpen, customerInfo.customerId]);
+
+  if (!isOpen) return null;
+
+  const messageText = `Hello ${customerInfo.customerName},
+
+Welcome to Printec! We are excited to work with you on your signage project.
+
+You can track your order status, approve quotations/designs, make payments, and chat directly with our team on your secure Customer Portal:
+${portalUrl || "Loading link..."}
+
+Best regards,
+Printec Team`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(messageText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSendWhatsApp = () => {
+    const cleanPhone = customerInfo.phone.replace(/[^0-9]/g, "");
+    const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    const encodedText = encodeURIComponent(messageText);
+    window.open(`https://wa.me/${formattedPhone}?text=${encodedText}`, "_blank");
+  };
+
+  const handleSendEmail = () => {
+    const subject = encodeURIComponent("Welcome to Printec - Customer Portal Link");
+    const body = encodeURIComponent(messageText);
+    window.open(`mailto:${customerInfo.email || ""}?subject=${subject}&body=${body}`, "_blank");
+  };
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0, left: 0, right: 0, bottom: 0,
+      background: "rgba(15, 23, 42, 0.4)",
+      backdropFilter: "blur(4px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1100,
+      padding: "20px",
+      fontFamily: "var(--font-sans), sans-serif"
+    }}>
+      <div style={{
+        background: "white",
+        borderRadius: "16px",
+        width: "100%",
+        maxWidth: "520px",
+        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
+        display: "flex",
+        flexDirection: "column",
+        maxHeight: "90vh",
+        overflow: "hidden"
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "20px 24px",
+          borderBottom: "1px solid #e2e8f0",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: "#f8fafc"
+        }}>
+          <div>
+            <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#0f172a", margin: 0 }}>Customer Portal Welcome Message</h2>
+            <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0 0" }}>Review and send the magic portal link to the customer.</p>
+          </div>
+          <button 
+            onClick={onClose}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#94a3b8",
+              cursor: "pointer",
+              padding: "4px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "6px"
+            }}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px" }}>
+          {loading ? (
+            <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+              <div style={{ width: "24px", height: "24px", border: "2px solid #018F10", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+              Generating secure customer link...
+            </div>
+          ) : (
+            <>
+              <div>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>
+                  Message Preview
+                </label>
+                <textarea 
+                  readOnly
+                  value={messageText}
+                  style={{
+                    width: "100%",
+                    height: "180px",
+                    padding: "12px",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    fontSize: "13px",
+                    color: "#334155",
+                    fontFamily: "inherit",
+                    resize: "none",
+                    background: "#f8fafc"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={handleCopy}
+                  style={{
+                    flex: 1,
+                    padding: "10px 14px",
+                    background: copied ? "#dcfce7" : "#f1f5f9",
+                    border: `1px solid ${copied ? "#86efac" : "#cbd5e1"}`,
+                    color: copied ? "#16a34a" : "#475569",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    cursor: "pointer"
+                  }}
+                >
+                  <Copy size={14} />
+                  {copied ? "Copied!" : "Copy Message"}
+                </button>
+
+                <button
+                  onClick={handleSendWhatsApp}
+                  style={{
+                    flex: 1,
+                    padding: "10px 14px",
+                    background: "#25D366",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    cursor: "pointer"
+                  }}
+                >
+                  <MessageSquare size={14} />
+                  Send WhatsApp
+                </button>
+
+                <button
+                  onClick={handleSendEmail}
+                  style={{
+                    flex: 1,
+                    padding: "10px 14px",
+                    background: "#003568",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    cursor: "pointer"
+                  }}
+                >
+                  <Mail size={14} />
+                  Send Email
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }

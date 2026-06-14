@@ -127,7 +127,7 @@ export function EmployeesViewNew() {
         </div>
 
         {/* Stats Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
           {stats.map((stat, idx) => {
             const Icon = stat.icon;
             return (
