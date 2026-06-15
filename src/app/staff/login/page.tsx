@@ -1,6 +1,6 @@
 import React from "react";
 import { StaffLoginForm } from "./StaffLoginForm";
-import { getEmployees } from "@/app/actions/employeeActions";
+import { getEmployees } from "@/features/employees/actions/employeeActions";
 
 export default async function StaffLoginPage() {
   const employeesData = await getEmployees();

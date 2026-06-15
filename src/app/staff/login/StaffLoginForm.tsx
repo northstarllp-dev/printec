@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { staffSignIn } from "@/app/actions/authActions";
+import { staffSignIn } from "@/features/auth/actions/authActions";
 
 interface StaffLoginFormProps {
   employees: {

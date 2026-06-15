@@ -1,6 +1,6 @@
 import React from "react";
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/app/actions/authActions";
+import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { Shield, Users, ArrowRight, BarChart3, ClipboardList } from "lucide-react";
 import Link from "next/link";
 

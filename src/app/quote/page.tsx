@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createEnquiry } from "@/app/actions/enquiryActions";
+import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
 import { 
   Sparkles, 
   ArrowRight, 

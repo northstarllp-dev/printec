@@ -8,7 +8,7 @@ import {
   Ruler, Activity, ChevronRight, User, Phone, Mail, Clock, ClipboardList
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { scheduleSiteVisitAction } from "@/app/actions/orderActions";
+import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 
 interface Customer {
   id: string;

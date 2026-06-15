@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { adminSignIn } from "@/app/actions/authActions";
+import { adminSignIn } from "@/features/auth/actions/authActions";
 
 export default function AdminLogin() {
   const router = useRouter();
