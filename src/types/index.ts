@@ -77,6 +77,26 @@ export interface SiteVisitDetails {
   checkInTimerStart?: string; // ISO Timestamp
   elapsedDuration?: string;   // e.g. "42 mins 10 secs"
 
+  // Staff execution details
+  visitStarted?: boolean;
+  visitStartTimestamp?: string;
+  startGpsLocation?: string;
+  startDeviceInfo?: string;
+  locations?: any[];
+  distanceToPowerSource?: number;
+  distanceToPowerSourceUnit?: string;
+  electricalNotes?: string;
+  audioNoteUrl?: string;
+  mountingMethod?: string;
+  surfaceCondition?: string;
+  obstacles?: string[];
+  customerBudget?: number;
+  expectedTimeline?: string;
+  customerPreferences?: string;
+  competitorReferences?: string;
+  suggestedProductType?: string;
+  additionalObservations?: string;
+
   // Stage 4: Completed Form Details
   width: number;
   height: number;
@@ -102,8 +122,14 @@ export interface SiteVisitDetails {
   };
 
   // Stage 5: Review & Statuses
-  reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending";
+  reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending" | "Pending Admin Approval" | "Draft" | "Needs Revision" | "Rejected";
   reviewNotes?: string;
+  auditTrail?: Array<{
+    event: string;
+    user: string;
+    timestamp: string;
+    details?: string;
+  }>;
 }
 
 export interface QuoteDetails {

@@ -40,8 +40,24 @@ export async function getOrders() {
 
 export async function getOrderById(id: string) {
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
-  if (error || !data) return null;
+  
+  // First try by UUID (id column)
+  let { data, error } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  
+  // If not found, try by friendly order_id column
+  if ((error || !data) && id) {
+    const { data: dataByOrderId, error: errorByOrderId } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("order_id", id)
+      .maybeSingle();
+    
+    if (!errorByOrderId && dataByOrderId) {
+      data = dataByOrderId;
+    }
+  }
+  
+  if (!data) return null;
   return data;
 }
 
