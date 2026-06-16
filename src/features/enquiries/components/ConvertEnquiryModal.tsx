@@ -10,7 +10,6 @@ interface ConvertEnquiryModalProps {
 
 export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectName }: ConvertEnquiryModalProps) {
   const [projectName, setProjectName] = useState(defaultProjectName);
-  const [budget, setBudget] = useState("");
 
   if (!isOpen) return null;
 
@@ -100,31 +99,6 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             />
           </div>
 
-          {/* Budget */}
-          <div>
-            <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
-              Estimated Budget (₹)
-            </label>
-            <input 
-              type="number" 
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-              placeholder="e.g. 5000"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                border: "1px solid #cbd5e1",
-                borderRadius: "8px",
-                fontSize: "14px",
-                color: "#0f172a",
-                outline: "none",
-                transition: "border-color 0.2s"
-              }}
-              onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
-              onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
-            />
-          </div>
-
         </div>
 
         {/* Footer */}
@@ -160,7 +134,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
                 alert("Please enter a project name.");
                 return;
               }
-              onSubmit(projectName, parseFloat(budget || "0"));
+              onSubmit(projectName, 0);
             }}
             style={{
               padding: "10px 16px",

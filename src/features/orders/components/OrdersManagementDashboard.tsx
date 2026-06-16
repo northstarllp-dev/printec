@@ -211,60 +211,6 @@ export function OrdersManagementDashboard({
               Track and process initial project requests
             </p>
           </div>
-          <div style={{ display: "flex", gap: "12px" }}>
-            <button
-              onClick={handleExportCSV}
-              style={{
-                padding: "10px 16px",
-                background: "#f1f5f9",
-                border: "1px solid #cbd5e1",
-                borderRadius: "8px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "13px",
-                fontWeight: "600",
-                color: "#475569",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#e2e8f0";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#f1f5f9";
-              }}
-            >
-              <Download size={16} /> Export CSV
-            </button>
-            {currentUserRole !== "Employee" && (
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                style={{
-                  padding: "10px 16px",
-                  background: "var(--color-primary)",
-                  border: "none",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  color: "white",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "var(--color-primary-container)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "var(--color-primary)";
-                }}
-              >
-                <Plus size={16} /> New Enquiry
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Stats Cards */}

@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import { OrderCommunicationCenter } from "@/components/communication/OrderCommunicationCenter";
 import {
   Search, Send, X, Maximize2, RefreshCw,
   Check, Share2, Pencil, CheckCircle2,
@@ -128,18 +130,59 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [activeStepTab, setActiveStepTab] = useState<number>(
     stageToTabIndex(initialOrder.stage)
   );
-  const [chatInput, setChatInput] = useState("");
   const [rejectNotes, setRejectNotes] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [activeRightPanel, setActiveRightPanel] = useState<"logs" | "chat" | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showLostReasonDropdown, setShowLostReasonDropdown] = useState(false);
   const [selectedLostReason, setSelectedLostReason] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
 
+  const [messages, setMessages] = useState<any[]>([]);
+
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
   useEffect(() => { setActiveStepTab(stageToTabIndex(order.stage)); }, [order.stage]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    async function loadMessages() {
+      const { data } = await supabase
+        .from("order_messages")
+        .select("*")
+        .eq("order_id", order.orderId || order.id);
+      if (data) setMessages(data);
+    }
+    loadMessages();
+
+    const channel = supabase
+      .channel(`order-comm-modal-${order.id}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "order_messages",
+        filter: `order_id=eq.${order.orderId || order.id}`
+      }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          setMessages(prev => {
+            if (prev.some(m => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
+        } else if (payload.eventType === "UPDATE") {
+          setMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
+        } else if (payload.eventType === "DELETE") {
+          setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [order.id, order.orderId]);
+
+  const logsCount = messages.filter((m) => m.tab === "timeline").length;
+  const chatCount = messages.filter((m) => m.tab === "internal").length;
 
   if (!isOpen) return null;
 
@@ -224,17 +267,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     } catch (err) { triggerLocalAlert("Failed to reopen.", "error"); }
   };
 
-  const handleSendChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
-    const senderName = isEmployee ? (currentEmployee?.name || "Staff") : "Admin";
-    setOrder((prev) => ({
-      ...prev,
-      chatHistory: [...(prev.chatHistory || []), { id: Date.now().toString(), sender: senderName, time: "Just now", message: chatInput }],
-    }));
-    setChatInput("");
-    try { await addChatMessageAction(order.id, senderName, chatInput); } catch (err) { console.error(err); }
-  };
+
 
   const handleCopyMagicLink = async () => {
     if (!client) return;
@@ -483,25 +516,171 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <aside style={{ width: "240px", flexShrink: 0, borderRight: "1px solid #E2E8F0", background: "#FAFAFA", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           
           {/* Order header */}
-          <div style={{ padding: "16px", borderBottom: "1px solid #E2E8F0" }}>
-            <div style={{ fontSize: "10px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>
-              {order.orderCode}
+          {isEmployee && (
+            <div style={{ padding: "16px", borderBottom: "1px solid #E2E8F0" }}>
+              <div style={{ fontSize: "10px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>
+                {order.orderCode}
+              </div>
+              <h2 style={{ margin: "0 0 6px", fontSize: "14px", fontWeight: "800", color: "#0F172A", lineHeight: 1.3 }}>
+                {order.projectName}
+              </h2>
+              {(() => {
+                const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, color: "#94A3B8" };
+                return (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "700", background: stageInfo.color + "15", color: stageInfo.color, border: `1px solid ${stageInfo.color}30` }}>
+                    ● {stageInfo.label}
+                  </span>
+                );
+              })()}
             </div>
-            <h2 style={{ margin: "0 0 6px", fontSize: "14px", fontWeight: "800", color: "#0F172A", lineHeight: 1.3 }}>
-              {order.projectName}
-            </h2>
-            {(() => {
-              const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, color: "#94A3B8" };
+          )}
+
+          {/* Workflow steps */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 12px" }}>
+            {workflowSteps.map((step, i) => {
+              const isActive = activeStepTab === step.tabIndex;
+              const isDone = step.done || step.tabIndex < currentStageIndex;
               return (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "700", background: stageInfo.color + "15", color: stageInfo.color, border: `1px solid ${stageInfo.color}30` }}>
-                  ● {stageInfo.label}
-                </span>
+                <button
+                  key={step.label}
+                  onClick={() => { if (step.tabIndex >= 0) setActiveStepTab(step.tabIndex); }}
+                  disabled={step.tabIndex < 0}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: "12px",
+                    padding: "10px 12px", marginBottom: "4px",
+                    background: isActive ? "var(--color-secondary)" : isDone ? "#F0FDF4" : "white",
+                    border: `1px solid ${isActive ? "var(--color-secondary)" : isDone ? "#BBF7D0" : "#E2E8F0"}`,
+                    borderRadius: "10px", cursor: step.tabIndex >= 0 ? "pointer" : "default",
+                    transition: "all 0.15s", textAlign: "left",
+                  }}
+                >
+                  {/* Step indicator */}
+                  <div style={{
+                    width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
+                    background: isActive ? "rgba(255,255,255,0.15)" : isDone ? "#22C55E" : "#F1F5F9",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    border: `2px solid ${isActive ? "rgba(255,255,255,0.3)" : isDone ? "#16A34A" : "#E2E8F0"}`,
+                  }}>
+                    {isDone ? (
+                      <Check size={13} style={{ color: isActive ? "white" : "white" }} />
+                    ) : (
+                      <span style={{ fontSize: "11px", fontWeight: "800", color: isActive ? "white" : "#94A3B8" }}>
+                        {i + 1}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "12px", fontWeight: "700", color: isActive ? "white" : "#0F172A" }}>
+                      {step.label}
+                    </div>
+                    <div style={{ fontSize: "10px", color: isActive ? "rgba(255,255,255,0.7)" : "#94A3B8", fontWeight: "500" }}>
+                      Step {i + 1}
+                    </div>
+                  </div>
+                </button>
               );
-            })()}
+            })}
+            
+            {/* Divider Line */}
+            <hr style={{ border: "none", borderTop: "1px solid #cbd5e1", margin: "16px 4px" }} />
+
+            {/* Project Logs (Admin only) */}
+            {!isEmployee && (
+              <button
+                onClick={() => {
+                  setActiveRightPanel(activeRightPanel === "logs" ? null : "logs");
+                }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: "12px",
+                  padding: "10px 12px", marginBottom: "8px",
+                  background: activeRightPanel === "logs" ? "var(--color-secondary)" : "white",
+                  border: `1px solid ${activeRightPanel === "logs" ? "var(--color-secondary)" : "#E2E8F0"}`,
+                  borderRadius: "10px",
+                  cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+                }}
+                onMouseEnter={e => { if (activeRightPanel !== "logs") e.currentTarget.style.background = "#F8FAFC"; }}
+                onMouseLeave={e => { if (activeRightPanel !== "logs") e.currentTarget.style.background = "white"; }}
+              >
+                <div style={{
+                  width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
+                  background: activeRightPanel === "logs" ? "rgba(255,255,255,0.15)" : "#F1F5F9",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  border: `2px solid ${activeRightPanel === "logs" ? "rgba(255,255,255,0.3)" : "#E2E8F0"}`
+                }}>
+                  <span style={{ fontSize: "12px" }}>📋</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flex: 1 }}>
+                  <div>
+                    <div style={{ fontSize: "12px", fontWeight: "700", color: activeRightPanel === "logs" ? "white" : "#0F172A" }}>
+                      Project Logs
+                    </div>
+                    <div style={{ fontSize: "10px", color: activeRightPanel === "logs" ? "rgba(255,255,255,0.7)" : "#94A3B8", fontWeight: "500" }}>
+                      System trail & logs
+                    </div>
+                  </div>
+                  {logsCount > 0 && (
+                    <span style={{
+                      fontSize: "10px", fontWeight: "800", padding: "2px 6px", borderRadius: "10px",
+                      background: activeRightPanel === "logs" ? "white" : "#F1F5F9",
+                      color: activeRightPanel === "logs" ? "var(--color-secondary)" : "#64748B",
+                      border: activeRightPanel === "logs" ? "none" : "1px solid #E2E8F0"
+                    }}>
+                      {logsCount}
+                    </span>
+                  )}
+                </div>
+              </button>
+            )}
+
+            {/* Team Chat (Admin & Staff) */}
+            <button
+              onClick={() => {
+                setActiveRightPanel(activeRightPanel === "chat" ? null : "chat");
+              }}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", gap: "12px",
+                padding: "10px 12px", marginBottom: "8px",
+                background: activeRightPanel === "chat" ? "var(--color-secondary)" : "white",
+                border: `1px solid ${activeRightPanel === "chat" ? "var(--color-secondary)" : "#E2E8F0"}`,
+                borderRadius: "10px",
+                cursor: "pointer", transition: "all 0.15s", textAlign: "left"
+              }}
+              onMouseEnter={e => { if (activeRightPanel !== "chat") e.currentTarget.style.background = "#F8FAFC"; }}
+              onMouseLeave={e => { if (activeRightPanel !== "chat") e.currentTarget.style.background = "white"; }}
+            >
+              <div style={{
+                width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
+                background: activeRightPanel === "chat" ? "rgba(255,255,255,0.15)" : "#F1F5F9",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                border: `2px solid ${activeRightPanel === "chat" ? "rgba(255,255,255,0.3)" : "#E2E8F0"}`
+              }}>
+                <span style={{ fontSize: "12px" }}>💬</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flex: 1 }}>
+                <div>
+                  <div style={{ fontSize: "12px", fontWeight: "700", color: activeRightPanel === "chat" ? "white" : "#0F172A" }}>
+                    Team Chat
+                  </div>
+                  <div style={{ fontSize: "10px", color: activeRightPanel === "chat" ? "rgba(255,255,255,0.7)" : "#94A3B8", fontWeight: "500" }}>
+                    Internal communication
+                  </div>
+                </div>
+                {chatCount > 0 && (
+                  <span style={{
+                    fontSize: "10px", fontWeight: "800", padding: "2px 6px", borderRadius: "10px",
+                    background: activeRightPanel === "chat" ? "white" : "#F1F5F9",
+                    color: activeRightPanel === "chat" ? "var(--color-secondary)" : "#64748B",
+                    border: activeRightPanel === "chat" ? "none" : "1px solid #E2E8F0"
+                  }}>
+                    {chatCount}
+                  </span>
+                )}
+              </div>
+            </button>
           </div>
 
-          {/* Customer info (Always on top, no scrolling required) */}
-          <div style={{ borderBottom: "1px solid #E2E8F0", padding: "14px", background: "white" }}>
+          {/* Customer info (Moved to complete bottom, borderTop instead of borderBottom) */}
+          <div style={{ borderTop: "1px solid #E2E8F0", padding: "14px", background: "white", flexShrink: 0 }}>
             <div style={{ fontSize: "9px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>Customer</div>
             {client ? (
               <>
@@ -551,53 +730,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             ) : (
               <p style={{ margin: 0, fontSize: "12px", color: "#94A3B8" }}>No client linked</p>
             )}
-          </div>
-
-          {/* Workflow steps */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "16px 12px" }}>
-            {workflowSteps.map((step, i) => {
-              const isActive = activeStepTab === step.tabIndex;
-              const isDone = step.done || step.tabIndex < currentStageIndex;
-              return (
-                <button
-                  key={step.label}
-                  onClick={() => { if (step.tabIndex >= 0) setActiveStepTab(step.tabIndex); }}
-                  disabled={step.tabIndex < 0}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: "12px",
-                    padding: "10px 12px", marginBottom: "4px",
-                    background: isActive ? "var(--color-secondary)" : isDone ? "#F0FDF4" : "white",
-                    border: `1px solid ${isActive ? "var(--color-secondary)" : isDone ? "#BBF7D0" : "#E2E8F0"}`,
-                    borderRadius: "10px", cursor: step.tabIndex >= 0 ? "pointer" : "default",
-                    transition: "all 0.15s", textAlign: "left",
-                  }}
-                >
-                  {/* Step indicator */}
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
-                    background: isActive ? "rgba(255,255,255,0.15)" : isDone ? "#22C55E" : "#F1F5F9",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    border: `2px solid ${isActive ? "rgba(255,255,255,0.3)" : isDone ? "#16A34A" : "#E2E8F0"}`,
-                  }}>
-                    {isDone ? (
-                      <Check size={13} style={{ color: isActive ? "white" : "white" }} />
-                    ) : (
-                      <span style={{ fontSize: "11px", fontWeight: "800", color: isActive ? "white" : "#94A3B8" }}>
-                        {i + 1}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "12px", fontWeight: "700", color: isActive ? "white" : "#0F172A" }}>
-                      {step.label}
-                    </div>
-                    <div style={{ fontSize: "10px", color: isActive ? "rgba(255,255,255,0.7)" : "#94A3B8", fontWeight: "500" }}>
-                      Step {i + 1}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
           </div>
         </aside>
 
@@ -669,55 +801,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               </div>
             </div>
 
-            {/* Internal Team Chat (collapsible) */}
-            <div style={{ marginTop: "20px", background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", overflow: "hidden" }}>
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid #F1F5F9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.06em" }}>Internal Team Logs</span>
-                  <span style={{ width: "6px", height: "6px", background: "#22C55E", borderRadius: "50%", boxShadow: "0 0 6px #22C55E80" }} />
-                </div>
-                <button onClick={() => setIsChatOpen(!isChatOpen)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94A3B8", padding: "4px" }}>
-                  <Maximize2 size={13} />
-                </button>
-              </div>
-              <div style={{ maxHeight: "200px", overflowY: "auto", padding: "14px" }}>
-                {(order.chatHistory || []).map((chat) => {
-                  const initials = chat.sender === "System" ? "SYS" : chat.sender.split(" ").map((n: string) => n[0]).join("").toUpperCase();
-                  return (
-                    <div key={chat.id} style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
-                      <div style={{ width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0, background: chat.sender === "System" ? "#F1F5F9" : "#EFF6FF", color: chat.sender === "System" ? "#64748B" : "#2563EB", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: "800" }}>
-                        {initials}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ background: chat.sender === "System" ? "#F8FAFC" : "#F0F9FF", border: "1px solid", borderColor: chat.sender === "System" ? "#E2E8F0" : "#BFDBFE", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", color: "#0F172A", lineHeight: 1.5, fontStyle: chat.sender === "System" ? "italic" : "normal" }}>
-                          {chat.message}
-                        </div>
-                        <div style={{ fontSize: "10px", color: "#94A3B8", fontWeight: "600", marginTop: "3px" }}>
-                          {chat.sender} • {chat.time}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {(!order.chatHistory || order.chatHistory.length === 0) && (
-                  <p style={{ margin: 0, fontSize: "12px", color: "#94A3B8", textAlign: "center", padding: "8px" }}>No internal logs yet.</p>
-                )}
-              </div>
-              <form onSubmit={handleSendChat} style={{ padding: "10px 14px", borderTop: "1px solid #F1F5F9", display: "flex", gap: "8px" }}>
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  placeholder="Log internal update..."
-                  style={{ flex: 1, padding: "8px 12px", border: "1px solid #E2E8F0", borderRadius: "8px", fontSize: "12px", outline: "none", fontFamily: "inherit" }}
-                  onFocus={e => e.currentTarget.style.borderColor = "var(--color-secondary)"}
-                  onBlur={e => e.currentTarget.style.borderColor = "#E2E8F0"}
-                />
-                <button type="submit" style={{ padding: "8px 12px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Send size={12} />
-                </button>
-              </form>
-            </div>
+
 
           </div>
 
@@ -741,32 +825,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     <Save size={13} /> Save Draft
                   </button>
 
-                  {/* Mark as lost */}
-                  {(order.stage === "Site Visit Pending" || order.stage === "Quotation Negotiation") && (
-                    <div style={{ position: "relative" }}>
-                      {!showLostReasonDropdown ? (
-                        <button onClick={() => { setShowLostReasonDropdown(true); setSelectedLostReason("No Response"); }} style={{ padding: "7px 14px", border: "1px solid #FECACA", background: "#FEF2F2", color: "#DC2626", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                          Mark as Lost
-                        </button>
-                      ) : (
-                        <div style={{ position: "absolute", bottom: "calc(100% + 8px)", right: 0, background: "white", border: "1px solid #E2E8F0", borderRadius: "10px", padding: "14px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", zIndex: 50, width: "220px" }}>
-                          <span style={{ fontSize: "10px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: "8px" }}>Select Reason</span>
-                          <select value={selectedLostReason} onChange={(e) => setSelectedLostReason(e.target.value)} style={{ width: "100%", padding: "7px 10px", border: "1px solid #E2E8F0", borderRadius: "7px", fontSize: "12px", marginBottom: "10px", outline: "none" }}>
-                            <option value="No Response">No Response</option>
-                            <option value="Price Too High">Price Too High</option>
-                            <option value="Competitor">Competitor</option>
-                            <option value="Budget Issue">Budget Issue</option>
-                            <option value="Other">Other</option>
-                          </select>
-                          <div style={{ display: "flex", gap: "6px" }}>
-                            <button onClick={() => setShowLostReasonDropdown(false)} style={{ flex: 1, padding: "6px", fontSize: "11px", fontWeight: "600", background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "6px", cursor: "pointer", color: "#64748B" }}>Cancel</button>
-                            <button onClick={() => { handleUpdateHealth("Lost", selectedLostReason); setShowLostReasonDropdown(false); }} style={{ flex: 1, padding: "6px", fontSize: "11px", fontWeight: "700", background: "#EF4444", border: "none", borderRadius: "6px", cursor: "pointer", color: "white" }}>Confirm</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* Advance stage / Staff section approval push */}
                   {isEmployee ? (
                     <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -774,7 +832,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     </button>
                   ) : (
                     currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
-                      <button onClick={handleAdminApprove} style={{ padding: "7px 16px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <button onClick={handleAdminApprove} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                         <Check size={13} /> Approve & Advance
                       </button>
                     )
@@ -784,6 +842,31 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             </div>
           </div>
         </div>
+
+        {/* ══ PANEL 4: SLIDING DRAWER PANEL ══ */}
+        {activeRightPanel && (
+          <aside style={{
+            width: "380px",
+            flexShrink: 0,
+            borderLeft: "1px solid #E2E8F0",
+            background: "white",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            height: "100%"
+          }}>
+            <OrderCommunicationCenter
+              orderId={order.orderId || order.id}
+              currentUserId={currentEmployee?.id || "admin-id"}
+              currentUserRole={currentUserRole}
+              currentUserName={currentUserRole === "Admin" ? "Admin" : (currentEmployee?.name || "Staff")}
+              employees={employees}
+              customers={customers}
+              onClose={() => setActiveRightPanel(null)}
+              defaultTab={activeRightPanel === "logs" ? "timeline" : "internal"}
+            />
+          </aside>
+        )}
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import {
   Calendar,
   User
 } from "lucide-react";
+import { OrderCommunicationCenter } from "@/components/communication/OrderCommunicationCenter";
 
 interface Customer {
   id: string;
@@ -188,7 +189,7 @@ export function OrderDetailClient({ customer, order, token }: OrderDetailClientP
         {activeTab === "quotation" && <QuotationTab order={order} />}
         {activeTab === "design" && <DesignTab order={order} />}
         {activeTab === "billing" && <BillingTab order={order} />}
-        {activeTab === "chat" && <ChatTab order={order} />}
+        {activeTab === "chat" && <ChatTab order={order} customer={customer} />}
       </main>
     </div>
   );
@@ -422,46 +423,17 @@ function BillingTab({ order }: { order: Order }) {
   );
 }
 
-function ChatTab({ order }: { order: Order }) {
+function ChatTab({ order, customer }: { order: Order; customer: Customer }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 h-[500px] flex flex-col">
-      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-        <h3 className="text-lg font-bold text-gray-900">Communication</h3>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <div className="flex gap-3">
-          <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold">
-            A
-          </div>
-          <div className="max-w-[70%]">
-            <div className="bg-gray-100 rounded-xl p-3">
-              <p className="text-sm text-gray-900">Hi! Welcome to Printec! We have received your order and will get started soon.</p>
-            </div>
-            <span className="text-xs text-gray-500 mt-1 block">Today at 10:00 AM</span>
-          </div>
-        </div>
-        
-        <div className="flex gap-3 justify-end">
-          <div className="max-w-[70%] text-right">
-            <div className="bg-blue-500 text-white rounded-xl p-3">
-              <p className="text-sm">Great! Looking forward to the design.</p>
-            </div>
-            <span className="text-xs text-gray-500 mt-1 block">Today at 10:05 AM</span>
-          </div>
-        </div>
-      </div>
-      
-      <div className="p-4 border-t border-gray-200 flex gap-2">
-        <input
-          type="text"
-          placeholder="Type your message..."
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <button className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-          Send
-        </button>
-      </div>
+    <div className="bg-white rounded-xl border border-gray-200 h-[550px] flex flex-col overflow-hidden">
+      <OrderCommunicationCenter
+        orderId={order.orderCode || order.id}
+        currentUserRole="Customer"
+        currentUserName={customer.name}
+        employees={[]}
+        customers={[customer]}
+        defaultTab="customer"
+      />
     </div>
   );
 }

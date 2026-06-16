@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { OrderCommunicationCenter } from "@/components/communication/OrderCommunicationCenter";
 
 interface Customer {
   id: string;
@@ -51,6 +52,7 @@ interface Order {
   stageStatus?: string;
   stageAdminNotes?: string;
   orderCode?: string;
+  orderId?: string;
 }
 
 interface PortalClientProps {
@@ -65,7 +67,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   const [activeOrderId, setActiveOrderId] = useState<string>(
     initialActiveOrderId || (initialOrders.length > 0 ? initialOrders[0].id : "")
   );
-  const [activeTab, setActiveTab] = useState<"progress" | "quote" | "design" | "chat" | "billing">("progress");
+  const [activeViewStage, setActiveViewStage] = useState<number>(1);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [quoteFeedback, setQuoteFeedback] = useState("");
   const [designFeedback, setDesignFeedback] = useState("");
@@ -94,6 +97,59 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const activeOrder = orders.find(o => o.id === activeOrderId);
+
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const currentOrder = activeOrder;
+    if (!currentOrder) return;
+    const supabase = createClient();
+    
+    async function loadUnreadCount() {
+      if (!currentOrder) return;
+      const { count } = await supabase
+        .from("order_messages")
+        .select("*", { count: "exact", head: true })
+        .eq("order_id", currentOrder.orderId || currentOrder.id)
+        .eq("tab", "customer")
+        .eq("is_read", false);
+      if (count !== null) setUnreadCount(count);
+    }
+    loadUnreadCount();
+
+    const channel = supabase
+      .channel(`order-unread-${currentOrder.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "order_messages",
+        filter: `order_id=eq.${currentOrder.orderId || currentOrder.id}`
+      }, (payload) => {
+        const newMessage = payload.new as any;
+        if (newMessage.tab === "customer" && newMessage.sender_role !== "Customer" && !isChatOpen) {
+          setUnreadCount(prev => prev + 1);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeOrder?.id, isChatOpen]);
+
+  useEffect(() => {
+    if (isChatOpen && activeOrder) {
+      setUnreadCount(0);
+      const supabase = createClient();
+      supabase
+        .from("order_messages")
+        .update({ is_read: true })
+        .eq("order_id", activeOrder.orderId || activeOrder.id)
+        .eq("tab", "customer")
+        .eq("is_read", false)
+        .then(() => {});
+    }
+  }, [isChatOpen, activeOrder]);
 
   // Sync site visit details when activeOrder changes
   useEffect(() => {
@@ -294,6 +350,14 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, ...updatedOrder } : o));
 
     const supabase = createClient();
+    await supabase.from("order_messages").insert({
+      order_id: activeOrder.orderId || activeOrder.id,
+      tab: "timeline",
+      sender_name: "System",
+      sender_role: "System",
+      content: "Client approved the quotation details."
+    });
+
     const { error } = await supabase
       .from("orders")
       .update({
@@ -339,6 +403,22 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     setShowQuoteDeclineInput(false);
 
     const supabase = createClient();
+    await supabase.from("order_messages").insert({
+      order_id: activeOrder.orderId || activeOrder.id,
+      tab: "customer",
+      sender_name: customer.name,
+      sender_role: "Customer",
+      content: `❌ Quotation Declined. Feedback: ${quoteFeedback}`
+    });
+
+    await supabase.from("order_messages").insert({
+      order_id: activeOrder.orderId || activeOrder.id,
+      tab: "timeline",
+      sender_name: "System",
+      sender_role: "System",
+      content: "Client returned quotation for revision."
+    });
+
     await supabase
       .from("orders")
       .update({
@@ -374,6 +454,14 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, ...updatedOrder } : o));
 
     const supabase = createClient();
+    await supabase.from("order_messages").insert({
+      order_id: activeOrder.orderId || activeOrder.id,
+      tab: "timeline",
+      sender_name: "System",
+      sender_role: "System",
+      content: "Client approved the design proof layout."
+    });
+
     await supabase
       .from("orders")
       .update({
@@ -418,6 +506,22 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     setShowDesignDeclineInput(false);
 
     const supabase = createClient();
+    await supabase.from("order_messages").insert({
+      order_id: activeOrder.orderId || activeOrder.id,
+      tab: "customer",
+      sender_name: customer.name,
+      sender_role: "Customer",
+      content: `❌ Design Proof Revision Requested. Notes: ${designFeedback}`
+    });
+
+    await supabase.from("order_messages").insert({
+      order_id: activeOrder.orderId || activeOrder.id,
+      tab: "timeline",
+      sender_name: "System",
+      sender_role: "System",
+      content: "Design proof reverted to Draft stage for updates."
+    });
+
     await supabase
       .from("orders")
       .update({
@@ -451,6 +555,14 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, depositPaid: newDepositPaid, chatHistory: updatedChat } : o));
 
     const supabase = createClient();
+    await supabase.from("order_messages").insert({
+      order_id: activeOrder.orderId || activeOrder.id,
+      tab: "timeline",
+      sender_name: "System",
+      sender_role: "System",
+      content: `💳 Client confirmed mock online UPI payment of ₹${paymentAmount.toLocaleString("en-IN")}. Pending admin verification.`
+    });
+
     await supabase
       .from("orders")
       .update({
@@ -507,6 +619,84 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
   const currentStageNum = activeOrder ? getVisualStageIndex(activeOrder.stage) : 1;
 
+  useEffect(() => {
+    if (activeOrder) {
+      setActiveViewStage(currentStageNum);
+    }
+  }, [activeOrderId, currentStageNum]);
+
+  const renderBillingSection = () => {
+    if (!activeOrder) return null;
+    const balanceDue = Math.max((qd.grandTotal || activeOrder.budget || 0) - (activeOrder.depositPaid || 0), 0);
+    return (
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6 shadow-sm">
+        <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-4 border-b border-slate-100">
+          <CreditCard size={14} className="text-[#1E40AF]" />
+          Invoicing & Payment Details
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase">Total Contract Value</span>
+            <div className="text-lg font-black text-slate-800 mt-2 font-mono">
+              ₹{(qd.grandTotal || activeOrder.budget || 0).toLocaleString("en-IN")}
+            </div>
+          </div>
+
+          <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 text-center">
+            <span className="text-[10px] font-bold text-emerald-600 uppercase">Deposits Received</span>
+            <div className="text-lg font-black text-emerald-800 mt-2 font-mono">
+              ₹{(activeOrder.depositPaid || 0).toLocaleString("en-IN")}
+            </div>
+          </div>
+
+          <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 text-center">
+            <span className="text-[10px] font-bold text-amber-600 uppercase">Outstanding Balance</span>
+            <div className="text-lg font-black text-amber-800 mt-2 font-mono">
+              ₹{balanceDue.toLocaleString("en-IN")}
+            </div>
+          </div>
+        </div>
+
+        {/* Bank transfer payment instructions */}
+        <div className="border border-slate-200 rounded-2xl p-5 space-y-4 bg-slate-50">
+          <span className="text-xs font-bold text-slate-700 block uppercase tracking-wider">Payment Options</span>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            <div className="space-y-2 text-xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Method 1: Direct Bank Transfer (NEFT/RTGS)</span>
+              <p className="font-semibold text-slate-700">Account Name: <span className="text-slate-900 block font-bold mt-0.5">PRINTEC SIGNAGE SOLUTIONS PVT LTD</span></p>
+              <p className="font-semibold text-slate-700 font-mono">Account Number: 50200088382939</p>
+              <p className="font-semibold text-slate-700">Bank Name: HDFC Bank Ltd</p>
+              <p className="font-semibold text-slate-700 font-mono">IFSC Code: HDFC0001202</p>
+            </div>
+
+            <div className="flex flex-col items-center justify-center border-t md:border-t-0 md:border-l border-slate-200 pt-6 md:pt-0 md:pl-6 text-center space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase block">Method 2: Scan UPI QR Code</span>
+              <div className="w-32 h-32 border border-slate-200 rounded-xl bg-white flex items-center justify-center p-2 shadow-2xs">
+                <QrCode size={100} className="text-[#0b1c30]" />
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">printec@hdfcbank</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Pay button */}
+        {balanceDue > 0 && (
+          <div className="flex justify-end">
+            <button
+              onClick={() => setShowPaymentModal(true)}
+              className="px-6 py-3 bg-[#F97316] hover:bg-[#ea580c] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer hover:scale-[1.02] duration-200"
+            >
+              <CreditCard size={14} />
+              Simulate Payment Confirmation
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const stepperItems = [
     { num: 1, label: "Site Audit", desc: "Measurements & survey" },
     { num: 2, label: "Quotation", desc: "Pricing breakdown" },
@@ -516,286 +706,140 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   ];
 
   return (
-    <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col md:flex-row font-sans">
+    <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col font-sans">
       
-      {/* ── LEFT SIDEBAR ── */}
-      <aside className="w-full md:w-[280px] bg-white border-r border-gray-200 shrink-0 flex flex-col select-none md:h-screen sticky top-0 z-20">
-        {/* Top Section */}
-        <div className="p-6 border-b border-gray-100">
+      {/* ── MAIN WORKSPACE CONTENT ── */}
+      <div className="flex-1 flex flex-col min-w-0">
+        
+        {/* Portal Header */}
+        <header className="bg-white border-b border-slate-200 px-6 md:px-10 py-4 shrink-0 flex items-center justify-between sticky top-0 z-10">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white">
+            <div className="w-10 h-10 bg-gradient-to-br from-[#1E40AF] to-blue-700 rounded-xl flex items-center justify-center text-white shadow-sm">
               <Printer size={20} />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-gray-800 leading-tight">Printec</h2>
-              <p className="text-sm text-gray-500">{customer.name}</p>
+              <h2 className="text-base font-extrabold text-gray-800 leading-none">PRINTEC</h2>
+              <span className="text-[10px] text-slate-400 font-bold block mt-1">Signage Solutions</span>
             </div>
           </div>
-        </div>
 
-        {/* Navigation */}
-        <div className="p-4 flex-1 overflow-y-auto">
-          <nav className="space-y-2">
-            {/* My Orders */}
-            <button
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-blue-50 text-blue-600 font-semibold text-sm transition-all hover:bg-blue-100"
-            >
-              <div className="flex items-center space-x-3">
-                <FolderOpen size={20} />
-                <span>My Orders</span>
-              </div>
-              <span className="bg-blue-200 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{orders.length}</span>
-            </button>
-
-            {/* Payments */}
-            <button
-              className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-gray-600 font-semibold text-sm transition-all hover:bg-gray-50"
-            >
-              <div className="flex items-center space-x-3">
-                <DollarSign size={20} />
-                <span>Payments</span>
-              </div>
-            </button>
-          </nav>
-        </div>
-      </aside>
-
-      {/* ── MAIN WORKSPACE CONTENT ── */}
-      <div className="flex-1 flex flex-col min-w-0 md:h-screen md:overflow-y-auto">
-        
-        {/* Portal Header */}
-        <header className="bg-gray-50 border-b border-gray-200 px-6 md:px-10 py-6 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sticky top-0 z-10">
-          <h1 className="text-2xl font-extrabold text-gray-800">My Orders</h1>
+          <div className="text-center hidden md:block">
+            <span className="text-xs font-mono font-black text-slate-700 bg-slate-50 border border-slate-200/60 px-4 py-1.5 rounded-full">
+              Order ID: {activeOrder?.orderCode || activeOrder?.id} • Stage: {activeOrder?.stage}
+            </span>
+          </div>
           
           <div className="flex items-center gap-4">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 bg-white text-gray-700 font-semibold text-sm transition-all hover:bg-gray-100">
-              <MessageSquare size={18} />
+            <button 
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-xs transition-all hover:bg-slate-50 shadow-2xs"
+            >
+              <MessageSquare size={16} className="text-[#1E40AF]" />
               Chat with Us
             </button>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">{customer.name}</span>
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-bold text-sm">
+            <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+              <div className="w-8.5 h-8.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-black text-sm shadow-sm">
                 {customer.name.charAt(0)}
               </div>
             </div>
           </div>
         </header>
 
-        <div className="p-6 md:p-10 space-y-8 max-w-5xl mx-auto w-full">
-          {/* Orders List */}
-          <div className="space-y-4">
-            {orders.map((o) => {
-              const isActive = o.id === activeOrderId;
-              const stageIdx = getVisualStageIndex(o.stage);
-              
-              const stages = ["Quotation", "Design", "In Production", "Installation", "Completed"];
-              
-              return (
-                <div
-                  key={o.id}
-                  className="p-6 rounded-2xl border cursor-pointer transition-all bg-white border-gray-100 hover:border-gray-200 hover:shadow-sm"
-                >
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className="text-2xl font-extrabold text-gray-800">{o.orderCode || o.id}</div>
-                      <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full">active</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-gray-800">₹{(o.budget || 0).toLocaleString("en-IN")}</div>
-                      <div className="text-sm text-gray-500 mt-1">Paid: ₹{(o.depositPaid || 0).toLocaleString("en-IN")}</div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between mb-6">
-                    <div>
-                      <div className="text-xl font-semibold text-gray-800 mb-3">{o.stage}</div>
-                      <div className="flex items-center gap-2">
-                        {/* Progress dots and lines */}
-                        <div className="flex items-center gap-1">
-                          {stages.map((stageName, idx) => (
-                            <React.Fragment key={idx}>
-                              <div
-                                className={`w-3 h-3 rounded-full ${
-                                  idx < stageIdx 
-                                    ? (idx === 0 ? "bg-green-500" : idx === 1 ? "bg-pink-500" : idx === 2 ? "bg-orange-500" : "bg-gray-800")
-                                    : "bg-gray-200"
-                                }`}
-                              />
-                              {idx < stages.length - 1 && (
-                                <div className={`w-16 h-2 rounded-full ${
-                                  idx < stageIdx 
-                                    ? (idx === 0 ? "bg-green-500" : idx === 1 ? "bg-pink-500" : idx === 2 ? "bg-orange-500" : "bg-gray-800")
-                                    : "bg-gray-200"
-                                }`} />
-                              )}
-                            </React.Fragment>
-                          ))}
-                        </div>
-                        <div className="flex items-center gap-1 ml-4">
-                          <div className="w-2 h-2 bg-orange-500 rounded-full" />
-                          <span className="text-sm text-gray-600">{o.stage}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-sm text-gray-600">2 products</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-2">
-                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-lg border border-gray-200">ACP Sign Board</span>
-                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-lg border border-gray-200">LED Channel Letters</span>
-                    </div>
+      {/* Main Workspace Content */}
+      <main className="flex-1 max-w-4xl mx-auto w-full p-6 md:p-8 space-y-6">
+        
+        {/* Mobile order stage indicator */}
+        <div className="block md:hidden text-center pb-2">
+          <span className="text-[10px] font-mono font-black text-slate-700 bg-slate-50 border border-slate-200/60 px-3 py-1 rounded-full">
+            Order ID: {activeOrder?.orderCode || activeOrder?.id} • Stage: {activeOrder?.stage}
+          </span>
+        </div>
+
+        {activeOrder && (
+          <div className="prt-animate-in space-y-8">
+            {/* Stepper Wizard Card */}
+            <div className="bg-white border border-slate-250 rounded-2xl p-6 shadow-sm max-w-4xl mx-auto">
+              <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-6 md:gap-4 relative">
+                {/* Horizontal line for desktop stepper */}
+                <div className="absolute top-5 left-[10%] right-[10%] h-0.5 bg-slate-100 hidden md:block z-0" />
+                {/* Active progress bar line overlay */}
+                <div 
+                  className="absolute top-5 left-[10%] h-0.5 bg-emerald-500 hidden md:block z-0 transition-all duration-500" 
+                  style={{ width: `${currentStageNum > 1 ? ((currentStageNum - 1) / 4) * 80 : 0}%` }}
+                />
+
+                {stepperItems.map((step) => {
+                  const isCompleted = step.num < currentStageNum;
+                  const isActive = step.num === activeViewStage;
+                  const isLocked = step.num > currentStageNum;
+
+                  return (
                     <button
-                      onClick={() => {
-                        // Open in current tab with customer_id and token
-                        const url = new URL(`/portal/order/${o.orderCode || o.id}`, window.location.origin);
-                        url.searchParams.set("customer_id", customer.customerCode || customer.id);
-                        url.searchParams.set("token", token);
-                        window.location.href = url.toString();
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
+                      key={step.num}
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => setActiveViewStage(step.num)}
+                      className={`flex flex-col items-center text-center relative z-10 focus:outline-none transition-all group ${
+                        isLocked ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                      }`}
                     >
-                      View Order
+                      {/* Step Circle */}
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border-2 transition-all duration-300 ${
+                        isActive 
+                          ? "bg-[#1E40AF] border-[#1E40AF] text-white shadow-[0_0_12px_rgba(30,64,175,0.4)] scale-110" 
+                          : isCompleted
+                            ? "bg-emerald-500 border-emerald-500 text-white"
+                            : "bg-white border-slate-200 text-slate-400 group-hover:border-slate-350"
+                      }`}>
+                        {isCompleted ? (
+                          <Check size={16} className="stroke-[3]" />
+                        ) : (
+                          step.num
+                        )}
+                      </div>
+
+                      {/* Step Info */}
+                      <div className="mt-3">
+                        <span className={`text-xs font-black block transition-colors ${
+                          isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : "text-slate-500"
+                        }`}>
+                          {step.label}
+                        </span>
+                        <span className="text-[9px] text-slate-400 font-medium hidden md:block mt-0.5">
+                          {step.desc}
+                        </span>
+                      </div>
                     </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          
-          {/* Show order details when an order is selected */}
-          {activeOrder && (
-            <div className="mt-8">
-              {/* ── SITE VISIT STATUS CARD & WORKFLOW STEPPER ── */}
-          <section className="bg-white border border-[#cbd5e1] rounded-2xl p-6 shadow-sm space-y-6">
-            
-            {/* Status Card Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-5 text-xs font-medium">
-              <div className="space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Order ID</span>
-                <p className="font-mono text-sm font-black text-[var(--color-primary)]">{activeOrder?.orderCode || activeOrder?.id}</p>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Current Stage</span>
-                <p className="text-sm font-black text-slate-800">{activeOrder?.stage}</p>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Health</span>
-                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black border bg-emerald-50 text-emerald-700 border-emerald-200">
-                  Active
-                </span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Assigned Employee</span>
-                <p className="text-sm font-bold text-slate-800">{sv?.sitePersonnel || "Hari"}</p>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Scheduled Visit</span>
-                <p className="text-sm font-bold text-[var(--color-secondary)]">
-                  {sv?.auditDate ? `${sv.auditDate} (${sv.auditTime})` : "Not Scheduled Yet"}
-                </p>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="border-t border-slate-100 pt-4 flex justify-between items-center">
-              <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                <Activity size={14} className="text-[var(--color-secondary)]" />
-                Order Progress Tracking
-              </h3>
-              <span className="text-[10px] font-mono font-bold text-[var(--color-secondary)] bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full">
-                Active Stage: {activeOrder?.stage}
-              </span>
-            </div>
-
-            {/* Stepper Steps UI */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 md:gap-2 relative">
-              {stepperItems.map((step) => {
-                const isCompleted = step.num < currentStageNum;
-                const isCurrent = step.num === currentStageNum;
-                
-                let circleBg = "bg-slate-100 text-slate-400 border-slate-200";
-                let titleColor = "text-slate-400";
-                if (isCompleted) {
-                  circleBg = "bg-emerald-50 text-[#16a34a] border-[#16a34a]";
-                  titleColor = "text-[#16a34a]";
-                } else if (isCurrent) {
-                  circleBg = "bg-[#eff4ff] text-[var(--color-primary)] border-[var(--color-primary)] ring-4 ring-indigo-50";
-                  titleColor = "text-[var(--color-primary)] font-bold";
-                }
-
-                return (
-                  <div key={step.num} className="flex flex-col items-center text-center relative group">
-                    <div className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-xs mb-2 transition-all ${circleBg}`}>
-                      {isCompleted ? <CheckCircle2 size={16} /> : step.num}
-                    </div>
-                    <span className={`text-xs block ${titleColor}`}>{step.label}</span>
-                    <span className="text-[9px] text-[#737780] hidden md:block mt-0.5">{step.desc}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          {/* ── WORKSPACE CONTROLS / TABS ── */}
-          <div className="flex border-b border-[#cbd5e1] gap-2 md:gap-4 overflow-x-auto pb-1 shrink-0 scrollbar-none">
-            {[
-              { id: "progress", label: "Workflow Specs", icon: ClipboardList },
-              { id: "quote", label: "Quotation & Invoicing", icon: FileText },
-              { id: "design", label: "Design Blueprint", icon: Printer },
-              { id: "billing", label: "Pay Deposit", icon: CreditCard },
-              { id: "chat", label: "Live Printec Chat", icon: MessageSquare, badge: activeOrder?.chatHistory.length },
-            ].map(tab => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 whitespace-nowrap cursor-pointer ${
-                    active 
-                      ? "border-[var(--color-primary)] text-[var(--color-primary)] bg-white" 
-                      : "border-transparent text-[#737780] hover:text-[#0b1c30]"
-                  }`}
-                >
-                  <Icon size={14} />
-                  <span>{tab.label}</span>
-                  {tab.badge && (
-                    <span className="ml-1 bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full text-[9px] font-bold font-mono">{tab.badge}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* ── TAB CONTENT ── */}
-          <main className="min-h-[400px]">
-            
-            {/* 1. PROGRESS / SPECIFICATION TAB */}
-            {activeTab === "progress" && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                
-                {/* ── LEFT SECTION: Site Visit Scheduling & Measurements ── */}
-                <div className="lg:col-span-2 space-y-6">
-                  
-                  {/* Scheduling Form / Rescheduling Mode */}
+            {/* Stage Content */}
+            <div className="transition-all duration-300">
+              {/* 1. SITE VISIT MODULE */}
+              {activeViewStage === 1 && (
+                <div className="space-y-6 max-w-2xl mx-auto">
                   {(!sv.auditDate || isRescheduling) ? (
-                    <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 md:p-8 space-y-6 shadow-xs">
-                      <div>
-                        <h3 className="text-sm font-black text-[#0b1c30] uppercase tracking-wider flex items-center gap-2">
-                          <Calendar size={16} className="text-[var(--color-secondary)]" />
-                          {isRescheduling ? "Reschedule Site Visit Appointment" : "Step 1: Schedule Your Site Visit"}
+                    <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 md:p-8 space-y-6 shadow-sm">
+                      <div className="text-center">
+                        <h3 className="text-lg font-black text-[#0b1c30] uppercase tracking-wider flex items-center justify-center gap-2">
+                          <Calendar size={18} className="text-[#1E40AF]" />
+                          {isRescheduling ? "Reschedule Site Visit" : "Schedule Your Site Visit"}
                         </h3>
                         <p className="text-xs text-[#737780] mt-1">
-                          Select a preferred date and time slot. We will dispatch an auditor to capture layout coordinates.
+                          Choose a date, time window, and installation address for our field engineer to survey.
                         </p>
                       </div>
 
                       <form onSubmit={handleScheduleSiteVisit} className="space-y-6">
-                        {/* Calendar Slot Selector */}
-                        <div className="space-y-3">
+                        {/* Date & Time Slot Selector */}
+                        <div className="space-y-4 border-b border-slate-100 pb-5">
                           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
-                            Select Available Date
+                            Step 1: Choose Date & Time Slot
                           </label>
+                          
+                          {/* Date Pills */}
                           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                             {getBusinessDays().map((dayDate, idx) => {
                               const dateStr = dayDate.toISOString().split("T")[0];
@@ -814,8 +858,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                   }}
                                   className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center min-w-[70px] transition-all cursor-pointer ${
                                     isSelected
-                                      ? "bg-[#eff4ff] border-[var(--color-primary)] text-[var(--color-primary)] ring-2 ring-blue-100 font-bold"
-                                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-350"
+                                      ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100 font-bold"
+                                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-355"
                                   }`}
                                 >
                                   <span className="text-[9px] uppercase tracking-wider text-slate-400 block">{dayName}</span>
@@ -825,97 +869,80 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                               );
                             })}
                           </div>
+
+                          {/* Time Slots */}
+                          {selectedDate && (
+                            <div className="space-y-2 pt-2 animate-in fade-in duration-200">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {["10:00 AM", "11:30 AM", "02:00 PM", "03:30 PM"].map((timeSlot) => {
+                                  const isBooked = isSlotBooked(selectedDate, timeSlot);
+                                  const isSelected = selectedTime === timeSlot;
+
+                                  return (
+                                    <button
+                                      key={timeSlot}
+                                      type="button"
+                                      disabled={isBooked}
+                                      onClick={() => setSelectedTime(timeSlot)}
+                                      className={`py-3 px-2 rounded-xl border text-xs font-bold transition-all text-center ${
+                                        isBooked
+                                          ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
+                                          : isSelected
+                                            ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
+                                            : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
+                                      }`}
+                                    >
+                                      {timeSlot}
+                                      {isBooked && <span className="block text-[8px] text-red-400 font-medium mt-0.5">Taken</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        {/* Time Slots Grid */}
-                        {selectedDate && (
-                          <div className="space-y-3 prt-animate-in">
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
-                              Select Available Time (Employee: {sv?.sitePersonnel || "Hari"})
-                            </label>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                              {["10:00 AM", "11:30 AM", "02:00 PM", "03:30 PM"].map((timeSlot) => {
-                                const isBooked = isSlotBooked(selectedDate, timeSlot);
-                                const isSelected = selectedTime === timeSlot;
+                        {/* Location Selector */}
+                        <div className="space-y-4">
+                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
+                            Step 2: Pin Site Location
+                          </label>
 
-                                return (
-                                  <button
-                                    key={timeSlot}
-                                    type="button"
-                                    disabled={isBooked}
-                                    onClick={() => setSelectedTime(timeSlot)}
-                                    className={`py-3 px-2 rounded-xl border text-xs font-bold transition-all text-center ${
-                                      isBooked
-                                        ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
-                                        : isSelected
-                                          ? "bg-[#eff4ff] border-[var(--color-primary)] text-[var(--color-primary)] ring-2 ring-blue-100"
-                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-330 cursor-pointer"
-                                    }`}
-                                  >
-                                    {timeSlot}
-                                    {isBooked && <span className="block text-[8px] text-red-400 font-medium mt-0.5">Taken (Double-booked)</span>}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Scheduling fields */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Address Input */}
                           <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-                              Site Address *
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                              Installation Site Address *
                             </label>
                             <input
                               type="text"
                               required
                               value={siteAddress}
                               onChange={(e) => setSiteAddress(e.target.value)}
-                              placeholder="Full installation site address"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
+                              placeholder="Full address where signage will be installed"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#1E40AF] focus:border-[#1E40AF] focus:outline-none bg-slate-50 focus:bg-white transition-all"
                             />
                           </div>
 
-                          <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-                              Landmark / Delivery Info
-                            </label>
-                            <input
-                              type="text"
-                              value={landmark}
-                              onChange={(e) => setLandmark(e.target.value)}
-                              placeholder="e.g. Near HDFC Bank, 2nd floor"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
-                            />
-                          </div>
-                        </div>
-
-                        {/* Interactive GPS Maps Picker Mock */}
-                        <div className="space-y-3">
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
-                            Google Maps Coordinates Pin *
-                          </label>
-                          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50">
-                            {/* Maps Canvas Area Mock */}
+                          {/* Maps Coordinates Pin Picker */}
+                          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 shadow-inner">
                             <div 
                               onClick={() => {
                                 setGpsCoords(`${(12.97 + Math.random() * 0.01).toFixed(4)}° N, ${(77.59 + Math.random() * 0.01).toFixed(4)}° E`);
                               }}
-                              className="h-32 bg-slate-100 flex flex-col items-center justify-center relative cursor-crosshair overflow-hidden group select-none"
+                              className="h-36 bg-slate-100 flex flex-col items-center justify-center relative cursor-crosshair overflow-hidden group select-none"
                             >
-                              {/* Grid representation */}
-                              <div className="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e1_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e1_1px,transparent_1px)] bg-[size:24px_24px] opacity-15" />
-                              <div className="absolute w-6 h-6 rounded-full bg-emerald-500/20 animate-ping" />
-                              <MapPin size={28} className="text-[var(--color-secondary)] relative z-10 transition-transform duration-300 group-hover:scale-110" />
-                              <span className="text-[10px] text-slate-400 mt-2 relative z-10 font-bold bg-white/80 px-2 py-0.5 rounded shadow-xs">
-                                Click Map area to reposition pin
+                              <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:20px_20px] opacity-25" />
+                              <div className="absolute w-8 h-8 rounded-full bg-blue-500/20 animate-ping" />
+                              <div className="absolute w-4 h-4 rounded-full bg-blue-500/40 animate-pulse" />
+                              <MapPin size={32} className="text-[#F97316] relative z-10 transition-transform duration-300 group-hover:scale-110 drop-shadow-md" />
+                              <span className="text-[10px] text-slate-500 mt-2.5 relative z-10 font-bold bg-white/90 px-3 py-1 rounded-full shadow-sm border border-slate-100">
+                                Click map area to reposition coordinates pin
                               </span>
                             </div>
 
-                            <div className="p-3 border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3">
+                            <div className="p-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3">
                               <span className="text-xs font-mono font-bold text-slate-700">
-                                📍 Coordinates: <span className="text-slate-900">{gpsCoords}</span>
+                                📍 Coordinates: <span className="text-slate-900 font-black">{gpsCoords}</span>
                               </span>
                               <button
                                 type="button"
@@ -926,85 +953,23 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                     setMapsSearching(false);
                                   }, 600);
                                 }}
-                                className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1.5"
+                                className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
                               >
                                 {mapsSearching ? (
-                                  <span className="w-3.5 h-3.5 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
-                                ) : "Auto-detect Coordinates"}
+                                  <span className="w-3 h-3 border-2 border-[#1E40AF] border-t-transparent rounded-full animate-spin" />
+                                ) : "Auto-detect Location"}
                               </button>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-                              Contact Person *
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={contactPerson}
-                              onChange={(e) => setContactPerson(e.target.value)}
-                              placeholder="Name of onsite contact"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-                              Contact Number *
-                            </label>
-                            <input
-                              type="tel"
-                              required
-                              value={contactNumber}
-                              onChange={(e) => setContactNumber(e.target.value)}
-                              placeholder="Phone number"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-                              Site Type *
-                            </label>
-                            <select
-                              value={siteType}
-                              onChange={(e) => setSiteType(e.target.value)}
-                              className="w-full p-3 border border-slate-200 bg-white rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
-                            >
-                              <option value="Shop Front">Shop Front</option>
-                              <option value="Office">Office</option>
-                              <option value="Restaurant">Restaurant</option>
-                              <option value="Hospital">Hospital</option>
-                              <option value="Mall">Mall</option>
-                              <option value="Factory">Factory</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
-                            Special Instructions / Onsite Logistics Notes
-                          </label>
-                          <textarea
-                            rows={3}
-                            value={specialInstructions}
-                            onChange={(e) => setSpecialInstructions(e.target.value)}
-                            placeholder="e.g. Parking available behind building. Contact security before entry. Visit only before 1 PM..."
-                            className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
-                          />
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="flex justify-end space-x-3 pt-2">
+                        {/* Submit Actions */}
+                        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
                           {isRescheduling && (
                             <button
                               type="button"
                               onClick={() => setIsRescheduling(false)}
-                              className="px-5 py-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50"
+                              className="px-5 py-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
                             >
                               Cancel
                             </button>
@@ -1012,20 +977,20 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           <button
                             type="submit"
                             disabled={!selectedDate || !selectedTime || schedulingLoading}
-                            className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-container)] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2 shadow-xs"
+                            className="px-6 py-2.5 bg-[#1E40AF] hover:bg-[#1d4ed8] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
                           >
                             {schedulingLoading ? (
                               <>
                                 <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                Processing Appointment...
+                                Processing slot...
                               </>
-                            ) : isRescheduling ? "Update Scheduled Visit" : "Confirm Site Visit Appointment"}
+                            ) : isRescheduling ? "Update Appointment" : "Book Site Survey"}
                           </button>
                         </div>
                       </form>
                     </div>
                   ) : sv.completed === false ? (
-                    // ── CONFIRMATION SCREEN (Scheduled successfully, but not completed yet) ──
+                    /* ── CONFIRMATION SCREEN ── */
                     <div className="bg-white border border-emerald-100 rounded-2xl p-6 md:p-8 space-y-6 shadow-xs text-center prt-animate-in">
                       <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
                         <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
@@ -1059,18 +1024,6 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           <span className="text-[10px] text-slate-400 uppercase font-bold">Audit Address</span>
                           <p className="font-medium text-slate-800 leading-normal">{sv.customerAddress}</p>
                         </div>
-                        {sv.landmark && (
-                          <div className="col-span-2 space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Landmark Reference</span>
-                            <p className="font-medium text-slate-800">{sv.landmark}</p>
-                          </div>
-                        )}
-                        {sv.notes && (
-                          <div className="col-span-2 space-y-0.5 border-t border-slate-100 pt-3">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Special Instructions</span>
-                            <p className="font-medium text-slate-600 leading-normal italic">"{sv.notes}"</p>
-                          </div>
-                        )}
                       </div>
 
                       <div className="flex justify-center pt-2">
@@ -1079,13 +1032,13 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           onClick={() => setIsRescheduling(true)}
                           className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
                         >
-                          <Calendar size={14} className="text-[var(--color-secondary)]" />
+                          <Calendar size={14} className="text-[#1E40AF]" />
                           Reschedule Site Visit Appointment
                         </button>
                       </div>
                     </div>
                   ) : sv.reviewStatus !== "Approved" ? (
-                    // ── COMPLETED BUT PENDING ADMIN APPROVAL (Staff details hidden) ──
+                    /* ── COMPLETED BUT PENDING ADMIN APPROVAL ── */
                     <div className="bg-white border border-amber-250 rounded-2xl p-6 md:p-8 space-y-6 shadow-xs prt-animate-in">
                       <div className="flex items-start space-x-4 bg-amber-50/50 border border-amber-200 rounded-xl p-5 text-amber-800">
                         <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={20} />
@@ -1117,20 +1070,20 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           onClick={() => setIsRescheduling(true)}
                           className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
                         >
-                          <Calendar size={14} className="text-[var(--color-secondary)]" />
+                          <Calendar size={14} className="text-[#1E40AF]" />
                           Request Audit Resurvey / Change Details
                         </button>
                       </div>
                     </div>
                   ) : (
-                    // ── APPROVED SITE VISIT VIEW (Visible after admin approval) ──
+                    /* ── APPROVED SITE VISIT VIEW ── */
                     <div className="space-y-6 prt-animate-in">
                       
                       {/* Visit Summary Card */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
                         <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                           <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                            <Clock size={14} className="text-[var(--color-secondary)]" />
+                            <Clock size={14} className="text-[#1E40AF]" />
                             Site Visit Summary (Approved)
                           </h4>
                           <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-0.5 rounded text-[10px] font-black uppercase">
@@ -1161,7 +1114,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {/* Measurement Summary Card */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
                         <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <Ruler size={14} className="text-[var(--color-secondary)]" />
+                          <Ruler size={14} className="text-[#1E40AF]" />
                           Measurement Summary
                         </h4>
 
@@ -1201,7 +1154,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {/* Site Photos Gallery Card */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
                         <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <Printer size={14} className="text-[var(--color-secondary)]" />
+                          <Printer size={14} className="text-[#1E40AF]" />
                           Site Photos Gallery
                         </h4>
 
@@ -1217,7 +1170,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                               target="_blank"
                               rel="noopener noreferrer"
                               key={idx}
-                              className="group block border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative aspect-square transition-all hover:border-[var(--color-primary)]"
+                              className="group block border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative aspect-square transition-all hover:border-[#1E40AF]"
                             >
                               <img src={item.url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/80 to-transparent p-3 pt-6 text-[10px] text-white font-bold uppercase tracking-wide">
@@ -1231,7 +1184,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {/* Site Assessment Card */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
                         <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <ClipboardList size={14} className="text-[var(--color-secondary)]" />
+                          <ClipboardList size={14} className="text-[#1E40AF]" />
                           Site Assessment Details
                         </h4>
 
@@ -1252,535 +1205,393 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                             <span className="text-[10px] text-slate-400 uppercase font-bold">Distance to Power Source</span>
                             <p className="font-bold text-slate-800 font-mono">{sv.distanceToPowerSource || "5 ft"}</p>
                           </div>
-                          {sv.notes && (
-                            <div className="col-span-1 sm:col-span-2 p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                              <span className="text-[10px] text-slate-400 uppercase font-bold">General Feasibility Notes</span>
-                              <p className="font-medium text-slate-700 leading-normal italic">"{sv.notes}"</p>
-                            </div>
-                          )}
                         </div>
                       </div>
 
                     </div>
                   )}
 
-                  {/* Fabrication checklist & installation signoff remain below */}
-                  {sv.completed && sv.reviewStatus === "Approved" && (
-                    <div className="space-y-6 pt-2">
-                      {/* Workshop fabrication checklist */}
-                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
-                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                          <CheckSquare size={14} className="text-[var(--color-secondary)]" />
-                          Workshop Fabrication Checklist (Real-time Status)
-                        </h4>
-                        
-                        {currentStageNum >= 4 ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {[
-                              { checked: pd.printing, label: "1. Print layout sheet & backing support plotted" },
-                              { checked: pd.cutting, label: "2. CNC precision cutting & routing alignment complete" },
-                              { checked: pd.fabrication, label: "3. Aluminium frame backing welding tested" },
-                              { checked: pd.assembly, label: "4. Acrylic letter mounting & LED internal circuitry wired" },
-                            ].map((item, idx) => (
-                              <div key={idx} className={`p-4 border rounded-xl flex items-center justify-between ${
-                                item.checked ? "bg-emerald-50/35 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-400"
-                              }`}>
-                                <span className="text-xs font-bold">{item.label}</span>
-                                {item.checked ? (
-                                  <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[9px] font-bold">Done</span>
-                                ) : (
-                                  <span className="bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full text-[9px] font-bold">Pending</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-xs">
-                            Workshop checklists activate once quotation and designs are finalized.
-                          </div>
-                        )}
-                      </div>
+                  {/* Customer Notifications Center Log */}
+                  <div className="space-y-6">
+                    <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-xs">
+                      <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
+                        <Mail size={14} className="text-[#1E40AF]" />
+                        Customer Notifications Center
+                      </h3>
+                      <p className="text-[11px] text-slate-500 leading-normal">
+                        Real-time log of automated messages dispatched to your registered details (Phone: <strong className="text-slate-700">{customer.phone}</strong>, Email: <strong className="text-slate-700">{customer.email}</strong>).
+                      </p>
 
-                      {/* Installation details */}
-                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
-                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                          <CheckCircle2 size={14} className="text-[var(--color-secondary)]" />
-                          Field Installation Sign-off Proof
-                        </h4>
-                        {inst.photoUrl ? (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 aspect-video">
-                              <img src={inst.photoUrl} alt="Installation Completion" className="w-full h-full object-cover" onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop';}} />
-                            </div>
-                            <div className="space-y-3 flex flex-col justify-center">
-                              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold space-y-1">
-                                <span className="block text-slate-400 text-[10px] uppercase font-bold">Sign-off Status</span>
-                                <p>✓ Job Completed & Signed off by Client</p>
+                      {getNotificationHistory().length > 0 ? (
+                        <div className="space-y-3.5 pt-2">
+                          {getNotificationHistory().map((alertLog, idx) => (
+                            <div key={idx} className="border border-slate-150 rounded-xl p-3.5 bg-slate-50/50 space-y-2.5">
+                              <div className="flex justify-between items-start">
+                                <span className="text-xs font-black text-slate-800">{alertLog.event}</span>
+                                <span className="text-[9px] font-mono text-slate-400 font-medium">{alertLog.time}</span>
                               </div>
-                              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
-                                <span className="text-[10px] text-slate-400 uppercase block font-bold">Customer Representative Signature</span>
-                                <span className="font-serif italic text-slate-800 text-sm font-bold block mt-1">{inst.customerSignature}</span>
-                                <span className="text-[9px] text-slate-400 font-mono mt-2 block">Security Code Verified: {inst.paymentCode}</span>
+                              <div className="flex flex-wrap gap-2 text-[9px] font-bold text-slate-400">
+                                <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
+                                  <Check size={10} className="stroke-[3]" /> Portal Alert
+                                </span>
+                                <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
+                                  <Check size={10} className="stroke-[3]" /> WhatsApp SMS
+                                </span>
+                                <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
+                                  <Check size={10} className="stroke-[3]" /> Email Dispatch
+                                </span>
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <p className="text-xs text-[#737780] italic">Field installation records will update here upon delivery confirmation.</p>
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-5 bg-slate-50 border border-slate-200 border-dashed rounded-xl text-center text-slate-400 text-xs italic">
+                          No automated alerts dispatched yet. Site scheduling triggers Portal, WhatsApp & Email messages.
+                        </div>
+                      )}
                     </div>
-                  )}
 
+                    {/* Rescheduling Helper Panel */}
+                    {sv.auditDate && sv.completed === false && !isRescheduling && (
+                      <div className="bg-[#eff4ff] border border-blue-200 rounded-2xl p-5 text-xs text-[#1E40AF] space-y-2 shadow-2xs">
+                        <span className="font-bold block">Need to Reschedule?</span>
+                        <p className="text-[11px] leading-relaxed text-slate-600">
+                          You can reschedule your appointment at any time before our audit representative visits your site. Rescheduling releases your current time slot back to the public pool.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              )}
 
-                {/* ── RIGHT SECTION: Notifications Center Log ── */}
-                <div className="space-y-6">
-                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-xs">
-                    <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                      <Mail size={14} className="text-[var(--color-secondary)]" />
-                      Customer Notifications Center
-                    </h3>
-                    <p className="text-[11px] text-slate-500 leading-normal">
-                      Real-time log of automated messages dispatched to your registered details (Phone: <strong className="text-slate-700">{customer.phone}</strong>, Email: <strong className="text-slate-700">{customer.email}</strong>).
-                    </p>
+              {/* 2. QUOTATION / INVOICING */}
+              {activeViewStage === 2 && (
+                <div className="space-y-6 max-w-3xl mx-auto">
+                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6 shadow-sm">
+                    <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+                      <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
+                        <FileText size={14} className="text-[#1E40AF]" />
+                        Invoice Quotation Details
+                      </h3>
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
+                        qd.status === "Approved" 
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-250" 
+                          : "bg-amber-50 text-amber-600 border-amber-250"
+                      }`}>
+                        {qd.status || "Draft"}
+                      </span>
+                    </div>
 
-                    {getNotificationHistory().length > 0 ? (
-                      <div className="space-y-3.5 pt-2">
-                        {getNotificationHistory().map((alertLog, idx) => (
-                          <div key={idx} className="border border-slate-150 rounded-xl p-3.5 bg-slate-50/50 space-y-2.5">
-                            <div className="flex justify-between items-start">
-                              <span className="text-xs font-black text-slate-800">{alertLog.event}</span>
-                              <span className="text-[9px] font-mono text-slate-400 font-medium">{alertLog.time}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-2 text-[9px] font-bold text-slate-400">
-                              <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
-                                <Check size={10} className="stroke-[3]" /> Portal Alert
-                              </span>
-                              <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
-                                <Check size={10} className="stroke-[3]" /> WhatsApp SMS
-                              </span>
-                              <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
-                                <Check size={10} className="stroke-[3]" /> Email Dispatch
-                              </span>
+                    {/* Pricing Table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
+                            <th className="pb-3">Fabrication Parameters</th>
+                            <th className="pb-3 text-right">Unit / Value</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          <tr>
+                            <td className="py-3.5 text-slate-500">Signage Type</td>
+                            <td className="py-3.5 text-right text-slate-800 font-bold">{qd.signageType}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-3.5 text-slate-500">Materials Spec</td>
+                            <td className="py-3.5 text-right text-slate-800 font-bold">{qd.material}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-3.5 text-slate-500">Mounting Support</td>
+                            <td className="py-3.5 text-right text-slate-800 font-bold">{qd.mounting}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-3.5 text-slate-500">Physical Dimensions</td>
+                            <td className="py-3.5 text-right text-slate-800 font-mono font-bold">{qd.width}″ × {qd.height}″ (Depth: {qd.depth}″)</td>
+                          </tr>
+                          <tr>
+                            <td className="py-3.5 text-slate-500">Base ACP Fabrication Cost</td>
+                            <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.baseACPPrice || 0).toLocaleString("en-IN")}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-3.5 text-slate-500">Hardware & Fittings Cost</td>
+                            <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.hardwarePrice || 0).toLocaleString("en-IN")}</td>
+                          </tr>
+                          <tr>
+                            <td className="py-3.5 text-slate-500">Polishing & Finishing</td>
+                            <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.polishingPrice || 0).toLocaleString("en-IN")}</td>
+                          </tr>
+                          {qd.discount > 0 && (
+                            <tr className="text-red-600">
+                              <td className="py-3.5 font-bold">Special Customer Discount</td>
+                              <td className="py-3.5 text-right font-mono font-bold">-₹{qd.discount.toLocaleString("en-IN")}</td>
+                            </tr>
+                          )}
+                          <tr className="font-bold border-t border-slate-200">
+                            <td className="py-4 text-slate-700">Subtotal Amount</td>
+                            <td className="py-4 text-right text-slate-900 font-mono">₹{(qd.subtotal || 0).toLocaleString("en-IN")}</td>
+                          </tr>
+                          <tr className="font-bold text-slate-500">
+                            <td className="py-3.5">Tax (18% IGST/GST)</td>
+                            <td className="py-3.5 text-right font-mono">₹{(qd.tax || 0).toLocaleString("en-IN")}</td>
+                          </tr>
+                          <tr className="font-black text-sm border-t border-dashed border-slate-200">
+                            <td className="py-4 text-[#1E40AF]">Grand Total Amount</td>
+                            <td className="py-4 text-right text-emerald-700 font-mono text-base">₹{(qd.grandTotal || 0).toLocaleString("en-IN")}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Actionable approvals if stage is appropriate */}
+                    {qd.status !== "Approved" && (activeOrder.stage === "Quotation Sent" || activeOrder.stage === "Quotation Negotiation") && (
+                      <div className="bg-[#eff4ff] border border-[#cbd5e0] rounded-2xl p-5 space-y-4">
+                        <div>
+                          <span className="text-xs font-black text-[#1E40AF] block">Review and Approve Quotation Invoice</span>
+                          <p className="text-[11px] text-slate-500 leading-normal mt-1">
+                            Please verify the financial cost sheet above. Approving will notify Printec Admin to schedule design draft creation.
+                          </p>
+                        </div>
+
+                        {showQuoteDeclineInput ? (
+                          <div className="space-y-3">
+                            <label className="block text-[10px] font-bold text-red-700 uppercase">Specify Revision Feedback / Changes Requested</label>
+                            <textarea
+                              rows={3}
+                              value={quoteFeedback}
+                              onChange={(e) => setQuoteFeedback(e.target.value)}
+                              placeholder="Please let us know your requirements..."
+                              className="w-full p-3 border border-slate-355 rounded-xl text-xs focus:ring-1 focus:ring-red-500 focus:outline-none bg-white"
+                            />
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => setShowQuoteDeclineInput(false)}
+                                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-lg text-xs font-bold"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={handleDeclineQuote}
+                                disabled={!quoteFeedback.trim() || updatingStatus !== null}
+                                className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50"
+                              >
+                                {updatingStatus === "quote-decline" ? "Submitting..." : "Submit Revision Notes"}
+                              </button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-5 bg-slate-50 border border-slate-200 border-dashed rounded-xl text-center text-slate-400 text-xs italic">
-                        No automated alerts dispatched yet. Site scheduling triggers Portal, WhatsApp & Email messages.
+                        ) : (
+                          <div className="flex space-x-3">
+                            <button
+                              onClick={() => setShowQuoteDeclineInput(true)}
+                              className="px-4 py-2 border border-slate-300 text-slate-600 bg-white rounded-xl text-xs font-bold hover:bg-slate-50"
+                            >
+                              Decline / Request Revision
+                            </button>
+                            <button
+                              onClick={handleApproveQuote}
+                              disabled={updatingStatus !== null}
+                              className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50 shadow-2xs"
+                            >
+                              <Check size={14} /> Approve Quotation
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* Rescheduling Helper Panel */}
-                  {sv.auditDate && sv.completed === false && !isRescheduling && (
-                    <div className="bg-[#eff4ff] border border-blue-200 rounded-2xl p-5 text-xs text-[var(--color-primary)] space-y-2">
-                      <span className="font-bold block">Need to Reschedule?</span>
-                      <p className="text-[11px] leading-relaxed text-slate-600">
-                        You can reschedule your appointment at any time before our audit representative visits your site. Rescheduling releases your current time slot back to the public pool.
-                      </p>
-                    </div>
-                  )}
+                  {/* Payment section if approved */}
+                  {qd.status === "Approved" && renderBillingSection()}
                 </div>
+              )}
 
-              </div>
-            )}
+              {/* 3. DESIGN BLUEPRINT PROOF */}
+              {activeViewStage === 3 && (
+                <div className="space-y-6 max-w-3xl mx-auto">
+                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6 shadow-sm">
+                    <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+                      <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
+                        <Printer size={14} className="text-[#1E40AF]" />
+                        Design Blueprint & Concept Mockup Proof
+                      </h3>
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
+                        dd.status === "Approved" 
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-250" 
+                          : "bg-amber-50 text-amber-600 border-amber-250"
+                      }`}>
+                        {dd.status || "Draft"}
+                      </span>
+                    </div>
 
-            {/* 2. QUOTATION / INVOICING TAB */}
-            {activeTab === "quote" && (
-              <div className="space-y-6">
-                <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6">
-                  <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                    <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                      <FileText size={14} className="text-[var(--color-secondary)]" />
-                      Invoice Quotation Details
-                    </h3>
-                    <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
-                      qd.status === "Approved" 
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-250" 
-                        : "bg-amber-50 text-amber-600 border-amber-250"
-                    }`}>
-                      {qd.status || "Draft"}
-                    </span>
-                  </div>
-
-                  {/* Pricing Table */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
-                          <th className="pb-3">Fabrication Parameters</th>
-                          <th className="pb-3 text-right">Unit / Value</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-medium">
-                        <tr>
-                          <td className="py-3.5 text-slate-500">Signage Type</td>
-                          <td className="py-3.5 text-right text-slate-800 font-bold">{qd.signageType}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3.5 text-slate-500">Materials Spec</td>
-                          <td className="py-3.5 text-right text-slate-800 font-bold">{qd.material}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3.5 text-slate-500">Mounting Support</td>
-                          <td className="py-3.5 text-right text-slate-800 font-bold">{qd.mounting}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3.5 text-slate-500">Physical Dimensions</td>
-                          <td className="py-3.5 text-right text-slate-800 font-mono font-bold">{qd.width}″ × {qd.height}″ (Depth: {qd.depth}″)</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3.5 text-slate-500">Base ACP Fabrication Cost</td>
-                          <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.baseACPPrice || 0).toLocaleString("en-IN")}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3.5 text-slate-500">Hardware & Fittings Cost</td>
-                          <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.hardwarePrice || 0).toLocaleString("en-IN")}</td>
-                        </tr>
-                        <tr>
-                          <td className="py-3.5 text-slate-500">Polishing & Finishing</td>
-                          <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.polishingPrice || 0).toLocaleString("en-IN")}</td>
-                        </tr>
-                        {qd.discount > 0 && (
-                          <tr className="text-red-600">
-                            <td className="py-3.5 font-bold">Special Customer Discount</td>
-                            <td className="py-3.5 text-right font-mono font-bold">-₹{qd.discount.toLocaleString("en-IN")}</td>
-                          </tr>
-                        )}
-                        <tr className="font-bold border-t border-slate-200">
-                          <td className="py-4 text-slate-700">Subtotal Amount</td>
-                          <td className="py-4 text-right text-slate-900 font-mono">₹{(qd.subtotal || 0).toLocaleString("en-IN")}</td>
-                        </tr>
-                        <tr className="font-bold text-slate-500">
-                          <td className="py-3.5">Tax (18% IGST/GST)</td>
-                          <td className="py-3.5 text-right font-mono">₹{(qd.tax || 0).toLocaleString("en-IN")}</td>
-                        </tr>
-                        <tr className="font-black text-sm border-t border-dashed border-slate-200">
-                          <td className="py-4 text-[var(--color-primary)]">Grand Total Amount</td>
-                          <td className="py-4 text-right text-emerald-700 font-mono text-base">₹{(qd.grandTotal || 0).toLocaleString("en-IN")}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Actionable approvals if stage is appropriate */}
-                  {qd.status !== "Approved" && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation") && (
-                    <div className="bg-[#eff4ff] border border-[#cbd5e0] rounded-2xl p-5 space-y-4">
-                      <div>
-                        <span className="text-xs font-black text-[var(--color-primary)] block">Review and Approve Quotation Invoice</span>
-                        <p className="text-[11px] text-slate-500 leading-normal mt-1">
-                          Please verify the financial cost sheet above. Approving will notify Printec Admin to schedule design draft creation.
-                        </p>
-                      </div>
-
-                      {showQuoteDeclineInput ? (
-                        <div className="space-y-3">
-                          <label className="block text-[10px] font-bold text-red-700 uppercase">Specify Revision Feedback / Changes Requested</label>
-                          <textarea
-                            rows={3}
-                            value={quoteFeedback}
-                            onChange={(e) => setQuoteFeedback(e.target.value)}
-                            placeholder="Please let us know your requirements..."
-                            className="w-full p-3 border border-slate-350 rounded-xl text-xs focus:ring-1 focus:ring-red-500 focus:outline-none"
+                    {dd.proofUrl ? (
+                      <div className="space-y-6">
+                        {/* Zoomable Image Container */}
+                        <div className="relative border border-slate-200 rounded-2xl bg-[#0b1c30] flex items-center justify-center p-6 overflow-hidden min-h-[300px]">
+                          <img 
+                            src={dd.proofUrl} 
+                            alt="Concept Proof" 
+                            className="max-h-[320px] object-contain transition-all duration-300"
+                            style={{ transform: `scale(${zoomLevel / 100})` }}
+                            onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop';}}
                           />
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => setShowQuoteDeclineInput(false)}
-                              className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-lg text-xs font-bold"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handleDeclineQuote}
-                              disabled={!quoteFeedback.trim() || updatingStatus !== null}
-                              className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50"
-                            >
-                              {updatingStatus === "quote-decline" ? "Submitting..." : "Submit Revision Notes"}
-                            </button>
+                          
+                          {/* Interactive Zoom Overlay controls */}
+                          <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-lg p-2 flex items-center space-x-2 shadow-sm">
+                            <button onClick={() => setZoomLevel(prev => Math.max(prev - 20, 50))} className="p-1 text-slate-500 hover:text-slate-800 rounded"><ZoomOut size={12} /></button>
+                            <span className="text-[10px] font-mono font-black select-none cursor-pointer" onClick={() => setZoomLevel(100)}>{zoomLevel}%</span>
+                            <button onClick={() => setZoomLevel(prev => Math.min(prev + 20, 200))} className="p-1 text-slate-500 hover:text-slate-800 rounded"><ZoomIn size={12} /></button>
                           </div>
                         </div>
-                      ) : (
-                        <div className="flex space-x-3">
-                          <button
-                            onClick={() => setShowQuoteDeclineInput(true)}
-                            className="px-4 py-2 border border-slate-300 text-slate-600 bg-white rounded-xl text-xs font-bold hover:bg-slate-50"
-                          >
-                            Decline / Request Revision
-                          </button>
-                          <button
-                            onClick={handleApproveQuote}
-                            disabled={updatingStatus !== null}
-                            className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50"
-                          >
-                            <Check size={14} /> Approve Quotation
-                          </button>
+
+                        {/* Design parameters details */}
+                        <div className="flex justify-between items-center text-xs text-[#737780] pt-2 border-t border-slate-100 font-mono">
+                          <span>FILE: signage_blueprint_concept.pdf</span>
+                          <span>Scale Ratio: 1:10 Vector</span>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
 
-            {/* 3. DESIGN BLUEPRINT PROOF TAB */}
-            {activeTab === "design" && (
-              <div className="space-y-6">
-                <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6">
-                  <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                    <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                      <Printer size={14} className="text-[var(--color-secondary)]" />
-                      Design Blueprint & Concept Mockup Proof
-                    </h3>
-                    <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
-                      dd.status === "Approved" 
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-250" 
-                        : "bg-amber-50 text-amber-600 border-amber-250"
-                    }`}>
-                      {dd.status || "Draft"}
-                    </span>
-                  </div>
+                        {/* Actionable design approval cards */}
+                        {dd.status !== "Approved" && (
+                          <div className="bg-[#f8f9ff] border border-slate-200 rounded-2xl p-5 space-y-4">
+                            <div>
+                              <span className="text-xs font-black text-[#1E40AF] block">Approve or Request Revisions for Design Mockup</span>
+                              <p className="text-[11px] text-slate-500 leading-normal mt-1">
+                                Please review the alignment, letter fonts, dimensions, and styling proofs. Revisions can be specified below.
+                              </p>
+                            </div>
 
-                  {dd.proofUrl ? (
-                    <div className="space-y-6">
-                      {/* Zoomable Image Container */}
-                      <div className="relative border border-slate-200 rounded-2xl bg-[#0b1c30] flex items-center justify-center p-6 overflow-hidden min-h-[300px]">
-                        <img 
-                          src={dd.proofUrl} 
-                          alt="Concept Proof" 
-                          className="max-h-[320px] object-contain transition-all duration-300"
-                          style={{ transform: `scale(${zoomLevel / 100})` }}
-                          onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop';}}
-                        />
-                        
-                        {/* Interactive Zoom Overlay controls */}
-                        <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-lg p-2 flex items-center space-x-2 shadow-sm">
-                          <button onClick={() => setZoomLevel(prev => Math.max(prev - 20, 50))} className="p-1 text-slate-500 hover:text-slate-800 rounded"><ZoomOut size={12} /></button>
-                          <span className="text-[10px] font-mono font-black select-none cursor-pointer" onClick={() => setZoomLevel(100)}>{zoomLevel}%</span>
-                          <button onClick={() => setZoomLevel(prev => Math.min(prev + 20, 200))} className="p-1 text-slate-500 hover:text-slate-800 rounded"><ZoomIn size={12} /></button>
-                        </div>
-                      </div>
-
-                      {/* Design parameters details */}
-                      <div className="flex justify-between items-center text-xs text-[#737780] pt-2 border-t border-slate-100 font-mono">
-                        <span>FILE: signage_blueprint_concept.pdf</span>
-                        <span>Scale Ratio: 1:10 Vector</span>
-                      </div>
-
-                      {/* Actionable design approval cards */}
-                      {dd.status !== "Approved" && (
-                        <div className="bg-[#f8f9ff] border border-slate-200 rounded-2xl p-5 space-y-4">
-                          <div>
-                            <span className="text-xs font-black text-[var(--color-primary)] block">Approve or Request Revisions for Design Mockup</span>
-                            <p className="text-[11px] text-slate-500 leading-normal mt-1">
-                              Please review the alignment, letter fonts, dimensions, and styling proofs. Revisions can be specified below.
-                            </p>
-                          </div>
-
-                          {showDesignDeclineInput ? (
-                            <div className="space-y-3">
-                              <label className="block text-[10px] font-bold text-red-700 uppercase">Specify Design Correction Feedback</label>
-                              <textarea
-                                rows={3}
-                                value={designFeedback}
-                                onChange={(e) => setDesignFeedback(e.target.value)}
-                                placeholder="e.g. Change font of acrylic letters, or modify wiring conduit entry point..."
-                                className="w-full p-3 border border-slate-350 rounded-xl text-xs focus:ring-1 focus:ring-red-500 focus:outline-none"
-                              />
-                              <div className="flex space-x-2">
+                            {showDesignDeclineInput ? (
+                              <div className="space-y-3">
+                                <label className="block text-[10px] font-bold text-red-700 uppercase">Specify Design Correction Feedback</label>
+                                <textarea
+                                  rows={3}
+                                  value={designFeedback}
+                                  onChange={(e) => setDesignFeedback(e.target.value)}
+                                  placeholder="e.g. Change font of acrylic letters, or modify wiring conduit entry point..."
+                                  className="w-full p-3 border border-slate-355 rounded-xl text-xs focus:ring-1 focus:ring-red-500 focus:outline-none bg-white"
+                                />
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => setShowDesignDeclineInput(false)}
+                                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-lg text-xs font-bold"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={handleDeclineDesign}
+                                    disabled={!designFeedback.trim() || updatingStatus !== null}
+                                    className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50"
+                                  >
+                                    {updatingStatus === "design-decline" ? "Submitting..." : "Send Revision Notes"}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex space-x-3">
                                 <button
-                                  onClick={() => setShowDesignDeclineInput(false)}
-                                  className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-lg text-xs font-bold"
+                                  onClick={() => setShowDesignDeclineInput(true)}
+                                  className="px-4 py-2 border border-slate-300 text-slate-600 bg-white rounded-xl text-xs font-bold hover:bg-slate-50"
                                 >
-                                  Cancel
+                                  Decline / Request Design Edit
                                 </button>
                                 <button
-                                  onClick={handleDeclineDesign}
-                                  disabled={!designFeedback.trim() || updatingStatus !== null}
-                                  className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50"
+                                  onClick={handleApproveDesign}
+                                  disabled={updatingStatus !== null}
+                                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50 shadow-2xs"
                                 >
-                                  {updatingStatus === "design-decline" ? "Submitting..." : "Send Revision Notes"}
+                                  <Check size={14} /> Approve Design Proof
                                 </button>
                               </div>
-                            </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-xs">
+                        Engineering design proofs will be uploaded by our designers once quotation is approved.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Billing Section */}
+                  {renderBillingSection()}
+                </div>
+              )}
+
+              {/* 4. FABRICATION */}
+              {activeViewStage === 4 && (
+                <div className="space-y-6 max-w-3xl mx-auto">
+                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-sm">
+                    <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
+                      <CheckSquare size={14} className="text-[#1E40AF]" />
+                      Workshop Fabrication Checklist (Real-time Status)
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {[
+                        { checked: pd.printing, label: "1. Print layout sheet & backing support plotted" },
+                        { checked: pd.cutting, label: "2. CNC precision cutting & routing alignment complete" },
+                        { checked: pd.fabrication, label: "3. Aluminium frame backing welding tested" },
+                        { checked: pd.assembly, label: "4. Acrylic letter mounting & LED internal circuitry wired" },
+                      ].map((item, idx) => (
+                        <div key={idx} className={`p-4 border rounded-xl flex items-center justify-between transition-all ${
+                          item.checked ? "bg-emerald-50/35 border-emerald-250 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-400"
+                        }`}>
+                          <span className="text-xs font-bold">{item.label}</span>
+                          {item.checked ? (
+                            <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[9px] font-bold">Done</span>
                           ) : (
-                            <div className="flex space-x-3">
-                              <button
-                                onClick={() => setShowDesignDeclineInput(true)}
-                                className="px-4 py-2 border border-slate-300 text-slate-600 bg-white rounded-xl text-xs font-bold hover:bg-slate-50"
-                              >
-                                Decline / Request Design Edit
-                              </button>
-                              <button
-                                onClick={handleApproveDesign}
-                                disabled={updatingStatus !== null}
-                                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50"
-                              >
-                                <Check size={14} /> Approve Design Proof
-                              </button>
-                            </div>
+                            <span className="bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full text-[9px] font-bold">Pending</span>
                           )}
                         </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-xs">
-                      Engineering design proofs will be uploaded by our designers once quotation is approved.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 4. BILLING / PAY DEPOSIT TAB */}
-            {activeTab === "billing" && (
-              <div className="space-y-6">
-                <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6">
-                  <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-4 border-b border-slate-100">
-                    <CreditCard size={14} className="text-[var(--color-secondary)]" />
-                    Invoicing & Payment Details
-                  </h3>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Total Contract Value</span>
-                      <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-                        ₹{(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}
-                      </div>
-                    </div>
-
-                    <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 text-center">
-                      <span className="text-[10px] font-bold text-emerald-600 uppercase">Deposits Received</span>
-                      <div className="text-lg font-black text-emerald-800 mt-2 font-mono">
-                        ₹{(activeOrder?.depositPaid || 0).toLocaleString("en-IN")}
-                      </div>
-                    </div>
-
-                    <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 text-center">
-                      <span className="text-[10px] font-bold text-amber-600 uppercase">Outstanding Balance</span>
-                      <div className="text-lg font-black text-amber-800 mt-2 font-mono">
-                        ₹{Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}
-                      </div>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Bank transfer payment instructions */}
-                  <div className="border border-slate-200 rounded-2xl p-5 space-y-4 bg-slate-50">
-                    <span className="text-xs font-bold text-slate-700 block uppercase tracking-wider">Payment Options</span>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                      <div className="space-y-2 text-xs">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Method 1: Direct Bank Transfer (NEFT/RTGS)</span>
-                        <p className="font-semibold text-slate-700">Account Name: <span className="text-slate-900 block font-bold mt-0.5">PRINTEC SIGNAGE SOLUTIONS PVT LTD</span></p>
-                        <p className="font-semibold text-slate-700 font-mono">Account Number: 50200088382939</p>
-                        <p className="font-semibold text-slate-700">Bank Name: HDFC Bank Ltd</p>
-                        <p className="font-semibold text-slate-700 font-mono">IFSC Code: HDFC0001202</p>
-                      </div>
+                  {/* Billing Section */}
+                  {renderBillingSection()}
+                </div>
+              )}
 
-                      <div className="flex flex-col items-center justify-center border-l md:border-l border-slate-200 pl-0 md:pl-6 text-center space-y-2">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Method 2: Scan UPI QR Code</span>
-                        <div className="w-32 h-32 border border-slate-200 rounded-xl bg-white flex items-center justify-center p-2">
-                          <QrCode size={100} className="text-[#0b1c30]" />
+              {/* 5. INSTALLATION */}
+              {activeViewStage === 5 && (
+                <div className="space-y-6 max-w-3xl mx-auto">
+                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-sm">
+                    <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
+                      <CheckCircle2 size={14} className="text-[#1E40AF]" />
+                      Field Installation Sign-off Proof
+                    </h4>
+                    {inst.photoUrl ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 aspect-video shadow-2xs">
+                          <img src={inst.photoUrl} alt="Installation Completion" className="w-full h-full object-cover" onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop';}} />
                         </div>
-                        <span className="text-[10px] text-slate-400 font-mono">printec@hdfcbank</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Pay button */}
-                  {Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0) > 0 && (
-                    <div className="flex justify-end">
-                      <button
-                        onClick={() => setShowPaymentModal(true)}
-                        className="px-6 py-3 bg-[var(--color-accent)] hover:bg-[#ea580c] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-                      >
-                        <CreditCard size={14} />
-                        Simulate Payment Confirmation
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* 5. DIRECT MESSAGING TAB */}
-            {activeTab === "chat" && (
-              <div className="space-y-6">
-                <div className="bg-white border border-[#cbd5e1] rounded-2xl flex flex-col h-[520px] shadow-sm overflow-hidden">
-                  
-                  {/* Chat Header */}
-                  <div className="px-6 py-4 border-b border-[#cbd5e1] bg-[#f8f9ff] flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center font-bold text-xs">
-                        P
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-[#0b1c30]">Printec Support Executive</h4>
-                        <span className="text-[9px] text-emerald-600 font-bold block mt-0.5">● Online</span>
-                      </div>
-                    </div>
-                    <span className="text-[9px] font-mono font-bold text-slate-400">Order: {activeOrder?.id}</span>
-                  </div>
-
-                  {/* Message History */}
-                  <div className="flex-1 p-6 overflow-y-auto space-y-4 custom-scrollbar bg-slate-50/50">
-                    {activeOrder?.chatHistory.map((chat: any) => {
-                      const isClient = chat.sender.includes("Client");
-                      const isSystem = chat.sender === "System";
-
-                      if (isSystem) {
-                        return (
-                          <div key={chat.id} className="flex justify-center">
-                            <span className="bg-slate-100 text-slate-500 border border-slate-200 px-3 py-1 rounded-full text-[9px] font-bold tracking-wider uppercase">
-                              {chat.message}
-                            </span>
+                        <div className="space-y-3 flex flex-col justify-center">
+                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold space-y-1 shadow-2xs">
+                            <span className="block text-slate-400 text-[10px] uppercase font-bold">Sign-off Status</span>
+                            <p>✓ Job Completed & Signed off by Client</p>
                           </div>
-                        );
-                      }
-
-                      return (
-                        <div key={chat.id} className={`flex flex-col ${isClient ? "items-end" : "items-start"}`}>
-                          <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs ${
-                            isClient 
-                              ? "bg-[#0b1c30] text-white rounded-br-none" 
-                              : "bg-white border border-[#cbd5e1] text-slate-800 rounded-bl-none shadow-2xs"
-                          }`}>
-                            <p className="font-semibold mb-1 text-[9px] opacity-75">{chat.sender}</p>
-                            <p className="leading-normal">{chat.message}</p>
-                            <span className="block text-[8px] opacity-60 text-right mt-1.5 font-mono">{chat.time}</span>
+                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 shadow-2xs">
+                            <span className="text-[10px] text-slate-400 uppercase block font-bold">Customer Representative Signature</span>
+                            <span className="font-serif italic text-slate-800 text-sm font-bold block mt-1">{inst.customerSignature}</span>
+                            <span className="text-[9px] text-slate-400 font-mono mt-2 block">Security Code Verified: {inst.paymentCode}</span>
                           </div>
                         </div>
-                      );
-                    })}
-                    <div ref={chatEndRef} />
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[#737780] italic">Field installation records will update here upon delivery confirmation.</p>
+                    )}
                   </div>
 
-                  {/* Input form */}
-                  <form onSubmit={handleSendChat} className="p-4 border-t border-[#cbd5e1] bg-white flex items-center space-x-3">
-                    <input
-                      type="text"
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      placeholder="Type your message, query, or revision requests here..."
-                      className="flex-1 p-3 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!chatInput.trim()}
-                      className="p-3 bg-[var(--color-primary)] hover:bg-[var(--color-primary-container)] text-white rounded-xl transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      <Send size={14} />
-                    </button>
-                  </form>
+                  {/* Billing Section */}
+                  {renderBillingSection()}
                 </div>
-              </div>
-            )}
-          </main>
+              )}
             </div>
-          )}
+          </div>
+        )}
+
+
+          </main>
         </div>
-      </div>
 
       {/* ── MOCK PAYMENT MODAL ── */}
       {showPaymentModal && (
@@ -1824,6 +1635,35 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Floating Chat Button */}
+      <button
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        className="fixed bottom-6 right-6 z-50 p-4 bg-[#1E40AF] text-white rounded-full shadow-lg hover:bg-[#1d4ed8] hover:scale-105 transition-all duration-200 cursor-pointer flex items-center justify-center group"
+        title="Chat with Printec Team"
+      >
+        <MessageSquare size={24} className="group-hover:rotate-6 transition-transform duration-200" />
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-[#EF4444] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white font-mono animate-bounce">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {/* Floating Chat Window */}
+      {isChatOpen && activeOrder && (
+        <div className="fixed bottom-24 right-6 z-50 w-[380px] h-[550px] bg-white border border-[#cbd5e1] rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-250">
+          <OrderCommunicationCenter
+            orderId={activeOrder.orderId || activeOrder.id}
+            currentUserRole="Customer"
+            currentUserName={customer.name}
+            employees={[]}
+            customers={[customer]}
+            onClose={() => setIsChatOpen(false)}
+            defaultTab="customer"
+          />
         </div>
       )}
     </div>

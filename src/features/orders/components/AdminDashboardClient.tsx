@@ -18,6 +18,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
+import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
@@ -490,9 +491,26 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
       <AddEnquiryModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSubmit={(data: EnquiryFormData) => {
-          console.log("New Enquiry:", data);
-          setIsAddModalOpen(false);
+        onSubmit={async (data: EnquiryFormData) => {
+          try {
+            const newEnq = {
+              lead_name: data.leadName,
+              phone: data.phone,
+              whatsapp: data.whatsappNumber,
+              email: data.email,
+              source: data.primaryMode === "whatsapp" ? "WhatsApp" : "Phone Call",
+              notes: data.notes,
+              primary_communication_mode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
+              location: data.location,
+              status: "Pending"
+            };
+            await createEnquiry(newEnq);
+            setIsAddModalOpen(false);
+            router.refresh();
+          } catch (error) {
+            console.error("Error adding enquiry:", error);
+            alert("Failed to add enquiry.");
+          }
         }}
       />
     </div>
