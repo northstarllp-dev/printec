@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { 
-  Printer, MapPin, FileText, CheckSquare, CheckCircle2, 
-  MessageSquare, Send, ZoomIn, ZoomOut, Check, X, 
-  AlertCircle, AlertTriangle, CreditCard, QrCode, Calendar, 
-  Ruler, Activity, ChevronRight, User, Phone, Mail, Clock, ClipboardList,
-  FolderOpen, Layout, FileCheck, DollarSign
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Printer, MapPin, FileText, CheckSquare, CheckCircle2,
+  MessageSquare, Send, ZoomIn, ZoomOut, Check, X,
+  AlertCircle, CreditCard, QrCode, Calendar,
+  Ruler, Activity, ChevronRight, Phone, Mail, Clock, ClipboardList,
+  Download, HeadphonesIcon, Building2, User2, Star, ArrowRight,
+  Package, Wrench, Palette, FileCheck, BarChart3, ChevronDown,
+  RefreshCw, AlertTriangle, Loader2
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
@@ -62,1608 +64,884 @@ interface PortalClientProps {
   token: string;
 }
 
+// Map stage to step index (0-based, 6 steps total)
+const STEPS = [
+  { key: "enquiry",      label: "Enquiries",    icon: FileText },
+  { key: "site_visit",   label: "Site Visit",   icon: MapPin },
+  { key: "quotation",    label: "Quotations",   icon: BarChart3 },
+  { key: "design",       label: "Design",       icon: Palette },
+  { key: "production",   label: "Production",   icon: Package },
+  { key: "installation", label: "Installation", icon: Wrench },
+];
+
+function getStepIndex(stage: string): number {
+  const s = (stage || "").toLowerCase();
+  if (s.includes("site visit")) return 1;
+  if (s.includes("quotation")) return 2;
+  if (s.includes("design")) return 3;
+  if (s.includes("production") || s.includes("fabricat") || s.includes("ready")) return 4;
+  if (s.includes("installation") || s.includes("completed") || s.includes("closed")) return 5;
+  return 0;
+}
+
+function getStageScopeItems(stage: string) {
+  const s = (stage || "").toLowerCase();
+  if (s.includes("site visit") || s.includes("enqui")) {
+    return [
+      {
+        label: "Initial Consultation & Brand Audit",
+        detail: "Comprehensive review of existing branding and identification of key navigation points across the 3-acre campus.",
+        status: "completed",
+      },
+      {
+        label: "Technical Site Survey",
+        detail: "Measurement of 12 distinct points, load-bearing tests for wall-mounted elements, and utility scanning for pylon foundations.",
+        status: "in_progress",
+      },
+      {
+        label: "Structural Design & Engineering",
+        detail: "Creation of detailed CAD drawings and load calculations for council approval. Estimated value: ₹40,000.",
+        status: "pending",
+      },
+    ];
+  }
+  if (s.includes("quotation")) {
+    return [
+      { label: "Site Audit Completed", detail: "All measurements verified and approved.", status: "completed" },
+      { label: "Quotation Prepared", detail: "Detailed cost breakdown including materials, labour and installation.", status: "completed" },
+      { label: "Client Review & Approval", detail: "Awaiting client sign-off on quoted amount.", status: "in_progress" },
+    ];
+  }
+  if (s.includes("design")) {
+    return [
+      { label: "Site Audit Completed", detail: "", status: "completed" },
+      { label: "Quotation Approved", detail: "", status: "completed" },
+      { label: "Design Concept Draft", detail: "Mockup layouts and proof sent for client review.", status: "in_progress" },
+      { label: "Final Design Sign-off", detail: "Pending client approval before production begins.", status: "pending" },
+    ];
+  }
+  if (s.includes("production") || s.includes("fabricat") || s.includes("ready")) {
+    return [
+      { label: "Site Audit Completed", detail: "", status: "completed" },
+      { label: "Quotation Approved", detail: "", status: "completed" },
+      { label: "Design Approved", detail: "", status: "completed" },
+      { label: "Workshop Fabrication", detail: "Printing, cutting, welding and LED wiring in progress.", status: "in_progress" },
+    ];
+  }
+  if (s.includes("installation") || s.includes("completed")) {
+    return [
+      { label: "Site Audit Completed", detail: "", status: "completed" },
+      { label: "Quotation Approved", detail: "", status: "completed" },
+      { label: "Design Approved", detail: "", status: "completed" },
+      { label: "Fabrication Completed", detail: "", status: "completed" },
+      { label: "Field Installation", detail: "Team on-site for final setup and sign-off.", status: "in_progress" },
+    ];
+  }
+  return [
+    { label: "Enquiry Received", detail: "Your project enquiry has been logged.", status: "completed" },
+    { label: "Site Visit Scheduling", detail: "Awaiting site visit appointment.", status: "in_progress" },
+  ];
+}
+
 export function PortalClient({ customer, orders: initialOrders, initialActiveOrderId, token }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [activeOrderId, setActiveOrderId] = useState<string>(
     initialActiveOrderId || (initialOrders.length > 0 ? initialOrders[0].id : "")
   );
-  const [activeViewStage, setActiveViewStage] = useState<number>(1);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState("");
+
+  // Site Visit scheduling states
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [siteAddress, setSiteAddress] = useState(customer.shippingAddress || "");
+  const [gpsCoords, setGpsCoords] = useState("12.9716° N, 77.5946° E");
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [schedulingLoading, setSchedulingLoading] = useState(false);
+  const [mapsSearching, setMapsSearching] = useState(false);
+
+  // Quote / design states
   const [quoteFeedback, setQuoteFeedback] = useState("");
   const [designFeedback, setDesignFeedback] = useState("");
   const [showQuoteDeclineInput, setShowQuoteDeclineInput] = useState(false);
   const [showDesignDeclineInput, setShowDesignDeclineInput] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(100);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
-
-  // Site Visit Module states
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("");
-  const [landmark, setLandmark] = useState("");
-  const [contactPerson, setContactPerson] = useState(customer.name);
-  const [contactNumber, setContactNumber] = useState(customer.phone);
-  const [siteType, setSiteType] = useState("Shop Front");
-  const [specialInstructions, setSpecialInstructions] = useState("");
-  const [siteAddress, setSiteAddress] = useState(customer.shippingAddress || "");
-  const [gpsCoords, setGpsCoords] = useState("12.9716° N, 77.5946° E");
-  const [isRescheduling, setIsRescheduling] = useState(false);
-  const [scheduleSuccess, setScheduleSuccess] = useState(false);
-  const [schedulingLoading, setSchedulingLoading] = useState(false);
-  const [mapsSearching, setMapsSearching] = useState(false);
-
-  const chatEndRef = useRef<HTMLDivElement>(null);
-
-  const activeOrder = orders.find(o => o.id === activeOrderId);
 
   const [unreadCount, setUnreadCount] = useState(0);
 
+  const activeOrder = orders.find(o => o.id === activeOrderId || o.orderId === activeOrderId || o.orderCode === activeOrderId) || orders[0];
+  const currentStep = activeOrder ? getStepIndex(activeOrder.stage) : 0;
+  const scopeItems = activeOrder ? getStageScopeItems(activeOrder.stage) : [];
+
+  // Sync site visit details
   useEffect(() => {
-    const currentOrder = activeOrder;
-    if (!currentOrder) return;
+    if (activeOrder?.siteVisitDetails) {
+      const sv = activeOrder.siteVisitDetails;
+      setSelectedDate(sv.auditDate || "");
+      setSelectedTime(sv.auditTime || "");
+      setSiteAddress(sv.customerAddress || customer.shippingAddress || "");
+      setGpsCoords(sv.gpsLocation || "12.9716° N, 77.5946° E");
+    }
+  }, [activeOrderId]);
+
+  // Unread count
+  useEffect(() => {
+    if (!activeOrder) return;
     const supabase = createClient();
-    
-    async function loadUnreadCount() {
-      if (!currentOrder) return;
+    async function loadUnread() {
       const { count } = await supabase
         .from("order_messages")
         .select("*", { count: "exact", head: true })
-        .eq("order_id", currentOrder.orderId || currentOrder.id)
+        .eq("order_id", activeOrder!.orderId || activeOrder!.id)
         .eq("tab", "customer")
         .eq("is_read", false);
       if (count !== null) setUnreadCount(count);
     }
-    loadUnreadCount();
-
-    const channel = supabase
-      .channel(`order-unread-${currentOrder.id}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "order_messages",
-        filter: `order_id=eq.${currentOrder.orderId || currentOrder.id}`
-      }, (payload) => {
-        const newMessage = payload.new as any;
-        if (newMessage.tab === "customer" && newMessage.sender_role !== "Customer" && !isChatOpen) {
+    loadUnread();
+    const ch = supabase
+      .channel(`unread-${activeOrder.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_messages", filter: `order_id=eq.${activeOrder.orderId || activeOrder.id}` }, (p) => {
+        const msg = p.new as any;
+        if (msg.tab === "customer" && msg.sender_role !== "Customer") {
           setUnreadCount(prev => prev + 1);
         }
       })
       .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [activeOrder?.id]);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [activeOrder?.id, isChatOpen]);
-
-  useEffect(() => {
-    if (isChatOpen && activeOrder) {
-      setUnreadCount(0);
-      const supabase = createClient();
-      supabase
-        .from("order_messages")
-        .update({ is_read: true })
-        .eq("order_id", activeOrder.orderId || activeOrder.id)
-        .eq("tab", "customer")
-        .eq("is_read", false)
-        .then(() => {});
-    }
-  }, [isChatOpen, activeOrder]);
-
-  // Sync site visit details when activeOrder changes
-  useEffect(() => {
-    if (activeOrder) {
-      const svDetails = activeOrder.siteVisitDetails;
-      setSelectedDate(svDetails?.auditDate || "");
-      setSelectedTime(svDetails?.auditTime || "");
-      setLandmark(svDetails?.landmark || "");
-      setContactPerson(svDetails?.contactPerson || customer.name);
-      setContactNumber(svDetails?.customerContact || customer.phone);
-      setSiteType(svDetails?.siteType || "Shop Front");
-      setSpecialInstructions(svDetails?.notes || "");
-      setSiteAddress(svDetails?.customerAddress || customer.shippingAddress || "");
-      setGpsCoords(svDetails?.gpsLocation || "12.9716° N, 77.5946° E");
-    }
-  }, [activeOrderId, activeOrder, customer]);
-
-  // Helper to generate next 7 business days starting tomorrow
   const getBusinessDays = () => {
-    const days = [];
-    const today = new Date();
-    let current = new Date(today);
-    
+    const days: Date[] = [];
+    const cur = new Date();
     while (days.length < 7) {
-      current.setDate(current.getDate() + 1);
-      // Skip Sunday (0)
-      if (current.getDay() !== 0) {
-        days.push(new Date(current));
-      }
+      cur.setDate(cur.getDate() + 1);
+      if (cur.getDay() !== 0) days.push(new Date(cur));
     }
     return days;
   };
 
-  // Prevent double booking slot validator
-  const isSlotBooked = (dateStr: string, timeStr: string) => {
-    return orders.some(o => 
-      o.id !== activeOrder?.id && 
-      o.siteVisitDetails && 
-      o.siteVisitDetails.auditDate === dateStr && 
-      o.siteVisitDetails.auditTime === timeStr
-    );
-  };
+  const isSlotBooked = (date: string, time: string) =>
+    orders.some(o => o.id !== activeOrder?.id && o.siteVisitDetails?.auditDate === date && o.siteVisitDetails?.auditTime === time);
 
   const handleScheduleSiteVisit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeOrder || !selectedDate || !selectedTime || !siteAddress || !contactPerson || !contactNumber) return;
-    
+    if (!activeOrder || !selectedDate || !selectedTime || !siteAddress) return;
     setSchedulingLoading(true);
-    
-    const schedulePayload = {
-      auditDate: selectedDate,
-      auditTime: selectedTime,
-      customerAddress: siteAddress,
-      gpsLocation: gpsCoords,
-      landmark: landmark,
-      contactPerson: contactPerson,
-      customerContact: contactNumber,
-      siteType: siteType,
-      notes: specialInstructions,
-      sitePersonnel: "Hari", // default assigned auditor
-      completed: false,
-      reviewStatus: "Pending"
-    };
-
     try {
-      const res = await scheduleSiteVisitAction(activeOrder.id, schedulePayload);
+      const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, sitePersonnel: "Hari", completed: false, reviewStatus: "Pending" };
+      const res = await scheduleSiteVisitAction(activeOrder.id, payload);
       if (res.success && res.order) {
-        // Update local state
-        setOrders(prev => prev.map(o => o.id === activeOrder.id ? { 
-          ...o, 
-          stage: res.order.stage, 
-          siteVisitDetails: res.order.site_visit_details,
-          chatHistory: res.order.chat_history
-        } : o));
-        
+        setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: res.order.stage, siteVisitDetails: res.order.site_visit_details } : o));
         setIsRescheduling(false);
-        setScheduleSuccess(true);
-        setTimeout(() => setScheduleSuccess(false), 5000);
       }
-    } catch (err) {
-      console.error("Failed to schedule site visit:", err);
-    } finally {
-      setSchedulingLoading(false);
-    }
-  };
-
-  const getNotificationHistory = () => {
-    const history = [];
-    const stage = activeOrder?.stage;
-    const svDetails = activeOrder?.siteVisitDetails;
-    
-    // 1. Scheduled alert
-    if (svDetails?.auditDate) {
-      history.push({
-        event: "Site Visit Scheduled",
-        time: "Just now",
-        channels: { portal: true, whatsapp: true, email: true }
-      });
-    }
-    // 2. Completed alert
-    if (svDetails?.completed) {
-      history.push({
-        event: "Site Visit Completed",
-        time: "1 hour ago",
-        channels: { portal: true, whatsapp: true, email: true }
-      });
-    }
-    // 3. Approved alert
-    if (svDetails?.reviewStatus === "Approved") {
-      history.push({
-        event: "Site Visit Approved",
-        time: "2 hours ago",
-        channels: { portal: true, whatsapp: true, email: true }
-      });
-    }
-    // 4. Quotation In Progress alert
-    if (stage === "Quotation In Progress" || stage === "Quotation Sent" || stage === "Quotation Negotiation" || stage === "Quotation Approved") {
-      history.push({
-        event: "Quotation In Progress",
-        time: "3 hours ago",
-        channels: { portal: true, whatsapp: true, email: true }
-      });
-    }
-    
-    return history;
-  };
-
-
-
-  // Auto-scroll chat to bottom
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeOrder?.chatHistory]);
-
-  if (orders.length === 0) {
-    return (
-      <div className="min-h-screen bg-[#f8f9ff] flex items-center justify-center p-6 font-sans">
-        <div className="bg-white border border-[#c3c6d0] rounded-2xl p-8 max-w-md w-full text-center shadow-lg">
-          <AlertCircle size={48} className="text-[var(--color-primary)] mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-[#0b1c30] mb-2">No Active Orders</h1>
-          <p className="text-sm text-[#43474f] mb-6">We couldn't find any active orders for your account at this time.</p>
-          <p className="text-xs text-[#737780]">Printec Signage Solutions</p>
-        </div>
-      </div>
-    );
-  }
-
-  const handleSendChat = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!chatInput.trim() || !activeOrder) return;
-
-    const newMessage = {
-      id: Date.now().toString(),
-      sender: `${customer.name} (Client)`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      message: chatInput.trim()
-    };
-
-    const updatedChatHistory = [...(activeOrder.chatHistory || []), newMessage];
-
-    // Optimistic state update
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, chatHistory: updatedChatHistory } : o));
-    setChatInput("");
-
-    // Write to Supabase
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("orders")
-      .update({ chat_history: updatedChatHistory })
-      .eq("id", activeOrder.id);
-
-    if (error) {
-      console.error("Error updating chat history:", error);
-    }
+    } catch (err) { console.error(err); }
+    finally { setSchedulingLoading(false); }
   };
 
   const handleApproveQuote = async () => {
     if (!activeOrder) return;
     setUpdatingStatus("quote-approve");
-
-    const systemMessage = {
-      id: `sys-${Date.now()}`,
-      sender: "System",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      message: "Client approved the quotation details."
-    };
-
-    const updatedChat = [...(activeOrder.chatHistory || []), systemMessage];
-    const updatedQuoteDetails = { ...activeOrder.quoteDetails, status: "Approved" };
-
-    // Advance order stage to "Quotation Approved" or trigger admin progression
-    const updatedOrder: Partial<Order> = {
-      stage: "Quotation Approved",
-      chatHistory: updatedChat,
-      quoteDetails: updatedQuoteDetails
-    };
-
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, ...updatedOrder } : o));
-
     const supabase = createClient();
-    await supabase.from("order_messages").insert({
-      order_id: activeOrder.orderId || activeOrder.id,
-      tab: "timeline",
-      sender_name: "System",
-      sender_role: "System",
-      content: "Client approved the quotation details."
-    });
-
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        stage: "Quotation Approved",
-        chat_history: updatedChat,
-        quote_details: updatedQuoteDetails
-      })
-      .eq("id", activeOrder.id);
-
-    if (error) console.error("Error approving quote:", error);
+    const updatedQuote = { ...activeOrder.quoteDetails, status: "Approved" };
+    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Approved", quoteDetails: updatedQuote } : o));
+    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the quotation details." });
+    await supabase.from("orders").update({ stage: "Quotation Approved", quote_details: updatedQuote }).eq("id", activeOrder.id);
     setUpdatingStatus(null);
   };
 
   const handleDeclineQuote = async () => {
     if (!activeOrder || !quoteFeedback.trim()) return;
     setUpdatingStatus("quote-decline");
-
-    const clientFeedbackMessage = {
-      id: `client-${Date.now()}`,
-      sender: `${customer.name} (Client)`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      message: `❌ Quotation Declined. Feedback: ${quoteFeedback}`
-    };
-
-    const systemMessage = {
-      id: `sys-${Date.now()}`,
-      sender: "System",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      message: "Client returned quotation for revision."
-    };
-
-    const updatedChat = [...(activeOrder.chatHistory || []), clientFeedbackMessage, systemMessage];
-    const updatedQuoteDetails = { ...activeOrder.quoteDetails, status: "Negotiation" };
-
-    const updatedOrder: Partial<Order> = {
-      stage: "Quotation Negotiation",
-      chatHistory: updatedChat,
-      quoteDetails: updatedQuoteDetails
-    };
-
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, ...updatedOrder } : o));
-    setQuoteFeedback("");
-    setShowQuoteDeclineInput(false);
-
     const supabase = createClient();
-    await supabase.from("order_messages").insert({
-      order_id: activeOrder.orderId || activeOrder.id,
-      tab: "customer",
-      sender_name: customer.name,
-      sender_role: "Customer",
-      content: `❌ Quotation Declined. Feedback: ${quoteFeedback}`
-    });
-
-    await supabase.from("order_messages").insert({
-      order_id: activeOrder.orderId || activeOrder.id,
-      tab: "timeline",
-      sender_name: "System",
-      sender_role: "System",
-      content: "Client returned quotation for revision."
-    });
-
-    await supabase
-      .from("orders")
-      .update({
-        stage: "Quotation Negotiation",
-        chat_history: updatedChat,
-        quote_details: updatedQuoteDetails
-      })
-      .eq("id", activeOrder.id);
-
-    setUpdatingStatus(null);
+    const updatedQuote = { ...activeOrder.quoteDetails, status: "Negotiation" };
+    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Negotiation", quoteDetails: updatedQuote } : o));
+    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}` });
+    await supabase.from("orders").update({ stage: "Quotation Negotiation", quote_details: updatedQuote }).eq("id", activeOrder.id);
+    setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
   };
 
   const handleApproveDesign = async () => {
     if (!activeOrder) return;
     setUpdatingStatus("design-approve");
-
-    const systemMessage = {
-      id: `sys-${Date.now()}`,
-      sender: "System",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      message: "Client approved the design proof layout."
-    };
-
-    const updatedChat = [...(activeOrder.chatHistory || []), systemMessage];
-    const updatedDesignDetails = { ...activeOrder.designDetails, status: "Approved" };
-
-    const updatedOrder: Partial<Order> = {
-      stage: "Design Approved",
-      chatHistory: updatedChat,
-      designDetails: updatedDesignDetails
-    };
-
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, ...updatedOrder } : o));
-
     const supabase = createClient();
-    await supabase.from("order_messages").insert({
-      order_id: activeOrder.orderId || activeOrder.id,
-      tab: "timeline",
-      sender_name: "System",
-      sender_role: "System",
-      content: "Client approved the design proof layout."
-    });
-
-    await supabase
-      .from("orders")
-      .update({
-        stage: "Design Approved",
-        chat_history: updatedChat,
-        design_details: updatedDesignDetails
-      })
-      .eq("id", activeOrder.id);
-
+    const updatedDesign = { ...activeOrder.designDetails, status: "Approved" };
+    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design Approved", designDetails: updatedDesign } : o));
+    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the design proof layout." });
+    await supabase.from("orders").update({ stage: "Design Approved", design_details: updatedDesign }).eq("id", activeOrder.id);
     setUpdatingStatus(null);
   };
 
   const handleDeclineDesign = async () => {
     if (!activeOrder || !designFeedback.trim()) return;
     setUpdatingStatus("design-decline");
-
-    const clientFeedbackMessage = {
-      id: `client-${Date.now()}`,
-      sender: `${customer.name} (Client)`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      message: `❌ Design Proof Revision Requested. Notes: ${designFeedback}`
-    };
-
-    const systemMessage = {
-      id: `sys-${Date.now()}`,
-      sender: "System",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      message: "Design proof reverted to Draft stage for updates."
-    };
-
-    const updatedChat = [...(activeOrder.chatHistory || []), clientFeedbackMessage, systemMessage];
-    const updatedDesignDetails = { ...activeOrder.designDetails, status: "Draft" };
-
-    const updatedOrder: Partial<Order> = {
-      stage: "Design In Progress",
-      chatHistory: updatedChat,
-      designDetails: updatedDesignDetails
-    };
-
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, ...updatedOrder } : o));
-    setDesignFeedback("");
-    setShowDesignDeclineInput(false);
-
     const supabase = createClient();
-    await supabase.from("order_messages").insert({
-      order_id: activeOrder.orderId || activeOrder.id,
-      tab: "customer",
-      sender_name: customer.name,
-      sender_role: "Customer",
-      content: `❌ Design Proof Revision Requested. Notes: ${designFeedback}`
-    });
-
-    await supabase.from("order_messages").insert({
-      order_id: activeOrder.orderId || activeOrder.id,
-      tab: "timeline",
-      sender_name: "System",
-      sender_role: "System",
-      content: "Design proof reverted to Draft stage for updates."
-    });
-
-    await supabase
-      .from("orders")
-      .update({
-        stage: "Design In Progress",
-        chat_history: updatedChat,
-        design_details: updatedDesignDetails
-      })
-      .eq("id", activeOrder.id);
-
-    setUpdatingStatus(null);
+    const updatedDesign = { ...activeOrder.designDetails, status: "Draft" };
+    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design In Progress", designDetails: updatedDesign } : o));
+    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}` });
+    await supabase.from("orders").update({ stage: "Design In Progress", design_details: updatedDesign }).eq("id", activeOrder.id);
+    setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
   };
 
   const handleConfirmMockPayment = async () => {
     if (!activeOrder) return;
     setPaymentLoading(true);
-
-    const totalBudget = activeOrder.budget || 45000;
-    // Simulate deposit confirmation (e.g. 50% or full payment)
-    const paymentAmount = activeOrder.depositPaid === 0 ? Math.round(totalBudget * 0.3) : totalBudget - activeOrder.depositPaid;
-    const newDepositPaid = activeOrder.depositPaid + paymentAmount;
-
-    const paymentConfirmMessage = {
-      id: `sys-${Date.now()}`,
-      sender: "System",
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      message: `💳 Client confirmed mock online UPI payment of ₹${paymentAmount.toLocaleString("en-IN")}. Pending admin verification.`
-    };
-
-    const updatedChat = [...(activeOrder.chatHistory || []), paymentConfirmMessage];
-
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, depositPaid: newDepositPaid, chatHistory: updatedChat } : o));
-
+    const qd = activeOrder.quoteDetails || {};
+    const total = qd.grandTotal || activeOrder.budget || 0;
+    const amount = activeOrder.depositPaid === 0 ? Math.round(total * 0.3) : total - activeOrder.depositPaid;
+    const newDeposit = activeOrder.depositPaid + amount;
     const supabase = createClient();
-    await supabase.from("order_messages").insert({
-      order_id: activeOrder.orderId || activeOrder.id,
-      tab: "timeline",
-      sender_name: "System",
-      sender_role: "System",
-      content: `💳 Client confirmed mock online UPI payment of ₹${paymentAmount.toLocaleString("en-IN")}. Pending admin verification.`
-    });
-
-    await supabase
-      .from("orders")
-      .update({
-        deposit_paid: newDepositPaid,
-        chat_history: updatedChat
-      })
-      .eq("id", activeOrder.id);
-
-    setTimeout(() => {
-      setPaymentLoading(false);
-      setShowPaymentModal(false);
-    }, 800);
+    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, depositPaid: newDeposit } : o));
+    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: `💳 Client confirmed mock UPI payment of ₹${amount.toLocaleString("en-IN")}. Pending admin verification.` });
+    await supabase.from("orders").update({ deposit_paid: newDeposit }).eq("id", activeOrder.id);
+    setTimeout(() => { setPaymentLoading(false); setShowPaymentModal(false); }, 800);
   };
 
-  // Helper getters to guarantee objects
-  const getSiteVisit = () => activeOrder?.siteVisitDetails || { completed: false, width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", photos: [] };
-  const getQuote = () => activeOrder?.quoteDetails || { grandTotal: 0, signageType: "ACP Panels", material: "Brushed Aluminium (3mm)", mounting: "Standoffs", baseACPPrice: 0, hardwarePrice: 0, polishingPrice: 0, discount: 0, subtotal: 0, tax: 0 };
-  const getDesign = () => activeOrder?.designDetails || { proofUrl: "", status: "Draft" };
-  const getProduction = () => activeOrder?.productionDetails || { printing: false, cutting: false, fabrication: false, assembly: false };
-  const getInstallation = () => activeOrder?.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
+  const sv = activeOrder?.siteVisitDetails || {};
+  const qd = activeOrder?.quoteDetails || {};
+  const dd = activeOrder?.designDetails || {};
+  const pd = activeOrder?.productionDetails || {};
+  const inst = activeOrder?.installationDetails || {};
 
-  const sv = getSiteVisit();
-  const qd = getQuote();
-  const dd = getDesign();
-  const pd = getProduction();
-  const inst = getInstallation();
-
-  // Helper to map order stage to a 5-step progress number
-  const getVisualStageIndex = (stage: string): number => {
-    switch (stage) {
-      case "Site Visit Pending":
-      case "Site Visit Scheduled":
-      case "Site Visit Completed":
-        return 1;
-      case "Quotation In Progress":
-      case "Quotation Sent":
-      case "Quotation Negotiation":
-      case "Quotation Approved":
-        return 2;
-      case "Design In Progress":
-      case "Design Approved":
-        return 3;
-      case "Production":
-      case "Ready For Installation":
-        return 4;
-      case "Installation Scheduled":
-      case "Completed":
-      case "Closed":
-        return 5;
-      default:
-        return 1;
-    }
-  };
-
-  const currentStageNum = activeOrder ? getVisualStageIndex(activeOrder.stage) : 1;
-
-  useEffect(() => {
-    if (activeOrder) {
-      setActiveViewStage(currentStageNum);
-    }
-  }, [activeOrderId, currentStageNum]);
-
-  const renderBillingSection = () => {
-    if (!activeOrder) return null;
-    const balanceDue = Math.max((qd.grandTotal || activeOrder.budget || 0) - (activeOrder.depositPaid || 0), 0);
+  if (orders.length === 0) {
     return (
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-6 shadow-sm">
-        <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-4 border-b border-slate-100">
-          <CreditCard size={14} className="text-[#1E40AF]" />
-          Invoicing & Payment Details
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center">
-            <span className="text-[10px] font-bold text-slate-400 uppercase">Total Contract Value</span>
-            <div className="text-lg font-black text-slate-800 mt-2 font-mono">
-              ₹{(qd.grandTotal || activeOrder.budget || 0).toLocaleString("en-IN")}
-            </div>
-          </div>
-
-          <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 text-center">
-            <span className="text-[10px] font-bold text-emerald-600 uppercase">Deposits Received</span>
-            <div className="text-lg font-black text-emerald-800 mt-2 font-mono">
-              ₹{(activeOrder.depositPaid || 0).toLocaleString("en-IN")}
-            </div>
-          </div>
-
-          <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 text-center">
-            <span className="text-[10px] font-bold text-amber-600 uppercase">Outstanding Balance</span>
-            <div className="text-lg font-black text-amber-800 mt-2 font-mono">
-              ₹{balanceDue.toLocaleString("en-IN")}
-            </div>
-          </div>
+      <div className="min-h-screen bg-[#f4f6fb] flex items-center justify-center p-6">
+        <div className="bg-white border border-slate-200 rounded-2xl p-10 max-w-md w-full text-center shadow-lg">
+          <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-[#0b1c30] mb-2">No Active Orders</h1>
+          <p className="text-sm text-slate-500">We couldn't find any active orders for your account.</p>
+          <p className="text-xs text-slate-400 mt-6 font-bold">PRINTEC Signage Solutions</p>
         </div>
-
-        {/* Bank transfer payment instructions */}
-        <div className="border border-slate-200 rounded-2xl p-5 space-y-4 bg-slate-50">
-          <span className="text-xs font-bold text-slate-700 block uppercase tracking-wider">Payment Options</span>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-            <div className="space-y-2 text-xs">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block">Method 1: Direct Bank Transfer (NEFT/RTGS)</span>
-              <p className="font-semibold text-slate-700">Account Name: <span className="text-slate-900 block font-bold mt-0.5">PRINTEC SIGNAGE SOLUTIONS PVT LTD</span></p>
-              <p className="font-semibold text-slate-700 font-mono">Account Number: 50200088382939</p>
-              <p className="font-semibold text-slate-700">Bank Name: HDFC Bank Ltd</p>
-              <p className="font-semibold text-slate-700 font-mono">IFSC Code: HDFC0001202</p>
-            </div>
-
-            <div className="flex flex-col items-center justify-center border-t md:border-t-0 md:border-l border-slate-200 pt-6 md:pt-0 md:pl-6 text-center space-y-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase block">Method 2: Scan UPI QR Code</span>
-              <div className="w-32 h-32 border border-slate-200 rounded-xl bg-white flex items-center justify-center p-2 shadow-2xs">
-                <QrCode size={100} className="text-[#0b1c30]" />
-              </div>
-              <span className="text-[10px] text-slate-400 font-mono">printec@hdfcbank</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Pay button */}
-        {balanceDue > 0 && (
-          <div className="flex justify-end">
-            <button
-              onClick={() => setShowPaymentModal(true)}
-              className="px-6 py-3 bg-[#F97316] hover:bg-[#ea580c] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer hover:scale-[1.02] duration-200"
-            >
-              <CreditCard size={14} />
-              Simulate Payment Confirmation
-            </button>
-          </div>
-        )}
       </div>
     );
-  };
-
-  const stepperItems = [
-    { num: 1, label: "Site Audit", desc: "Measurements & survey" },
-    { num: 2, label: "Quotation", desc: "Pricing breakdown" },
-    { num: 3, label: "Design Concept", desc: "Proof blueprint signoff" },
-    { num: 4, label: "Fabrication", desc: "Workshop assembly" },
-    { num: 5, label: "Installation", desc: "Field setup completion" },
-  ];
+  }
 
   return (
-    <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col font-sans">
-      
-      {/* ── MAIN WORKSPACE CONTENT ── */}
-      <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* Portal Header */}
-        <header className="bg-white border-b border-slate-200 px-6 md:px-10 py-4 shrink-0 flex items-center justify-between sticky top-0 z-10">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#1E40AF] to-blue-700 rounded-xl flex items-center justify-center text-white shadow-sm">
-              <Printer size={20} />
-            </div>
-            <div>
-              <h2 className="text-base font-extrabold text-gray-800 leading-none">PRINTEC</h2>
-              <span className="text-[10px] text-slate-400 font-bold block mt-1">Signage Solutions</span>
-            </div>
-          </div>
+    <div className="min-h-screen bg-[#f4f6fb] font-sans">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        .portal-stepper-line { transition: width 0.6s cubic-bezier(0.4,0,0.2,1); }
+        .scope-item { transition: all 0.2s ease; }
+        .chat-scroll::-webkit-scrollbar { width: 4px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+        @keyframes slideUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+        .animate-slide-up { animation: slideUp 0.3s ease forwards; }
+      `}</style>
 
-          <div className="text-center hidden md:block">
-            <span className="text-xs font-mono font-black text-slate-700 bg-slate-50 border border-slate-200/60 px-4 py-1.5 rounded-full">
-              Order ID: {activeOrder?.orderCode || activeOrder?.id} • Stage: {activeOrder?.stage}
-            </span>
-          </div>
-          
+      {/* ─── TOP HEADER ─── */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+        <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between gap-4">
+          {/* Left: Logo + Order Info */}
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setIsChatOpen(!isChatOpen)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-xs transition-all hover:bg-slate-50 shadow-2xs"
-            >
-              <MessageSquare size={16} className="text-[#1E40AF]" />
-              Chat with Us
-            </button>
-            <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
-              <div className="w-8.5 h-8.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-black text-sm shadow-sm">
-                {customer.name.charAt(0)}
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 bg-[#1E40AF] rounded-lg flex items-center justify-center">
+                <Printer size={16} className="text-white" />
               </div>
+              <span className="font-black text-[#0b1c30] text-sm tracking-tight">PRINTEC</span>
+            </div>
+            <div className="w-px h-6 bg-slate-200" />
+            <div>
+              <h1 className="text-base font-black text-[#0b1c30] leading-none">
+                Order #{activeOrder?.orderCode || activeOrder?.id}
+              </h1>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Client: {customer.name} | {activeOrder?.projectName || "Signage Project"}
+              </p>
             </div>
           </div>
-        </header>
 
-      {/* Main Workspace Content */}
-      <main className="flex-1 max-w-4xl mx-auto w-full p-6 md:p-8 space-y-6">
-        
-        {/* Mobile order stage indicator */}
-        <div className="block md:hidden text-center pb-2">
-          <span className="text-[10px] font-mono font-black text-slate-700 bg-slate-50 border border-slate-200/60 px-3 py-1 rounded-full">
-            Order ID: {activeOrder?.orderCode || activeOrder?.id} • Stage: {activeOrder?.stage}
-          </span>
-        </div>
-
-        {activeOrder && (
-          <div className="prt-animate-in space-y-8">
-            {/* Stepper Wizard Card */}
-            <div className="bg-white border border-slate-250 rounded-2xl p-6 shadow-sm max-w-4xl mx-auto">
-              <div className="flex flex-col md:flex-row justify-between items-center md:items-start gap-6 md:gap-4 relative">
-                {/* Horizontal line for desktop stepper */}
-                <div className="absolute top-5 left-[10%] right-[10%] h-0.5 bg-slate-100 hidden md:block z-0" />
-                {/* Active progress bar line overlay */}
-                <div 
-                  className="absolute top-5 left-[10%] h-0.5 bg-emerald-500 hidden md:block z-0 transition-all duration-500" 
-                  style={{ width: `${currentStageNum > 1 ? ((currentStageNum - 1) / 4) * 80 : 0}%` }}
-                />
-
-                {stepperItems.map((step) => {
-                  const isCompleted = step.num < currentStageNum;
-                  const isActive = step.num === activeViewStage;
-                  const isLocked = step.num > currentStageNum;
-
-                  return (
-                    <button
-                      key={step.num}
-                      type="button"
-                      disabled={isLocked}
-                      onClick={() => setActiveViewStage(step.num)}
-                      className={`flex flex-col items-center text-center relative z-10 focus:outline-none transition-all group ${
-                        isLocked ? "cursor-not-allowed opacity-50" : "cursor-pointer"
-                      }`}
-                    >
-                      {/* Step Circle */}
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm border-2 transition-all duration-300 ${
-                        isActive 
-                          ? "bg-[#1E40AF] border-[#1E40AF] text-white shadow-[0_0_12px_rgba(30,64,175,0.4)] scale-110" 
-                          : isCompleted
-                            ? "bg-emerald-500 border-emerald-500 text-white"
-                            : "bg-white border-slate-200 text-slate-400 group-hover:border-slate-350"
-                      }`}>
-                        {isCompleted ? (
-                          <Check size={16} className="stroke-[3]" />
-                        ) : (
-                          step.num
-                        )}
-                      </div>
-
-                      {/* Step Info */}
-                      <div className="mt-3">
-                        <span className={`text-xs font-black block transition-colors ${
-                          isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : "text-slate-500"
-                        }`}>
-                          {step.label}
-                        </span>
-                        <span className="text-[9px] text-slate-400 font-medium hidden md:block mt-0.5">
-                          {step.desc}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+          {/* Right: Action Buttons + Avatar */}
+          <div className="flex items-center gap-2.5">
+            {orders.length > 1 && (
+              <select
+                value={activeOrderId}
+                onChange={e => setActiveOrderId(e.target.value)}
+                className="text-xs border border-slate-200 rounded-lg px-3 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+              >
+                {orders.map(o => (
+                  <option key={o.id} value={o.id}>{o.orderCode || o.id} — {o.stage}</option>
+                ))}
+              </select>
+            )}
+            <button className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 bg-white text-[#0b1c30] text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors">
+              <Download size={13} />
+              Download Proposal
+            </button>
+            <button className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1E40AF] text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+              <HeadphonesIcon size={13} />
+              Support Center
+            </button>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-black text-xs ml-1">
+              {customer.name.charAt(0)}
             </div>
+          </div>
+        </div>
+      </header>
 
-            {/* Stage Content */}
-            <div className="transition-all duration-300">
-              {/* 1. SITE VISIT MODULE */}
-              {activeViewStage === 1 && (
-                <div className="space-y-6 max-w-2xl mx-auto">
-                  {(!sv.auditDate || isRescheduling) ? (
-                    <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 md:p-8 space-y-6 shadow-sm">
-                      <div className="text-center">
-                        <h3 className="text-lg font-black text-[#0b1c30] uppercase tracking-wider flex items-center justify-center gap-2">
-                          <Calendar size={18} className="text-[#1E40AF]" />
-                          {isRescheduling ? "Reschedule Site Visit" : "Schedule Your Site Visit"}
-                        </h3>
-                        <p className="text-xs text-[#737780] mt-1">
-                          Choose a date, time window, and installation address for our field engineer to survey.
-                        </p>
-                      </div>
+      {/* ─── PROGRESS STEPPER ─── */}
+      <div className="bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-6 py-5">
+          <div className="flex items-start justify-between relative">
+            {/* Background line */}
+            <div className="absolute top-[18px] left-0 right-0 h-[2px] bg-slate-100 z-0" />
+            {/* Progress fill */}
+            <div
+              className="absolute top-[18px] left-0 h-[2px] bg-emerald-500 z-0 portal-stepper-line"
+              style={{ width: `${(currentStep / (STEPS.length - 1)) * 100}%` }}
+            />
 
-                      <form onSubmit={handleScheduleSiteVisit} className="space-y-6">
-                        {/* Date & Time Slot Selector */}
-                        <div className="space-y-4 border-b border-slate-100 pb-5">
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
-                            Step 1: Choose Date & Time Slot
-                          </label>
-                          
-                          {/* Date Pills */}
-                          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-                            {getBusinessDays().map((dayDate, idx) => {
-                              const dateStr = dayDate.toISOString().split("T")[0];
-                              const dayName = dayDate.toLocaleDateString("en-US", { weekday: "short" });
-                              const monthName = dayDate.toLocaleDateString("en-US", { month: "short" });
-                              const dayNum = dayDate.getDate();
-                              const isSelected = selectedDate === dateStr;
+            {STEPS.map((step, idx) => {
+              const Icon = step.icon;
+              const isCompleted = idx < currentStep;
+              const isActive = idx === currentStep;
+              const isLocked = idx > currentStep;
 
-                              return (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedDate(dateStr);
-                                    setSelectedTime(""); // Reset time on date change
-                                  }}
-                                  className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center min-w-[70px] transition-all cursor-pointer ${
-                                    isSelected
-                                      ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100 font-bold"
-                                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-355"
-                                  }`}
-                                >
-                                  <span className="text-[9px] uppercase tracking-wider text-slate-400 block">{dayName}</span>
-                                  <span className="text-base font-black block mt-1">{dayNum}</span>
-                                  <span className="text-[9px] block text-slate-400">{monthName}</span>
-                                </button>
-                              );
-                            })}
-                          </div>
+              return (
+                <div key={step.key} className="flex flex-col items-center text-center relative z-10 flex-1">
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                    isActive
+                      ? "bg-[#1E40AF] border-[#1E40AF] text-white shadow-[0_0_0_4px_rgba(30,64,175,0.12)]"
+                      : isCompleted
+                        ? "bg-emerald-500 border-emerald-500 text-white"
+                        : "bg-white border-slate-200 text-slate-400"
+                  }`}>
+                    {isCompleted ? <Check size={14} className="stroke-[3]" /> : <Icon size={14} />}
+                  </div>
+                  <span className={`text-[11px] font-bold mt-2 block ${
+                    isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : "text-slate-400"
+                  }`}>
+                    {step.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
-                          {/* Time Slots */}
-                          {selectedDate && (
-                            <div className="space-y-2 pt-2 animate-in fade-in duration-200">
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                {["10:00 AM", "11:30 AM", "02:00 PM", "03:30 PM"].map((timeSlot) => {
-                                  const isBooked = isSlotBooked(selectedDate, timeSlot);
-                                  const isSelected = selectedTime === timeSlot;
+      {/* ─── MAIN CONTENT ─── */}
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
 
+          {/* ── LEFT: Stage Content ── */}
+          <div className="space-y-5">
+
+            {/* Current Stage Panel */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              {/* Stage label bar */}
+              <div className="px-6 pt-5 pb-3 border-b border-slate-100">
+                <span className="text-[10px] font-bold text-[#1E40AF] uppercase tracking-widest bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full">
+                  CURRENT STAGE: {STEPS[currentStep]?.label?.toUpperCase()}
+                </span>
+              </div>
+
+              <div className="p-6">
+                {/* ── SITE VISIT STAGE ── */}
+                {currentStep <= 1 && (
+                  <>
+                    {(!sv.auditDate || isRescheduling) ? (
+                      <div className="space-y-6">
+                        <div>
+                          <h2 className="text-xl font-black text-[#0b1c30] mb-1.5">Schedule Your Physical Site Audit</h2>
+                          <p className="text-sm text-slate-500 leading-relaxed max-w-lg">
+                            Our technical survey team needs to verify dimensions and substrate conditions before we can finalize the structural design for your exterior month signs. Estimated duration: 45 mins.
+                          </p>
+                        </div>
+
+                        <form onSubmit={handleScheduleSiteVisit} className="space-y-5">
+                          {/* Date Picker */}
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                              Pick a Date
+                            </label>
+                            <div className="flex gap-2 overflow-x-auto pb-1">
+                              {getBusinessDays().map((day, idx) => {
+                                const ds = day.toISOString().split("T")[0];
+                                const dayName = day.toLocaleDateString("en-US", { weekday: "short" });
+                                const monthName = day.toLocaleDateString("en-US", { month: "short" });
+                                const selected = selectedDate === ds;
+                                return (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => { setSelectedDate(ds); setSelectedTime(""); }}
+                                    className={`flex flex-col items-center p-3 rounded-xl border text-center min-w-[64px] transition-all cursor-pointer ${
+                                      selected
+                                        ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
+                                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                                    }`}
+                                  >
+                                    <span className="text-[9px] uppercase tracking-wider text-slate-400">{dayName}</span>
+                                    <span className="text-sm font-black mt-0.5">{day.getDate()}</span>
+                                    <span className="text-[9px] text-slate-400">{monthName}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {selectedDate && (
+                              <div className="grid grid-cols-4 gap-2 mt-3">
+                                {["10:00 AM", "11:30 AM", "02:00 PM", "03:30 PM"].map(slot => {
+                                  const booked = isSlotBooked(selectedDate, slot);
+                                  const sel = selectedTime === slot;
                                   return (
                                     <button
-                                      key={timeSlot}
+                                      key={slot}
                                       type="button"
-                                      disabled={isBooked}
-                                      onClick={() => setSelectedTime(timeSlot)}
-                                      className={`py-3 px-2 rounded-xl border text-xs font-bold transition-all text-center ${
-                                        isBooked
-                                          ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
-                                          : isSelected
-                                            ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
+                                      disabled={booked}
+                                      onClick={() => setSelectedTime(slot)}
+                                      className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${
+                                        booked ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
+                                          : sel ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
                                             : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
                                       }`}
                                     >
-                                      {timeSlot}
-                                      {isBooked && <span className="block text-[8px] text-red-400 font-medium mt-0.5">Taken</span>}
+                                      {slot}
                                     </button>
                                   );
                                 })}
                               </div>
-                            </div>
-                          )}
-                        </div>
+                            )}
+                          </div>
 
-                        {/* Location Selector */}
-                        <div className="space-y-4">
-                          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide">
-                            Step 2: Pin Site Location
-                          </label>
-
-                          {/* Address Input */}
+                          {/* Location */}
                           <div>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                              Installation Site Address *
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                              Choose Location in Maps
                             </label>
                             <input
                               type="text"
                               required
                               value={siteAddress}
-                              onChange={(e) => setSiteAddress(e.target.value)}
+                              onChange={e => setSiteAddress(e.target.value)}
                               placeholder="Full address where signage will be installed"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#1E40AF] focus:border-[#1E40AF] focus:outline-none bg-slate-50 focus:bg-white transition-all"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition-all"
                             />
-                          </div>
 
-                          {/* Maps Coordinates Pin Picker */}
-                          <div className="border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 shadow-inner">
-                            <div 
-                              onClick={() => {
-                                setGpsCoords(`${(12.97 + Math.random() * 0.01).toFixed(4)}° N, ${(77.59 + Math.random() * 0.01).toFixed(4)}° E`);
-                              }}
-                              className="h-36 bg-slate-100 flex flex-col items-center justify-center relative cursor-crosshair overflow-hidden group select-none"
-                            >
-                              <div className="absolute inset-0 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:20px_20px] opacity-25" />
-                              <div className="absolute w-8 h-8 rounded-full bg-blue-500/20 animate-ping" />
-                              <div className="absolute w-4 h-4 rounded-full bg-blue-500/40 animate-pulse" />
-                              <MapPin size={32} className="text-[#F97316] relative z-10 transition-transform duration-300 group-hover:scale-110 drop-shadow-md" />
-                              <span className="text-[10px] text-slate-500 mt-2.5 relative z-10 font-bold bg-white/90 px-3 py-1 rounded-full shadow-sm border border-slate-100">
-                                Click map area to reposition coordinates pin
-                              </span>
-                            </div>
-
-                            <div className="p-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-3">
-                              <span className="text-xs font-mono font-bold text-slate-700">
-                                📍 Coordinates: <span className="text-slate-900 font-black">{gpsCoords}</span>
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setMapsSearching(true);
-                                  setTimeout(() => {
-                                    setGpsCoords("12.9716° N, 77.5946° E");
-                                    setMapsSearching(false);
-                                  }, 600);
-                                }}
-                                className="px-3.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
+                            {/* Map visual */}
+                            <div className="mt-2 border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                              <div
+                                onClick={() => setGpsCoords(`${(12.97 + Math.random() * 0.01).toFixed(4)}° N, ${(77.59 + Math.random() * 0.01).toFixed(4)}° E`)}
+                                className="h-28 bg-[#e8edf2] flex flex-col items-center justify-center relative cursor-crosshair group select-none"
                               >
-                                {mapsSearching ? (
-                                  <span className="w-3 h-3 border-2 border-[#1E40AF] border-t-transparent rounded-full animate-spin" />
-                                ) : "Auto-detect Location"}
-                              </button>
+                                <div className="absolute inset-0 bg-[linear-gradient(to_right,#d1d9e0_1px,transparent_1px),linear-gradient(to_bottom,#d1d9e0_1px,transparent_1px)] bg-[size:20px_20px] opacity-40" />
+                                <div className="absolute w-8 h-8 rounded-full bg-blue-400/20 animate-ping" />
+                                <MapPin size={28} className="text-[#1E40AF] relative z-10 drop-shadow-md" />
+                                <span className="text-[10px] text-slate-500 mt-1.5 relative z-10 font-medium bg-white/90 px-2 py-0.5 rounded-full border border-slate-200">
+                                  Click to pin location
+                                </span>
+                              </div>
+                              <div className="px-3 py-2 bg-white border-t border-slate-200 flex items-center justify-between">
+                                <span className="text-[10px] font-mono font-semibold text-slate-600">📍 {gpsCoords}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => { setMapsSearching(true); setTimeout(() => { setGpsCoords("12.9716° N, 77.5946° E"); setMapsSearching(false); }, 600); }}
+                                  className="flex items-center gap-1 text-[10px] font-bold text-[#1E40AF] hover:underline"
+                                >
+                                  {mapsSearching ? <Loader2 size={10} className="animate-spin" /> : null}
+                                  Auto-detect
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Submit Actions */}
-                        <div className="flex justify-end space-x-3 pt-4 border-t border-slate-100">
-                          {isRescheduling && (
+                          <div className="flex items-center gap-3 pt-2">
                             <button
-                              type="button"
-                              onClick={() => setIsRescheduling(false)}
-                              className="px-5 py-2.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+                              type="submit"
+                              disabled={!selectedDate || !selectedTime || schedulingLoading}
+                              className="flex items-center gap-2 px-5 py-2.5 bg-[#0b1c30] text-white rounded-xl text-sm font-bold hover:bg-[#1a2f47] transition-all disabled:opacity-50 shadow-sm"
                             >
-                              Cancel
+                              {schedulingLoading ? <Loader2 size={14} className="animate-spin" /> : null}
+                              Pick Date & Time
+                              <ArrowRight size={14} />
                             </button>
-                          )}
-                          <button
-                            type="submit"
-                            disabled={!selectedDate || !selectedTime || schedulingLoading}
-                            className="px-6 py-2.5 bg-[#1E40AF] hover:bg-[#1d4ed8] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
-                          >
-                            {schedulingLoading ? (
-                              <>
-                                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                Processing slot...
-                              </>
-                            ) : isRescheduling ? "Update Appointment" : "Book Site Survey"}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  ) : sv.completed === false ? (
-                    /* ── CONFIRMATION SCREEN ── */
-                    <div className="bg-white border border-emerald-100 rounded-2xl p-6 md:p-8 space-y-6 shadow-xs text-center prt-animate-in">
-                      <div className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
-                        <Check className="w-8 h-8 text-emerald-600 stroke-[3]" />
+                            <button type="button" className="px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
+                              Request Callback
+                            </button>
+                          </div>
+                        </form>
                       </div>
-                      
-                      <div className="space-y-2">
-                        <h3 className="text-lg font-black text-slate-800">Site Visit Scheduled Successfully</h3>
-                        <p className="text-xs text-[#737780] max-w-md mx-auto">
-                          Your site audit parameters are registered. A field engineer will arrive at the scheduled date and time.
-                        </p>
-                      </div>
-
-                      <div className="max-w-md mx-auto bg-slate-50 border border-slate-200 rounded-xl p-5 text-left grid grid-cols-2 gap-4 text-xs">
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Appointment Date</span>
-                          <p className="font-bold text-slate-800 font-mono">{sv.auditDate}</p>
+                    ) : sv.completed === false ? (
+                      // Scheduled confirmation
+                      <div className="text-center space-y-5 py-4">
+                        <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
+                          <Check size={24} className="text-emerald-600 stroke-[3]" />
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Time Window</span>
-                          <p className="font-bold text-slate-800 font-mono">{sv.auditTime}</p>
+                        <div>
+                          <h2 className="text-lg font-black text-[#0b1c30]">Site Visit Scheduled</h2>
+                          <p className="text-sm text-slate-500 mt-1">Our team will arrive at the scheduled time.</p>
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Assigned Auditor</span>
-                          <p className="font-bold text-slate-800">{sv.sitePersonnel || "Hari"}</p>
+                        <div className="max-w-sm mx-auto bg-slate-50 border border-slate-200 rounded-xl p-4 text-left grid grid-cols-2 gap-3 text-xs">
+                          <div><span className="text-[10px] text-slate-400 uppercase font-bold block">Date</span><p className="font-bold text-slate-800 font-mono mt-0.5">{sv.auditDate}</p></div>
+                          <div><span className="text-[10px] text-slate-400 uppercase font-bold block">Time</span><p className="font-bold text-slate-800 font-mono mt-0.5">{sv.auditTime}</p></div>
+                          <div className="col-span-2"><span className="text-[10px] text-slate-400 uppercase font-bold block">Address</span><p className="font-medium text-slate-800 mt-0.5">{sv.customerAddress}</p></div>
                         </div>
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Site Type</span>
-                          <p className="font-bold text-slate-800">{sv.siteType || "Shop Front"}</p>
-                        </div>
-                        <div className="col-span-2 space-y-0.5 border-t border-slate-100 pt-3">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Audit Address</span>
-                          <p className="font-medium text-slate-800 leading-normal">{sv.customerAddress}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-center pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setIsRescheduling(true)}
-                          className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
-                        >
-                          <Calendar size={14} className="text-[#1E40AF]" />
-                          Reschedule Site Visit Appointment
+                        <button onClick={() => setIsRescheduling(true)} className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2 mx-auto">
+                          <RefreshCw size={12} /> Reschedule Appointment
                         </button>
                       </div>
-                    </div>
-                  ) : sv.reviewStatus !== "Approved" ? (
-                    /* ── COMPLETED BUT PENDING ADMIN APPROVAL ── */
-                    <div className="bg-white border border-amber-250 rounded-2xl p-6 md:p-8 space-y-6 shadow-xs prt-animate-in">
-                      <div className="flex items-start space-x-4 bg-amber-50/50 border border-amber-200 rounded-xl p-5 text-amber-800">
-                        <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={20} />
-                        <div className="space-y-1">
-                          <span className="text-sm font-black block">Site Survey Completed - Undergoing Verification</span>
-                          <p className="text-xs text-amber-700 leading-relaxed">
-                            Our field representative completed the site survey audit. The captured metrics and installation feasibility are currently undergoing engineering quality checks.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 text-xs grid grid-cols-2 gap-4">
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Visit Completed Date</span>
-                          <p className="font-bold text-slate-800">{sv.auditDate}</p>
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-slate-400 uppercase font-bold">Visited By</span>
-                          <p className="font-bold text-slate-800">{sv.sitePersonnel || "Hari"}</p>
-                        </div>
-                        <div className="col-span-2 space-y-2 border-t border-slate-100 pt-3 text-slate-500 italic">
-                          💡 Measurement dimensions, wall assessment, and site mockup photos will be published here automatically once approved by the Printec Administrator.
-                        </div>
-                      </div>
-
-                      <div className="flex justify-center pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setIsRescheduling(true)}
-                          className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
-                        >
-                          <Calendar size={14} className="text-[#1E40AF]" />
-                          Request Audit Resurvey / Change Details
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* ── APPROVED SITE VISIT VIEW ── */
-                    <div className="space-y-6 prt-animate-in">
-                      
-                      {/* Visit Summary Card */}
-                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
-                        <div className="flex justify-between items-center pb-3 border-b border-slate-100">
-                          <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                            <Clock size={14} className="text-[#1E40AF]" />
-                            Site Visit Summary (Approved)
-                          </h4>
-                          <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-0.5 rounded text-[10px] font-black uppercase">
-                            Approved
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Visited By</span>
-                            <p className="font-bold text-slate-800">{sv.sitePersonnel || "Hari"}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Visit Date</span>
-                            <p className="font-bold text-slate-800 font-mono">{sv.auditDate}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Time Window</span>
-                            <p className="font-bold text-slate-800 font-mono">{sv.auditTime}</p>
-                          </div>
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Visit Duration</span>
-                            <p className="font-bold text-slate-800 font-mono">{sv.elapsedDuration || "35 mins"}</p>
+                    ) : (
+                      // Completed or pending approval
+                      <div className="space-y-4">
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                          <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-bold text-amber-800">Site Survey Completed — Under Verification</p>
+                            <p className="text-xs text-amber-700 mt-0.5">Measurement data is being reviewed by our engineering team.</p>
                           </div>
                         </div>
-                      </div>
-
-                      {/* Measurement Summary Card */}
-                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
-                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <Ruler size={14} className="text-[#1E40AF]" />
-                          Measurement Summary
-                        </h4>
-
-                        <div className="space-y-4">
-                          {(sv.locations || [
-                            { name: "Main Fascia", width: "12 ft", height: "3 ft", depth: "6 in", groundClearance: "10 ft" },
-                            { name: "Side Projection Board", width: "4 ft", height: "2 ft", depth: "4 in", groundClearance: "N/A" }
-                          ]).map((loc: any, idx: number) => (
-                            <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                              <div className="space-y-1">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase">Location {idx + 1}</span>
-                                <h5 className="text-xs font-black text-[#0b1c30]">{loc.name}</h5>
-                              </div>
-                              <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-6 gap-y-2 text-xs font-semibold">
-                                <div className="space-y-0.5">
-                                  <span className="text-[9px] text-slate-400 uppercase block leading-none">Width</span>
-                                  <span className="font-mono text-slate-800">{loc.width}</span>
-                                </div>
-                                <div className="space-y-0.5">
-                                  <span className="text-[9px] text-slate-400 uppercase block leading-none">Height</span>
-                                  <span className="font-mono text-slate-800">{loc.height}</span>
-                                </div>
-                                <div className="space-y-0.5">
-                                  <span className="text-[9px] text-slate-400 uppercase block leading-none">Depth</span>
-                                  <span className="font-mono text-slate-800">{loc.depth}</span>
-                                </div>
-                                <div className="space-y-0.5">
-                                  <span className="text-[9px] text-slate-400 uppercase block leading-none">Clearance</span>
-                                  <span className="font-mono text-slate-800">{loc.groundClearance || "N/A"}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Site Photos Gallery Card */}
-                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
-                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <Printer size={14} className="text-[#1E40AF]" />
-                          Site Photos Gallery
-                        </h4>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                          {[
-                            { title: "Front View", url: sv.photoCategories?.front || "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=250&auto=format&fit=crop" },
-                            { title: "Installation Area", url: sv.photoCategories?.area || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=250&auto=format&fit=crop" },
-                            { title: "Power Source", url: sv.photoCategories?.electrical || "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=250&auto=format&fit=crop" },
-                            { title: "Measurement Reference", url: sv.photoCategories?.competitor || "https://images.unsplash.com/photo-1513694203232-719a280e022f?w=250&auto=format&fit=crop" }
-                          ].map((item, idx) => (
-                            <a
-                              href={item.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              key={idx}
-                              className="group block border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative aspect-square transition-all hover:border-[#1E40AF]"
-                            >
-                              <img src={item.url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/80 to-transparent p-3 pt-6 text-[10px] text-white font-bold uppercase tracking-wide">
-                                {item.title}
-                              </div>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Site Assessment Card */}
-                      <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
-                        <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <ClipboardList size={14} className="text-[#1E40AF]" />
-                          Site Assessment Details
-                        </h4>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Wall Type</span>
-                            <p className="font-bold text-slate-800">{sv.wallType || "Concrete/Brick"}</p>
-                          </div>
-                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Mounting Method</span>
-                            <p className="font-bold text-slate-800">{sv.mountingMethod || "Anchor Bolts with Metal Frame"}</p>
-                          </div>
-                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Power Available Onsite</span>
-                            <p className="font-bold text-slate-800">{sv.powerAvailable || "Yes"}</p>
-                          </div>
-                          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-0.5">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold">Distance to Power Source</span>
-                            <p className="font-bold text-slate-800 font-mono">{sv.distanceToPowerSource || "5 ft"}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-                  )}
-
-                  {/* Customer Notifications Center Log */}
-                  <div className="space-y-6">
-                    <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-xs">
-                      <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                        <Mail size={14} className="text-[#1E40AF]" />
-                        Customer Notifications Center
-                      </h3>
-                      <p className="text-[11px] text-slate-500 leading-normal">
-                        Real-time log of automated messages dispatched to your registered details (Phone: <strong className="text-slate-700">{customer.phone}</strong>, Email: <strong className="text-slate-700">{customer.email}</strong>).
-                      </p>
-
-                      {getNotificationHistory().length > 0 ? (
-                        <div className="space-y-3.5 pt-2">
-                          {getNotificationHistory().map((alertLog, idx) => (
-                            <div key={idx} className="border border-slate-150 rounded-xl p-3.5 bg-slate-50/50 space-y-2.5">
-                              <div className="flex justify-between items-start">
-                                <span className="text-xs font-black text-slate-800">{alertLog.event}</span>
-                                <span className="text-[9px] font-mono text-slate-400 font-medium">{alertLog.time}</span>
-                              </div>
-                              <div className="flex flex-wrap gap-2 text-[9px] font-bold text-slate-400">
-                                <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
-                                  <Check size={10} className="stroke-[3]" /> Portal Alert
-                                </span>
-                                <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
-                                  <Check size={10} className="stroke-[3]" /> WhatsApp SMS
-                                </span>
-                                <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 border border-emerald-150 rounded-full px-2 py-0.5">
-                                  <Check size={10} className="stroke-[3]" /> Email Dispatch
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-5 bg-slate-50 border border-slate-200 border-dashed rounded-xl text-center text-slate-400 text-xs italic">
-                          No automated alerts dispatched yet. Site scheduling triggers Portal, WhatsApp & Email messages.
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Rescheduling Helper Panel */}
-                    {sv.auditDate && sv.completed === false && !isRescheduling && (
-                      <div className="bg-[#eff4ff] border border-blue-200 rounded-2xl p-5 text-xs text-[#1E40AF] space-y-2 shadow-2xs">
-                        <span className="font-bold block">Need to Reschedule?</span>
-                        <p className="text-[11px] leading-relaxed text-slate-600">
-                          You can reschedule your appointment at any time before our audit representative visits your site. Rescheduling releases your current time slot back to the public pool.
-                        </p>
                       </div>
                     )}
-                  </div>
-                </div>
-              )}
+                  </>
+                )}
 
-              {/* 2. QUOTATION / INVOICING */}
-              {activeViewStage === 2 && (
-                <div className="space-y-6 max-w-3xl mx-auto">
-                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6 shadow-sm">
-                    <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                      <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                        <FileText size={14} className="text-[#1E40AF]" />
-                        Invoice Quotation Details
-                      </h3>
-                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
-                        qd.status === "Approved" 
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-250" 
-                          : "bg-amber-50 text-amber-600 border-amber-250"
-                      }`}>
-                        {qd.status || "Draft"}
-                      </span>
+                {/* ── QUOTATION STAGE ── */}
+                {currentStep === 2 && (
+                  <div className="space-y-5">
+                    <div>
+                      <h2 className="text-xl font-black text-[#0b1c30] mb-1">Review Your Quotation</h2>
+                      <p className="text-sm text-slate-500">Please review the cost breakdown below and approve or request revisions.</p>
                     </div>
-
-                    {/* Pricing Table */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-xs">
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase text-[10px]">
-                            <th className="pb-3">Fabrication Parameters</th>
-                            <th className="pb-3 text-right">Unit / Value</th>
+                          <tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Item</th>
+                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Amount</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 font-medium">
-                          <tr>
-                            <td className="py-3.5 text-slate-500">Signage Type</td>
-                            <td className="py-3.5 text-right text-slate-800 font-bold">{qd.signageType}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-3.5 text-slate-500">Materials Spec</td>
-                            <td className="py-3.5 text-right text-slate-800 font-bold">{qd.material}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-3.5 text-slate-500">Mounting Support</td>
-                            <td className="py-3.5 text-right text-slate-800 font-bold">{qd.mounting}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-3.5 text-slate-500">Physical Dimensions</td>
-                            <td className="py-3.5 text-right text-slate-800 font-mono font-bold">{qd.width}″ × {qd.height}″ (Depth: {qd.depth}″)</td>
-                          </tr>
-                          <tr>
-                            <td className="py-3.5 text-slate-500">Base ACP Fabrication Cost</td>
-                            <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.baseACPPrice || 0).toLocaleString("en-IN")}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-3.5 text-slate-500">Hardware & Fittings Cost</td>
-                            <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.hardwarePrice || 0).toLocaleString("en-IN")}</td>
-                          </tr>
-                          <tr>
-                            <td className="py-3.5 text-slate-500">Polishing & Finishing</td>
-                            <td className="py-3.5 text-right text-slate-800 font-mono">₹{(qd.polishingPrice || 0).toLocaleString("en-IN")}</td>
-                          </tr>
-                          {qd.discount > 0 && (
-                            <tr className="text-red-600">
-                              <td className="py-3.5 font-bold">Special Customer Discount</td>
-                              <td className="py-3.5 text-right font-mono font-bold">-₹{qd.discount.toLocaleString("en-IN")}</td>
+                        <tbody className="divide-y divide-slate-100">
+                          {[
+                            { label: "Signage Type", val: qd.signageType || "ACP Panels" },
+                            { label: "Materials", val: qd.material || "Brushed Aluminium" },
+                            { label: "Mounting", val: qd.mounting || "Standoffs" },
+                            { label: "Base Fabrication", val: `₹${(qd.baseACPPrice || 0).toLocaleString("en-IN")}` },
+                            { label: "Hardware & Fittings", val: `₹${(qd.hardwarePrice || 0).toLocaleString("en-IN")}` },
+                            { label: "Subtotal", val: `₹${(qd.subtotal || 0).toLocaleString("en-IN")}` },
+                            { label: "GST (18%)", val: `₹${(qd.tax || 0).toLocaleString("en-IN")}` },
+                          ].map((row, i) => (
+                            <tr key={i}>
+                              <td className="px-4 py-3 text-slate-500 text-xs">{row.label}</td>
+                              <td className="px-4 py-3 text-right text-slate-800 font-bold text-xs">{row.val}</td>
                             </tr>
-                          )}
-                          <tr className="font-bold border-t border-slate-200">
-                            <td className="py-4 text-slate-700">Subtotal Amount</td>
-                            <td className="py-4 text-right text-slate-900 font-mono">₹{(qd.subtotal || 0).toLocaleString("en-IN")}</td>
-                          </tr>
-                          <tr className="font-bold text-slate-500">
-                            <td className="py-3.5">Tax (18% IGST/GST)</td>
-                            <td className="py-3.5 text-right font-mono">₹{(qd.tax || 0).toLocaleString("en-IN")}</td>
-                          </tr>
-                          <tr className="font-black text-sm border-t border-dashed border-slate-200">
-                            <td className="py-4 text-[#1E40AF]">Grand Total Amount</td>
-                            <td className="py-4 text-right text-emerald-700 font-mono text-base">₹{(qd.grandTotal || 0).toLocaleString("en-IN")}</td>
+                          ))}
+                          <tr className="bg-slate-50">
+                            <td className="px-4 py-3.5 font-black text-[#1E40AF] text-sm">Grand Total</td>
+                            <td className="px-4 py-3.5 text-right font-black text-emerald-700 text-sm font-mono">₹{(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}</td>
                           </tr>
                         </tbody>
                       </table>
                     </div>
 
-                    {/* Actionable approvals if stage is appropriate */}
-                    {qd.status !== "Approved" && (activeOrder.stage === "Quotation Sent" || activeOrder.stage === "Quotation Negotiation") && (
-                      <div className="bg-[#eff4ff] border border-[#cbd5e0] rounded-2xl p-5 space-y-4">
-                        <div>
-                          <span className="text-xs font-black text-[#1E40AF] block">Review and Approve Quotation Invoice</span>
-                          <p className="text-[11px] text-slate-500 leading-normal mt-1">
-                            Please verify the financial cost sheet above. Approving will notify Printec Admin to schedule design draft creation.
-                          </p>
-                        </div>
-
+                    {qd.status !== "Approved" && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation") && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                        <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed to Design</p>
                         {showQuoteDeclineInput ? (
-                          <div className="space-y-3">
-                            <label className="block text-[10px] font-bold text-red-700 uppercase">Specify Revision Feedback / Changes Requested</label>
-                            <textarea
-                              rows={3}
-                              value={quoteFeedback}
-                              onChange={(e) => setQuoteFeedback(e.target.value)}
-                              placeholder="Please let us know your requirements..."
-                              className="w-full p-3 border border-slate-355 rounded-xl text-xs focus:ring-1 focus:ring-red-500 focus:outline-none bg-white"
-                            />
-                            <div className="flex space-x-2">
-                              <button
-                                onClick={() => setShowQuoteDeclineInput(false)}
-                                className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-lg text-xs font-bold"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={handleDeclineQuote}
-                                disabled={!quoteFeedback.trim() || updatingStatus !== null}
-                                className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50"
-                              >
-                                {updatingStatus === "quote-decline" ? "Submitting..." : "Submit Revision Notes"}
-                              </button>
+                          <div className="space-y-2">
+                            <textarea rows={3} value={quoteFeedback} onChange={e => setQuoteFeedback(e.target.value)} placeholder="Your revision feedback..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500" />
+                            <div className="flex gap-2">
+                              <button onClick={() => setShowQuoteDeclineInput(false)} className="px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg text-xs font-bold">Cancel</button>
+                              <button onClick={handleDeclineQuote} disabled={!quoteFeedback.trim() || !!updatingStatus} className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">Submit</button>
                             </div>
                           </div>
                         ) : (
-                          <div className="flex space-x-3">
-                            <button
-                              onClick={() => setShowQuoteDeclineInput(true)}
-                              className="px-4 py-2 border border-slate-300 text-slate-600 bg-white rounded-xl text-xs font-bold hover:bg-slate-50"
-                            >
-                              Decline / Request Revision
-                            </button>
-                            <button
-                              onClick={handleApproveQuote}
-                              disabled={updatingStatus !== null}
-                              className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50 shadow-2xs"
-                            >
-                              <Check size={14} /> Approve Quotation
+                          <div className="flex gap-2">
+                            <button onClick={() => setShowQuoteDeclineInput(true)} className="px-4 py-2 border border-slate-300 bg-white text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50">Decline / Revise</button>
+                            <button onClick={handleApproveQuote} disabled={!!updatingStatus} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50">
+                              <Check size={13} /> Approve Quotation
                             </button>
                           </div>
                         )}
                       </div>
                     )}
+                    {qd.status === "Approved" && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+                        <Check size={16} className="text-emerald-600 stroke-[2.5]" />
+                        <span className="text-sm font-bold text-emerald-700">Quotation Approved</span>
+                      </div>
+                    )}
                   </div>
+                )}
 
-                  {/* Payment section if approved */}
-                  {qd.status === "Approved" && renderBillingSection()}
-                </div>
-              )}
-
-              {/* 3. DESIGN BLUEPRINT PROOF */}
-              {activeViewStage === 3 && (
-                <div className="space-y-6 max-w-3xl mx-auto">
-                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6 shadow-sm">
-                    <div className="flex justify-between items-center pb-4 border-b border-slate-100">
-                      <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                        <Printer size={14} className="text-[#1E40AF]" />
-                        Design Blueprint & Concept Mockup Proof
-                      </h3>
-                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
-                        dd.status === "Approved" 
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-250" 
-                          : "bg-amber-50 text-amber-600 border-amber-250"
-                      }`}>
-                        {dd.status || "Draft"}
-                      </span>
+                {/* ── DESIGN STAGE ── */}
+                {currentStep === 3 && (
+                  <div className="space-y-5">
+                    <div>
+                      <h2 className="text-xl font-black text-[#0b1c30] mb-1">Design Concept Proof</h2>
+                      <p className="text-sm text-slate-500">Review the design mockup below. You can approve or request revisions.</p>
                     </div>
-
                     {dd.proofUrl ? (
-                      <div className="space-y-6">
-                        {/* Zoomable Image Container */}
-                        <div className="relative border border-slate-200 rounded-2xl bg-[#0b1c30] flex items-center justify-center p-6 overflow-hidden min-h-[300px]">
-                          <img 
-                            src={dd.proofUrl} 
-                            alt="Concept Proof" 
-                            className="max-h-[320px] object-contain transition-all duration-300"
-                            style={{ transform: `scale(${zoomLevel / 100})` }}
-                            onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop';}}
-                          />
-                          
-                          {/* Interactive Zoom Overlay controls */}
-                          <div className="absolute bottom-3 right-3 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-lg p-2 flex items-center space-x-2 shadow-sm">
-                            <button onClick={() => setZoomLevel(prev => Math.max(prev - 20, 50))} className="p-1 text-slate-500 hover:text-slate-800 rounded"><ZoomOut size={12} /></button>
-                            <span className="text-[10px] font-mono font-black select-none cursor-pointer" onClick={() => setZoomLevel(100)}>{zoomLevel}%</span>
-                            <button onClick={() => setZoomLevel(prev => Math.min(prev + 20, 200))} className="p-1 text-slate-500 hover:text-slate-800 rounded"><ZoomIn size={12} /></button>
-                          </div>
+                      <div className="border border-slate-200 rounded-xl bg-[#0b1c30] flex items-center justify-center p-4 min-h-52 relative">
+                        <img src={dd.proofUrl} alt="Design Proof" className="max-h-64 object-contain transition-all" style={{ transform: `scale(${zoomLevel / 100})` }} onError={e => { e.currentTarget.src = "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop"; }} />
+                        <div className="absolute bottom-3 right-3 bg-white/90 border border-slate-200 rounded-lg p-1.5 flex items-center gap-2">
+                          <button onClick={() => setZoomLevel(v => Math.max(v - 20, 50))} className="p-0.5 text-slate-500 hover:text-slate-800"><ZoomOut size={12} /></button>
+                          <span className="text-[10px] font-mono font-black">{zoomLevel}%</span>
+                          <button onClick={() => setZoomLevel(v => Math.min(v + 20, 200))} className="p-0.5 text-slate-500 hover:text-slate-800"><ZoomIn size={12} /></button>
                         </div>
-
-                        {/* Design parameters details */}
-                        <div className="flex justify-between items-center text-xs text-[#737780] pt-2 border-t border-slate-100 font-mono">
-                          <span>FILE: signage_blueprint_concept.pdf</span>
-                          <span>Scale Ratio: 1:10 Vector</span>
-                        </div>
-
-                        {/* Actionable design approval cards */}
-                        {dd.status !== "Approved" && (
-                          <div className="bg-[#f8f9ff] border border-slate-200 rounded-2xl p-5 space-y-4">
-                            <div>
-                              <span className="text-xs font-black text-[#1E40AF] block">Approve or Request Revisions for Design Mockup</span>
-                              <p className="text-[11px] text-slate-500 leading-normal mt-1">
-                                Please review the alignment, letter fonts, dimensions, and styling proofs. Revisions can be specified below.
-                              </p>
-                            </div>
-
-                            {showDesignDeclineInput ? (
-                              <div className="space-y-3">
-                                <label className="block text-[10px] font-bold text-red-700 uppercase">Specify Design Correction Feedback</label>
-                                <textarea
-                                  rows={3}
-                                  value={designFeedback}
-                                  onChange={(e) => setDesignFeedback(e.target.value)}
-                                  placeholder="e.g. Change font of acrylic letters, or modify wiring conduit entry point..."
-                                  className="w-full p-3 border border-slate-355 rounded-xl text-xs focus:ring-1 focus:ring-red-500 focus:outline-none bg-white"
-                                />
-                                <div className="flex space-x-2">
-                                  <button
-                                    onClick={() => setShowDesignDeclineInput(false)}
-                                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-lg text-xs font-bold"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    onClick={handleDeclineDesign}
-                                    disabled={!designFeedback.trim() || updatingStatus !== null}
-                                    className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 disabled:opacity-50"
-                                  >
-                                    {updatingStatus === "design-decline" ? "Submitting..." : "Send Revision Notes"}
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex space-x-3">
-                                <button
-                                  onClick={() => setShowDesignDeclineInput(true)}
-                                  className="px-4 py-2 border border-slate-300 text-slate-600 bg-white rounded-xl text-xs font-bold hover:bg-slate-50"
-                                >
-                                  Decline / Request Design Edit
-                                </button>
-                                <button
-                                  onClick={handleApproveDesign}
-                                  disabled={updatingStatus !== null}
-                                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50 shadow-2xs"
-                                >
-                                  <Check size={14} /> Approve Design Proof
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     ) : (
-                      <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-xs">
-                        Engineering design proofs will be uploaded by our designers once quotation is approved.
+                      <div className="p-10 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-sm">Design proof will be uploaded once quotation is approved.</div>
+                    )}
+                    {dd.proofUrl && dd.status !== "Approved" && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                        {showDesignDeclineInput ? (
+                          <div className="space-y-2">
+                            <textarea rows={3} value={designFeedback} onChange={e => setDesignFeedback(e.target.value)} placeholder="Design revision notes..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500" />
+                            <div className="flex gap-2">
+                              <button onClick={() => setShowDesignDeclineInput(false)} className="px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg text-xs font-bold">Cancel</button>
+                              <button onClick={handleDeclineDesign} disabled={!designFeedback.trim() || !!updatingStatus} className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">Send Notes</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button onClick={() => setShowDesignDeclineInput(true)} className="px-4 py-2 border border-slate-300 bg-white text-slate-600 rounded-lg text-xs font-bold">Request Edit</button>
+                            <button onClick={handleApproveDesign} disabled={!!updatingStatus} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50">
+                              <Check size={13} /> Approve Design
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {dd.status === "Approved" && (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+                        <Check size={16} className="text-emerald-600 stroke-[2.5]" />
+                        <span className="text-sm font-bold text-emerald-700">Design Approved — Moving to Fabrication</span>
                       </div>
                     )}
                   </div>
+                )}
 
-                  {/* Billing Section */}
-                  {renderBillingSection()}
-                </div>
-              )}
-
-              {/* 4. FABRICATION */}
-              {activeViewStage === 4 && (
-                <div className="space-y-6 max-w-3xl mx-auto">
-                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-sm">
-                    <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                      <CheckSquare size={14} className="text-[#1E40AF]" />
-                      Workshop Fabrication Checklist (Real-time Status)
-                    </h4>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* ── PRODUCTION / FABRICATION STAGE ── */}
+                {currentStep === 4 && (
+                  <div className="space-y-5">
+                    <div>
+                      <h2 className="text-xl font-black text-[#0b1c30] mb-1">Workshop Fabrication Status</h2>
+                      <p className="text-sm text-slate-500">Real-time checklist of production milestones.</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
-                        { checked: pd.printing, label: "1. Print layout sheet & backing support plotted" },
-                        { checked: pd.cutting, label: "2. CNC precision cutting & routing alignment complete" },
-                        { checked: pd.fabrication, label: "3. Aluminium frame backing welding tested" },
-                        { checked: pd.assembly, label: "4. Acrylic letter mounting & LED internal circuitry wired" },
-                      ].map((item, idx) => (
-                        <div key={idx} className={`p-4 border rounded-xl flex items-center justify-between transition-all ${
-                          item.checked ? "bg-emerald-50/35 border-emerald-250 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-400"
-                        }`}>
-                          <span className="text-xs font-bold">{item.label}</span>
-                          {item.checked ? (
-                            <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-[9px] font-bold">Done</span>
-                          ) : (
-                            <span className="bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full text-[9px] font-bold">Pending</span>
-                          )}
+                        { done: pd.printing, label: "Print layout & backing plotted" },
+                        { done: pd.cutting, label: "CNC precision cutting complete" },
+                        { done: pd.fabrication, label: "Aluminium frame welding tested" },
+                        { done: pd.assembly, label: "LED circuitry & acrylic wired" },
+                      ].map((item, i) => (
+                        <div key={i} className={`p-4 border rounded-xl flex items-center justify-between ${item.done ? "bg-emerald-50/50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-500"}`}>
+                          <span className="text-xs font-semibold">{item.label}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${item.done ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500"}`}>{item.done ? "Done" : "Pending"}</span>
                         </div>
                       ))}
                     </div>
                   </div>
+                )}
 
-                  {/* Billing Section */}
-                  {renderBillingSection()}
-                </div>
-              )}
-
-              {/* 5. INSTALLATION */}
-              {activeViewStage === 5 && (
-                <div className="space-y-6 max-w-3xl mx-auto">
-                  <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-sm">
-                    <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                      <CheckCircle2 size={14} className="text-[#1E40AF]" />
-                      Field Installation Sign-off Proof
-                    </h4>
+                {/* ── INSTALLATION STAGE ── */}
+                {currentStep === 5 && (
+                  <div className="space-y-5">
+                    <div>
+                      <h2 className="text-xl font-black text-[#0b1c30] mb-1">Field Installation</h2>
+                      <p className="text-sm text-slate-500">Installation completion sign-off and records.</p>
+                    </div>
                     {inst.photoUrl ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 aspect-video shadow-2xs">
-                          <img src={inst.photoUrl} alt="Installation Completion" className="w-full h-full object-cover" onError={(e)=>{e.currentTarget.src='https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop';}} />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="border border-slate-200 rounded-xl overflow-hidden aspect-video">
+                          <img src={inst.photoUrl} alt="Installation" className="w-full h-full object-cover" onError={e => { e.currentTarget.src = "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400&auto=format&fit=crop"; }} />
                         </div>
-                        <div className="space-y-3 flex flex-col justify-center">
-                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-bold space-y-1 shadow-2xs">
-                            <span className="block text-slate-400 text-[10px] uppercase font-bold">Sign-off Status</span>
-                            <p>✓ Job Completed & Signed off by Client</p>
-                          </div>
-                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 shadow-2xs">
-                            <span className="text-[10px] text-slate-400 uppercase block font-bold">Customer Representative Signature</span>
-                            <span className="font-serif italic text-slate-800 text-sm font-bold block mt-1">{inst.customerSignature}</span>
-                            <span className="text-[9px] text-slate-400 font-mono mt-2 block">Security Code Verified: {inst.paymentCode}</span>
+                        <div className="space-y-3">
+                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800">✓ Job Completed & Signed off by Client</div>
+                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                            <span className="text-slate-400 uppercase font-bold text-[10px] block mb-1">Signature</span>
+                            <span className="font-serif italic text-slate-800 text-sm">{inst.customerSignature}</span>
                           </div>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-[#737780] italic">Field installation records will update here upon delivery confirmation.</p>
+                      <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400 text-sm">Installation records will appear here once complete.</div>
                     )}
                   </div>
+                )}
+              </div>
+            </div>
 
-                  {/* Billing Section */}
-                  {renderBillingSection()}
+            {/* ── DETAILED SCOPE OF WORK ── */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+              <div className="px-6 py-4 border-b border-slate-100">
+                <h3 className="text-sm font-black text-[#0b1c30] flex items-center gap-2">
+                  <ClipboardList size={15} className="text-slate-400" />
+                  Detailed Scope of Work
+                </h3>
+              </div>
+              <div className="p-6 space-y-4">
+                {scopeItems.map((item, idx) => (
+                  <div key={idx} className="flex gap-3 scope-item">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
+                      item.status === "completed"
+                        ? "bg-emerald-500 border-emerald-500"
+                        : item.status === "in_progress"
+                          ? "border-[#1E40AF] bg-white"
+                          : "border-slate-300 bg-white"
+                    }`}>
+                      {item.status === "completed" && <Check size={10} className="text-white stroke-[3]" />}
+                      {item.status === "in_progress" && <div className="w-1.5 h-1.5 rounded-full bg-[#1E40AF]" />}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className={`text-sm font-semibold ${item.status === "pending" ? "text-slate-400" : "text-[#0b1c30]"}`}>
+                          {item.label}
+                        </p>
+                        {item.status === "completed" && (
+                          <span className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-full">COMPLETED</span>
+                        )}
+                        {item.status === "in_progress" && (
+                          <span className="text-[9px] font-black uppercase bg-blue-100 text-[#1E40AF] border border-blue-200 px-1.5 py-0.5 rounded-full">IN PROGRESS</span>
+                        )}
+                      </div>
+                      {item.detail && (
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.detail}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* ── PAYMENT (if applicable) ── */}
+            {(currentStep >= 2) && (qd.grandTotal || activeOrder?.budget) && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                <h3 className="text-sm font-black text-[#0b1c30] flex items-center gap-2">
+                  <CreditCard size={15} className="text-slate-400" />
+                  Invoicing & Payments
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: "Total Value", val: `₹${(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}`, color: "slate" },
+                    { label: "Paid", val: `₹${(activeOrder?.depositPaid || 0).toLocaleString("en-IN")}`, color: "emerald" },
+                    { label: "Balance", val: `₹${Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}`, color: "amber" },
+                  ].map((card, i) => (
+                    <div key={i} className={`rounded-xl p-3.5 text-center border ${
+                      card.color === "emerald" ? "bg-emerald-50 border-emerald-100" :
+                        card.color === "amber" ? "bg-amber-50 border-amber-100" : "bg-slate-50 border-slate-200"
+                    }`}>
+                      <span className={`text-[9px] font-black uppercase tracking-wide ${
+                        card.color === "emerald" ? "text-emerald-600" : card.color === "amber" ? "text-amber-600" : "text-slate-400"
+                      }`}>{card.label}</span>
+                      <p className={`text-sm font-black mt-1 font-mono ${
+                        card.color === "emerald" ? "text-emerald-800" : card.color === "amber" ? "text-amber-800" : "text-slate-800"
+                      }`}>{card.val}</p>
+                    </div>
+                  ))}
                 </div>
-              )}
+                {Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0) > 0 && (
+                  <div className="flex justify-end">
+                    <button onClick={() => setShowPaymentModal(true)} className="px-4 py-2 bg-[#F97316] text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-all flex items-center gap-2">
+                      <CreditCard size={13} /> Make Payment
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── RIGHT SIDEBAR ── */}
+          <div className="space-y-5">
+
+            {/* Project Logistics */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-3.5 border-b border-slate-100">
+                <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest">Project Logistics</h3>
+              </div>
+
+              {/* Location Image */}
+              <div className="relative h-36 bg-slate-100 overflow-hidden">
+                <img
+                  src="https://images.unsplash.com/photo-1486325212027-8081e485255e?w=400&auto=format&fit=crop"
+                  alt="Site Location"
+                  className="w-full h-full object-cover"
+                  onError={e => { e.currentTarget.style.display = "none"; }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+              </div>
+
+              <div className="p-4 space-y-3">
+                {/* Address */}
+                <div className="flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <MapPin size={13} className="text-slate-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-[#0b1c30] leading-relaxed">
+                      {sv.customerAddress || customer.shippingAddress || "Site address will appear after scheduling"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Project Manager */}
+                <div className="flex items-center gap-2.5 py-2 border-t border-slate-100">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-white flex items-center justify-center font-black text-xs flex-shrink-0">
+                    S
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-bold text-[#0b1c30]">Sarah Jenkins</p>
+                    <p className="text-[10px] text-slate-400">Project Manager</p>
+                  </div>
+                </div>
+
+                <button className="w-full flex items-center justify-center gap-2 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+                  <Phone size={12} />
+                  Contact Manager
+                </button>
+              </div>
+            </div>
+
+            {/* Updates & Chat */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" style={{ height: "420px", display: "flex", flexDirection: "column" }}>
+              <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+                <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest">Updates & Chat</h3>
+                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />
+              </div>
+
+              <div className="flex-1 overflow-hidden">
+                {activeOrder && (
+                  <OrderCommunicationCenter
+                    orderId={activeOrder.orderId || activeOrder.id}
+                    currentUserRole="Customer"
+                    currentUserName={customer.name}
+                    employees={[]}
+                    customers={[customer]}
+                    defaultTab="customer"
+                  />
+                )}
+              </div>
             </div>
           </div>
-        )}
-
-
-          </main>
         </div>
+      </div>
 
-      {/* ── MOCK PAYMENT MODAL ── */}
+      {/* ─── PAYMENT MODAL ─── */}
       {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
-              <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">UPI Mock Payment Confirmation</h2>
-              <button onClick={() => setShowPaymentModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded">
-                <X size={18} />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <h2 className="text-sm font-bold text-[#0b1c30]">UPI Payment Confirmation</h2>
+              <button onClick={() => setShowPaymentModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded"><X size={16} /></button>
             </div>
-            
             <div className="p-6 space-y-4 text-center">
-              <QrCode size={120} className="text-[#0b1c30] mx-auto" />
-              <div className="space-y-1">
+              <QrCode size={100} className="text-[#0b1c30] mx-auto" />
+              <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Amount Due</span>
-                <p className="text-lg font-black text-slate-800 font-mono">
+                <p className="text-xl font-black text-slate-800 font-mono mt-1">
                   ₹{Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}
                 </p>
               </div>
-              <p className="text-xs text-slate-500 leading-normal">
-                To simulate checking out: scan the code or transfer using direct netbanking, then click below to trigger a mock confirmation update.
-              </p>
+              <p className="text-xs text-slate-500">Scan or transfer via netbanking, then confirm below.</p>
             </div>
-
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => setShowPaymentModal(false)}
-                className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmMockPayment}
-                disabled={paymentLoading}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-50"
-              >
-                {paymentLoading ? "Processing..." : "Confirm UPI Transfer"}
+            <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+              <button onClick={() => setShowPaymentModal(false)} className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-xs font-bold">Cancel</button>
+              <button onClick={handleConfirmMockPayment} disabled={paymentLoading} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold disabled:opacity-50">
+                {paymentLoading ? "Processing..." : "Confirm Payment"}
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Floating Chat Button */}
-      <button
-        onClick={() => setIsChatOpen(!isChatOpen)}
-        className="fixed bottom-6 right-6 z-50 p-4 bg-[#1E40AF] text-white rounded-full shadow-lg hover:bg-[#1d4ed8] hover:scale-105 transition-all duration-200 cursor-pointer flex items-center justify-center group"
-        title="Chat with Printec Team"
-      >
-        <MessageSquare size={24} className="group-hover:rotate-6 transition-transform duration-200" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-[#EF4444] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white font-mono animate-bounce">
-            {unreadCount}
-          </span>
-        )}
-      </button>
-
-      {/* Floating Chat Window */}
-      {isChatOpen && activeOrder && (
-        <div className="fixed bottom-24 right-6 z-50 w-[380px] h-[550px] bg-white border border-[#cbd5e1] rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-250">
-          <OrderCommunicationCenter
-            orderId={activeOrder.orderId || activeOrder.id}
-            currentUserRole="Customer"
-            currentUserName={customer.name}
-            employees={[]}
-            customers={[customer]}
-            onClose={() => setIsChatOpen(false)}
-            defaultTab="customer"
-          />
         </div>
       )}
     </div>
