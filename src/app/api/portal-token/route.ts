@@ -14,17 +14,16 @@ export async function GET(request: NextRequest) {
   }
 
   const salt = process.env.PORTAL_SALT || "printec_portal_salt_secure_2026";
-  const token = createHash("sha256")
+  const signature = createHash("sha256")
     .update(`${customerId}-${salt}`)
-    .digest("hex");
+    .digest("hex")
+    .substring(0, 16);
 
   // Get base URL / origin dynamically from request
   const origin = request.nextUrl.origin;
-  let url = `${origin}/portal?customer_id=${customerId}&token=${token}`;
-  if (orderId) {
-    url += `&order_id=${orderId}`;
-  }
+  const tokenPayload = Buffer.from(`${customerId}:${orderId || ""}:${signature}`).toString("base64url");
+  let url = `${origin}/portal?token=${tokenPayload}`;
 
-  return NextResponse.json({ token, url });
+  return NextResponse.json({ token: tokenPayload, url });
 }
 

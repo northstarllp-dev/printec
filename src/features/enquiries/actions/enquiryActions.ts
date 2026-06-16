@@ -168,12 +168,14 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
 
   // 6. Generate secure magic customer portal access token using friendly ID
   const salt = process.env.PORTAL_SALT || "printec_portal_salt_secure_2026";
-  const token = createHash("sha256")
+  const signature = createHash("sha256")
     .update(`${friendlyCustomerId}-${salt}`)
-    .digest("hex");
+    .digest("hex")
+    .substring(0, 16);
     
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-  const portalLink = `${baseUrl}/portal?customer_id=${friendlyCustomerId}&token=${token}&order_id=${friendlyOrderId}`;
+  const tokenPayload = Buffer.from(`${friendlyCustomerId}:${friendlyOrderId}:${signature}`).toString("base64url");
+  const portalLink = `${baseUrl}/portal?token=${tokenPayload}`;
 
   // 7. Trigger customer notification workflow (Simulated send)
   const notificationMsg = `WhatsApp & Email notification sent to client. Order ID: ${friendlyOrderId}. Portal Link: ${portalLink}`;

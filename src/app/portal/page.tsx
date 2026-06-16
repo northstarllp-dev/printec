@@ -12,21 +12,38 @@ export default async function PortalPage({
   searchParams: Promise<{ customer_id?: string; token?: string; order_id?: string }>;
 }) {
   const params = await searchParams;
-  const customerId = params.customer_id;
-  const token = params.token;
-  const orderId = params.order_id;
+  const tokenBase64 = params.token;
 
-  if (!customerId || !token) {
+  if (!tokenBase64) {
     return <PortalError title="Invalid Magic Link" message="The magic link you clicked is incomplete or has expired. Please ask Printec Admin to send it again." />;
   }
 
-  // Verify the salted token
-  const salt = process.env.PORTAL_SALT || "printec_portal_salt_secure_2026";
-  const expectedToken = createHash("sha256")
-    .update(`${customerId}-${salt}`)
-    .digest("hex");
+  let customerId = "";
+  let orderId = "";
+  let signature = "";
 
-  if (token !== expectedToken) {
+  try {
+    const decoded = Buffer.from(tokenBase64, "base64url").toString("utf-8");
+    const parts = decoded.split(":");
+    customerId = parts[0] || "";
+    orderId = parts[1] || "";
+    signature = parts[2] || "";
+  } catch (err) {
+    return <PortalError title="Invalid Magic Link" message="The magic link you clicked is corrupt. Please ask Printec Admin to send it again." />;
+  }
+
+  if (!customerId || !signature) {
+    return <PortalError title="Invalid Magic Link" message="The magic link you clicked is incomplete or has expired." />;
+  }
+
+  // Verify the salted signature
+  const salt = process.env.PORTAL_SALT || "printec_portal_salt_secure_2026";
+  const expectedSignature = createHash("sha256")
+    .update(`${customerId}-${salt}`)
+    .digest("hex")
+    .substring(0, 16);
+
+  if (signature !== expectedSignature) {
     return <PortalError title="Access Denied" message="This secure portal link is invalid. Please request a new link from Printec." />;
   }
 
@@ -115,7 +132,7 @@ export default async function PortalPage({
       customer={customer}
       orders={orders}
       initialActiveOrderId={orderId || null}
-      token={token}
+      token={tokenBase64}
     />
   );
 }
