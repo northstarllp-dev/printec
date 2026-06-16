@@ -522,11 +522,11 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
         <aside className="w-full md:w-[320px] bg-white border-r border-[#cbd5e1] shrink-0 flex flex-col select-none md:h-screen sticky top-0 z-20">
           <div className="p-6 border-b border-[#cbd5e1] flex items-center space-x-3 bg-[#f8f9ff]/50">
             <div className="bg-[#0b1c30] text-white p-2 rounded-lg">
-              <Printer size={18} className="text-[#018F10]" />
+              <Printer size={18} className="text-[var(--color-primary)]" />
             </div>
             <div>
               <h2 className="text-sm font-extrabold text-[#0b1c30] tracking-wider uppercase leading-none">PRINTEC</h2>
-              <p className="text-[10px] text-[#018F10] font-bold uppercase tracking-widest mt-1">Customer Hub</p>
+              <p className="text-[10px] text-[var(--color-primary)] font-bold uppercase tracking-widest mt-1">Customer Hub</p>
             </div>
           </div>
 
@@ -544,12 +544,12 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 <button
                   key={o.id}
                   onClick={() => {
-                    setActiveOrderId(o.id);
-                    setActiveTab("progress");
+                     setActiveOrderId(o.id);
+                     setActiveTab("progress");
                   }}
                   className={`w-full text-left p-4 rounded-xl transition-all border flex flex-col gap-2 relative ${
                     active 
-                      ? "bg-[#eff4ff] border-[#018F10] shadow-sm" 
+                      ? "bg-[#eff4ff] border-[var(--color-primary)] shadow-sm" 
                       : "bg-white border-[#cbd5e1] hover:bg-slate-50"
                   }`}
                 >
@@ -563,7 +563,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   
                   <div className="flex items-center justify-between text-[10px] text-[#737780] mt-1 pt-2 border-t border-slate-100">
                     <span className="font-semibold">{o.stage}</span>
-                    <span className="font-mono font-bold text-[#018F10]">{stageIdx * 20}%</span>
+                    <span className="font-mono font-bold text-[var(--color-primary)]">{stageIdx * 20}%</span>
                   </div>
                 </button>
               );
@@ -587,7 +587,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               <span>&gt;</span>
               <span>Account Hub</span>
               <span>&gt;</span>
-              <span className="text-[#018F10] font-mono">{activeOrder?.orderCode || activeOrder?.id}</span>
+              <span className="text-[var(--color-primary)] font-mono">{activeOrder?.orderCode || activeOrder?.id}</span>
             </div>
             <h1 className="text-xl md:text-2xl font-black text-[#0b1c30] mt-1 flex items-center gap-3">
               {activeOrder?.projectName}
@@ -636,7 +636,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Scheduled Visit</span>
-                <p className="text-sm font-bold text-[#018F10]">
+                <p className="text-sm font-bold text-[var(--color-secondary)]">
                   {sv?.auditDate ? `${sv.auditDate} (${sv.auditTime})` : "Not Scheduled Yet"}
                 </p>
               </div>
@@ -644,10 +644,10 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
             <div className="border-t border-slate-100 pt-4 flex justify-between items-center">
               <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                <Activity size={14} className="text-[#018F10]" />
+                <Activity size={14} className="text-[var(--color-secondary)]" />
                 Order Progress Tracking
               </h3>
-              <span className="text-[10px] font-mono font-bold text-[#018F10] bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+              <span className="text-[10px] font-mono font-bold text-[var(--color-secondary)] bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full">
                 Active Stage: {activeOrder?.stage}
               </span>
             </div>
@@ -664,7 +664,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   circleBg = "bg-emerald-50 text-[#16a34a] border-[#16a34a]";
                   titleColor = "text-[#16a34a]";
                 } else if (isCurrent) {
-                  circleBg = "bg-[#eff4ff] text-[#003568] border-[#018F10] ring-4 ring-emerald-100";
+                  circleBg = "bg-[#eff4ff] text-[#003568] border-[var(--color-primary)] ring-4 ring-indigo-50";
                   titleColor = "text-[#003568] font-bold";
                 }
 
@@ -698,7 +698,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   onClick={() => setActiveTab(tab.id as any)}
                   className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 whitespace-nowrap cursor-pointer ${
                     active 
-                      ? "border-[#018F10] text-[#018F10] bg-white" 
+                      ? "border-[var(--color-primary)] text-[var(--color-primary)] bg-white" 
                       : "border-transparent text-[#737780] hover:text-[#0b1c30]"
                   }`}
                 >
@@ -727,7 +727,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                     <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 md:p-8 space-y-6 shadow-xs">
                       <div>
                         <h3 className="text-sm font-black text-[#0b1c30] uppercase tracking-wider flex items-center gap-2">
-                          <Calendar size={16} className="text-[#018F10]" />
+                          <Calendar size={16} className="text-[var(--color-secondary)]" />
                           {isRescheduling ? "Reschedule Site Visit Appointment" : "Step 1: Schedule Your Site Visit"}
                         </h3>
                         <p className="text-xs text-[#737780] mt-1">
@@ -759,7 +759,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                   }}
                                   className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center min-w-[70px] transition-all cursor-pointer ${
                                     isSelected
-                                      ? "bg-[#eff4ff] border-[#018F10] text-[#003568] ring-2 ring-emerald-100 font-bold"
+                                      ? "bg-[#eff4ff] border-[var(--color-primary)] text-[#003568] ring-2 ring-blue-100 font-bold"
                                       : "bg-white border-slate-200 text-slate-600 hover:border-slate-350"
                                   }`}
                                 >
@@ -793,7 +793,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                       isBooked
                                         ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
                                         : isSelected
-                                          ? "bg-[#eff4ff] border-[#018F10] text-[#003568] ring-2 ring-emerald-100"
+                                          ? "bg-[#eff4ff] border-[var(--color-primary)] text-[#003568] ring-2 ring-blue-100"
                                           : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
                                     }`}
                                   >
@@ -818,7 +818,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                               value={siteAddress}
                               onChange={(e) => setSiteAddress(e.target.value)}
                               placeholder="Full installation site address"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
                             />
                           </div>
 
@@ -831,7 +831,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                               value={landmark}
                               onChange={(e) => setLandmark(e.target.value)}
                               placeholder="e.g. Near HDFC Bank, 2nd floor"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
                             />
                           </div>
                         </div>
@@ -852,7 +852,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                               {/* Grid representation */}
                               <div className="absolute inset-0 bg-[linear-gradient(to_right,#cbd5e1_1px,transparent_1px),linear-gradient(to_bottom,#cbd5e1_1px,transparent_1px)] bg-[size:24px_24px] opacity-15" />
                               <div className="absolute w-6 h-6 rounded-full bg-emerald-500/20 animate-ping" />
-                              <MapPin size={28} className="text-[#018F10] relative z-10 transition-transform duration-300 group-hover:scale-110" />
+                              <MapPin size={28} className="text-[var(--color-secondary)] relative z-10 transition-transform duration-300 group-hover:scale-110" />
                               <span className="text-[10px] text-slate-400 mt-2 relative z-10 font-bold bg-white/80 px-2 py-0.5 rounded shadow-xs">
                                 Click Map area to reposition pin
                               </span>
@@ -874,7 +874,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                 className="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-50 flex items-center gap-1.5"
                               >
                                 {mapsSearching ? (
-                                  <span className="w-3.5 h-3.5 border-2 border-[#018F10] border-t-transparent rounded-full animate-spin" />
+                                  <span className="w-3.5 h-3.5 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin" />
                                 ) : "Auto-detect Coordinates"}
                               </button>
                             </div>
@@ -892,7 +892,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                               value={contactPerson}
                               onChange={(e) => setContactPerson(e.target.value)}
                               placeholder="Name of onsite contact"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
                             />
                           </div>
 
@@ -906,7 +906,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                               value={contactNumber}
                               onChange={(e) => setContactNumber(e.target.value)}
                               placeholder="Phone number"
-                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                              className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
                             />
                           </div>
 
@@ -917,7 +917,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                             <select
                               value={siteType}
                               onChange={(e) => setSiteType(e.target.value)}
-                              className="w-full p-3 border border-slate-200 bg-white rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                              className="w-full p-3 border border-slate-200 bg-white rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
                             >
                               <option value="Shop Front">Shop Front</option>
                               <option value="Office">Office</option>
@@ -939,7 +939,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                             value={specialInstructions}
                             onChange={(e) => setSpecialInstructions(e.target.value)}
                             placeholder="e.g. Parking available behind building. Contact security before entry. Visit only before 1 PM..."
-                            className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[#018F10] focus:outline-none"
+                            className="w-full p-3 border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-[var(--color-primary)] focus:outline-none"
                           />
                         </div>
 
@@ -957,7 +957,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           <button
                             type="submit"
                             disabled={!selectedDate || !selectedTime || schedulingLoading}
-                            className="px-6 py-2.5 bg-[#018F10] hover:bg-[#01730c] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2 shadow-xs"
+                            className="px-6 py-2.5 bg-[var(--color-primary)] hover:bg-[var(--color-primary-container)] text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2 shadow-xs"
                           >
                             {schedulingLoading ? (
                               <>
@@ -1024,7 +1024,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           onClick={() => setIsRescheduling(true)}
                           className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
                         >
-                          <Calendar size={14} className="text-[#018F10]" />
+                          <Calendar size={14} className="text-[var(--color-secondary)]" />
                           Reschedule Site Visit Appointment
                         </button>
                       </div>
@@ -1062,7 +1062,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           onClick={() => setIsRescheduling(true)}
                           className="px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
                         >
-                          <Calendar size={14} className="text-[#018F10]" />
+                          <Calendar size={14} className="text-[var(--color-secondary)]" />
                           Request Audit Resurvey / Change Details
                         </button>
                       </div>
@@ -1075,7 +1075,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
                         <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                           <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                            <Clock size={14} className="text-[#018F10]" />
+                            <Clock size={14} className="text-[var(--color-secondary)]" />
                             Site Visit Summary (Approved)
                           </h4>
                           <span className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-0.5 rounded text-[10px] font-black uppercase">
@@ -1106,7 +1106,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {/* Measurement Summary Card */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
                         <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <Ruler size={14} className="text-[#018F10]" />
+                          <Ruler size={14} className="text-[var(--color-secondary)]" />
                           Measurement Summary
                         </h4>
 
@@ -1146,7 +1146,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {/* Site Photos Gallery Card */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
                         <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <Printer size={14} className="text-[#018F10]" />
+                          <Printer size={14} className="text-[var(--color-secondary)]" />
                           Site Photos Gallery
                         </h4>
 
@@ -1162,7 +1162,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                               target="_blank"
                               rel="noopener noreferrer"
                               key={idx}
-                              className="group block border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative aspect-square transition-all hover:border-[#018F10]"
+                              className="group block border border-slate-200 rounded-xl overflow-hidden bg-slate-50 relative aspect-square transition-all hover:border-[var(--color-primary)]"
                             >
                               <img src={item.url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/80 to-transparent p-3 pt-6 text-[10px] text-white font-bold uppercase tracking-wide">
@@ -1176,7 +1176,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {/* Site Assessment Card */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-2xs">
                         <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <ClipboardList size={14} className="text-[#018F10]" />
+                          <ClipboardList size={14} className="text-[var(--color-secondary)]" />
                           Site Assessment Details
                         </h4>
 
@@ -1215,7 +1215,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {/* Workshop fabrication checklist */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
                         <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                          <CheckSquare size={14} className="text-[#018F10]" />
+                          <CheckSquare size={14} className="text-[var(--color-secondary)]" />
                           Workshop Fabrication Checklist (Real-time Status)
                         </h4>
                         
@@ -1249,7 +1249,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {/* Installation details */}
                       <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4">
                         <h4 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                          <CheckCircle2 size={14} className="text-[#018F10]" />
+                          <CheckCircle2 size={14} className="text-[var(--color-secondary)]" />
                           Field Installation Sign-off Proof
                         </h4>
                         {inst.photoUrl ? (
@@ -1282,7 +1282,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 <div className="space-y-6">
                   <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-4 shadow-xs">
                     <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-3 border-b border-slate-100">
-                      <Mail size={14} className="text-[#018F10]" />
+                      <Mail size={14} className="text-[var(--color-secondary)]" />
                       Customer Notifications Center
                     </h3>
                     <p className="text-[11px] text-slate-500 leading-normal">
@@ -1338,7 +1338,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6">
                   <div className="flex justify-between items-center pb-4 border-b border-slate-100">
                     <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                      <FileText size={14} className="text-[#018F10]" />
+                      <FileText size={14} className="text-[var(--color-secondary)]" />
                       Invoice Quotation Details
                     </h3>
                     <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
@@ -1475,7 +1475,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6">
                   <div className="flex justify-between items-center pb-4 border-b border-slate-100">
                     <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2">
-                      <Printer size={14} className="text-[#018F10]" />
+                      <Printer size={14} className="text-[var(--color-secondary)]" />
                       Design Blueprint & Concept Mockup Proof
                     </h3>
                     <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border ${
@@ -1583,7 +1583,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               <div className="space-y-6">
                 <div className="bg-white border border-[#cbd5e1] rounded-2xl p-6 space-y-6">
                   <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest flex items-center gap-2 pb-4 border-b border-slate-100">
-                    <CreditCard size={14} className="text-[#018F10]" />
+                    <CreditCard size={14} className="text-[var(--color-secondary)]" />
                     Invoicing & Payment Details
                   </h3>
 
@@ -1638,7 +1638,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                     <div className="flex justify-end">
                       <button
                         onClick={() => setShowPaymentModal(true)}
-                        className="px-6 py-3 bg-[#018F10] hover:bg-[#01730c] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2"
+                        className="px-6 py-3 bg-[var(--color-accent)] hover:bg-[#ea580c] text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer"
                       >
                         <CreditCard size={14} />
                         Simulate Payment Confirmation
@@ -1708,12 +1708,12 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
                       placeholder="Type your message, query, or revision requests here..."
-                      className="flex-1 p-3 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[#018F10] focus:ring-1 focus:ring-[#018F10]"
+                      className="flex-1 p-3 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]"
                     />
                     <button
                       type="submit"
                       disabled={!chatInput.trim()}
-                      className="p-3 bg-[#018F10] hover:bg-[#01730c] text-white rounded-xl transition-all disabled:opacity-50"
+                      className="p-3 bg-[var(--color-primary)] hover:bg-[var(--color-primary-container)] text-white rounded-xl transition-all disabled:opacity-50 cursor-pointer"
                     >
                       <Send size={14} />
                     </button>

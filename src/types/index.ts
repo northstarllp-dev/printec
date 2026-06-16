@@ -54,6 +54,28 @@ export interface ChatMessage {
   verified?: boolean;
 }
 
+// New Sign Location type
+export interface SignLocation {
+  id: string;
+  name: string;
+  width?: number;
+  height?: number;
+  depth?: number;
+  groundClearance?: number;
+  notes?: string;
+  photos: string[];
+}
+
+// Site Photo Categories
+export interface SitePhotoCategories {
+  front: string[];
+  installationArea: string[];
+  powerSource: string[];
+  measurementReference: string[];
+  additional: string[];
+}
+
+// Extended Site Visit Details
 export interface SiteVisitDetails {
   completed: boolean;
   
@@ -82,12 +104,11 @@ export interface SiteVisitDetails {
   visitStartTimestamp?: string;
   startGpsLocation?: string;
   startDeviceInfo?: string;
-  locations?: any[];
+  locations?: SignLocation[]; // Updated to use new SignLocation type
   distanceToPowerSource?: number;
   distanceToPowerSourceUnit?: string;
   electricalNotes?: string;
   audioNoteUrl?: string;
-  mountingMethod?: string;
   surfaceCondition?: string;
   obstacles?: string[];
   customerBudget?: number;
@@ -97,17 +118,47 @@ export interface SiteVisitDetails {
   suggestedProductType?: string;
   additionalObservations?: string;
 
-  // Stage 4: Completed Form Details
+  // New Visit Information Section
+  visitDate?: string;
+  visitTime?: string;
+  siteAddress?: string;
+  siteType?: string;
+  contactPerson?: string;
+  contactNumber?: string;
+  specialInstructions?: string;
+
+  // Electrical Assessment
+  powerAvailable?: boolean;
+  electricalPhotos?: string[];
+
+  // Structural Assessment
+  wallType?: "Concrete" | "ACP Cladding" | "Glass" | "Tile" | "Metal" | "Wood" | "Composite Panel";
+  mountingMethod?: "Direct Mount" | "Frame Mount" | "Hanging" | "Pole Mounted";
+  structuralNotes?: string;
+
+  // Internal Notes (Admin only)
+  internalNotes?: {
+    customerPreferences?: string;
+    budgetNotes?: string;
+    suggestedProductType?: string;
+    competitorReferences?: string;
+    specialInstallationNotes?: string;
+    voiceNotes?: string[];
+  };
+
+  // Photo Categories
+  photoCategories?: SitePhotoCategories;
+
+  // Legacy Fields for backward compatibility
   width: number;
   height: number;
   depth: number;
   installationHeight?: number;
-  wallType?: string;
-  powerAvailable?: string;
+  powerAvailableLegacy?: string;
   existingSignage?: string;
   complexity?: string;
   photos: string[]; // Front, Side, Area, Electrical, Competitor
-  photoCategories?: {
+  legacyPhotoCategories?: {
     front?: string;
     side?: string;
     area?: string;

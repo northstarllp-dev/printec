@@ -88,6 +88,7 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
       order={mappedOrder}
       customers={mappedCustomers}
       employees={mappedEmployees}
+      allOrders={[]}
       role="Employee"
       currentEmployee={currentEmployee}
     />

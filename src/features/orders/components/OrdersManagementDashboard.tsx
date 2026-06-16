@@ -23,20 +23,20 @@ import { updateOrder } from "@/features/orders/actions/orderActions";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
-    "Site Visit Pending":     { bg: "#e0e7ff", text: "#6366f1", label: "SITE VISIT" },
-    "Site Visit Scheduled":   { bg: "#e0e7ff", text: "#6366f1", label: "SCHEDULED" },
-    "Site Visit Completed":   { bg: "#e0e7ff", text: "#6366f1", label: "SITE DONE" },
-    "Quotation In Progress":  { bg: "#fef3c7", text: "#ea580c", label: "QUOTATION" },
-    "Quotation Sent":         { bg: "#fef3c7", text: "#ea580c", label: "QUOTE SENT" },
-    "Quotation Negotiation":  { bg: "#fef3c7", text: "#ea580c", label: "NEGOTIATING" },
-    "Quotation Approved":     { bg: "#fef3c7", text: "#ea580c", label: "QUOTE OK" },
+    "Site Visit Pending":     { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "SITE VISIT" },
+    "Site Visit Scheduled":   { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "SCHEDULED" },
+    "Site Visit Completed":   { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "SITE DONE" },
+    "Quotation In Progress":  { bg: "#fef3c7", text: "#F97316", label: "QUOTATION" },
+    "Quotation Sent":         { bg: "#fef3c7", text: "#F97316", label: "QUOTE SENT" },
+    "Quotation Negotiation":  { bg: "#fef3c7", text: "#F97316", label: "NEGOTIATING" },
+    "Quotation Approved":     { bg: "#fef3c7", text: "#F97316", label: "QUOTE OK" },
     "Design In Progress":     { bg: "#f3e8ff", text: "#a855f7", label: "DESIGN" },
     "Design Approved":        { bg: "#f3e8ff", text: "#a855f7", label: "DESIGN OK" },
     "Production":             { bg: "#dbeafe", text: "#0284c7", label: "PRODUCTION" },
     "Ready For Installation": { bg: "#dbeafe", text: "#0284c7", label: "READY" },
     "Installation Scheduled": { bg: "#dbeafe", text: "#0284c7", label: "INSTALLATION" },
-    "Completed":              { bg: "#dcfce7", text: "#16a34a", label: "COMPLETED" },
-    "Closed":                 { bg: "#dcfce7", text: "#16a34a", label: "CLOSED" },
+    "Completed":              { bg: "#dcfce7", text: "#22c55e", label: "COMPLETED" },
+    "Closed":                 { bg: "#dcfce7", text: "#22c55e", label: "CLOSED" },
   };
   return colors[status] || { bg: "#f1f5f9", text: "#64748b", label: status.toUpperCase() };
 };
@@ -75,6 +75,8 @@ export function OrdersManagementDashboard({
   
   const currentUserRole = userRole;
   const employeeName = currentEmployeeName;
+  const currentEmployeeObj = initialEmployees.find(e => e.name === employeeName || e.email === employeeName || e.id === employeeName);
+  const currentEmployeeId = currentEmployeeObj?.id || employeeName;
   const customers = initialCustomers;
   const employees = initialEmployees;
   const enquiries = initialEnquiries;
@@ -110,10 +112,10 @@ export function OrdersManagementDashboard({
   const convertedLeads = enquiries ? enquiries.filter(e => e.status === "Converted").length : 0;
 
   // Calculations for Staff
-  const myActiveOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && o.assignedEmployees.includes(employeeName)).length;
-  const myUrgentOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && o.urgent && o.assignedEmployees.includes(employeeName)).length;
-  const myActionRequired = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && o.assignedEmployees.includes(employeeName) && (o.deadlineStatus === "Action Required" || o.deadlineStatus === "Delayed")).length;
-  const myCompletedOrders = orders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && o.assignedEmployees.includes(employeeName)).length;
+  const myActiveOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
+  const myUrgentOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && o.urgent && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
+  const myActionRequired = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId)) && (o.deadlineStatus === "Action Required" || o.deadlineStatus === "Delayed")).length;
+  const myCompletedOrders = orders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
 
   const stats = currentUserRole === "Employee" ? [
     {
@@ -121,14 +123,14 @@ export function OrdersManagementDashboard({
       value: myActiveOrders.toString(),
       change: "Active projects in your queue",
       icon: Briefcase,
-      color: "#018F10",
+      color: "var(--color-secondary)", // Indigo
     },
     {
       label: "URGENT PROJECTS",
       value: myUrgentOrders.toString(),
       change: "High priority tasks",
       icon: AlertTriangle,
-      color: "#ef4444",
+      color: "#F97316", // Orange
     },
     {
       label: "ACTION REQUIRED",
@@ -142,7 +144,7 @@ export function OrdersManagementDashboard({
       value: myCompletedOrders.toString(),
       change: "All-time completed orders",
       icon: CheckCircle,
-      color: "#06b6d4",
+      color: "#22c55e", // Green (success only)
     },
   ] : [
     {
@@ -150,28 +152,28 @@ export function OrdersManagementDashboard({
       value: activeOrders.toString(),
       change: "Current orders in pipeline",
       icon: TrendingUp,
-      color: "#018F10",
+      color: "#003568", // Navy Blue
     },
     {
       label: "WEBSITE LEADS",
       value: websiteLeads.toString(),
       change: "All time",
       icon: TrendingUp,
-      color: "#3b82f6",
+      color: "var(--color-secondary)", // Indigo
     },
     {
       label: "PENDING CALLS",
       value: pendingCalls.toString(),
       change: "Immediate action req.",
       icon: AlertCircle,
-      color: "#f59e0b",
+      color: "#F97316", // Orange
     },
     {
       label: "CONVERTED",
       value: convertedLeads.toString(),
       change: "Total converted enquiries",
       icon: Clock,
-      color: "#06b6d4",
+      color: "#22c55e", // Green (success only)
     },
   ];
 
@@ -190,7 +192,7 @@ export function OrdersManagementDashboard({
     if (healthFilter !== "ALL" && (order.health || "Active") !== healthFilter) return false;
 
     if (currentUserRole === "Employee") {
-      return order.assignedEmployees?.includes(employeeName);
+      return order.assignedEmployees?.includes(employeeName) || order.assignedEmployees?.includes(currentEmployeeId);
     }
 
     return true;
@@ -240,7 +242,7 @@ export function OrdersManagementDashboard({
                 onClick={() => setIsAddModalOpen(true)}
                 style={{
                   padding: "10px 16px",
-                  background: "#018F10",
+                  background: "#003568",
                   border: "none",
                   borderRadius: "8px",
                   cursor: "pointer",
@@ -253,10 +255,10 @@ export function OrdersManagementDashboard({
                   transition: "all 0.2s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#01730c";
+                  e.currentTarget.style.background = "#002a50";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#018F10";
+                  e.currentTarget.style.background = "#003568";
                 }}
               >
                 <Plus size={16} /> New Enquiry
@@ -332,8 +334,8 @@ export function OrdersManagementDashboard({
                 transition: "all 0.2s",
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#018F10";
-                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(1, 143, 16, 0.1)";
+                e.currentTarget.style.borderColor = "#003568";
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0, 53, 104, 0.1)";
                 e.currentTarget.style.outline = "none";
               }}
               onBlur={(e) => {
@@ -617,7 +619,7 @@ export function OrdersManagementDashboard({
                     {employees.map(staff => {
                       const isAssigned = assignOrder.assignedEmployees?.includes(staff.id);
                       return (
-                        <label key={staff.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px", border: "1px solid", borderColor: isAssigned ? "#018F10" : "#e2e8f0", borderRadius: "8px", cursor: "pointer", transition: "all 0.2s", background: isAssigned ? "#f0fdf4" : "white" }}>
+                        <label key={staff.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px", border: "1px solid", borderColor: isAssigned ? "#003568" : "#e2e8f0", borderRadius: "8px", cursor: "pointer", transition: "all 0.2s", background: isAssigned ? "#eff6ff" : "white" }}>
                           <input 
                             type="checkbox" 
                             checked={isAssigned || false}
@@ -627,10 +629,10 @@ export function OrdersManagementDashboard({
                               else current = current.filter((x: string) => x !== staff.id);
                               assignEmployeesToOrderLocal(assignOrder.id, current);
                             }}
-                            style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#018F10" }}
+                            style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#003568" }}
                           />
                           <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
-                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: isAssigned ? "#018F10" : "#f1f5f9", color: isAssigned ? "white" : "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "bold" }}>
+                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: isAssigned ? "#003568" : "#f1f5f9", color: isAssigned ? "white" : "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "bold" }}>
                               {staff.name.substring(0, 2).toUpperCase()}
                             </div>
                             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -645,7 +647,13 @@ export function OrdersManagementDashboard({
                   
                   <button 
                     onClick={() => setAssignPanelOrderId(null)} 
-                    style={{ width: "100%", marginTop: "24px", padding: "14px", background: "#018F10", color: "white", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
+                    style={{ width: "100%", marginTop: "24px", padding: "14px", background: "#003568", color: "white", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "#002a50";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "#003568";
+                    }}
                   >
                     Save Assignments
                   </button>

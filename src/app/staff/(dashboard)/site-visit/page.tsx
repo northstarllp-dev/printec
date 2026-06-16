@@ -5,7 +5,7 @@ import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
 import { getUserSession } from "@/features/auth/actions/authActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 
-export default async function StaffOrdersPage() {
+export default async function StaffSiteVisitPage() {
   const orders = await getOrders();
   const customers = await getCustomers();
   const enquiries = await getEnquiries();
@@ -15,11 +15,13 @@ export default async function StaffOrdersPage() {
   // Find current employee info
   const currentEmployee = employeesData?.find(e => e.id === user?.id);
   
-  // Filter orders allotted to this staff member
+  // Filter orders allotted to this staff member & in Site Visit stages
+  const siteVisitStages = ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"];
   const allottedOrders = orders?.filter(o => 
-    o.assigned_employees?.includes(user?.id) ||
-    o.assigned_designers?.includes(user?.id) ||
-    o.assigned_marketers?.includes(user?.id)
+    (o.assigned_employees?.includes(user?.id) ||
+     o.assigned_designers?.includes(user?.id) ||
+     o.assigned_marketers?.includes(user?.id)) &&
+    siteVisitStages.includes(o.stage)
   ) || [];
   
   const mappedOrders = allottedOrders.map(o => ({
@@ -62,13 +64,19 @@ export default async function StaffOrdersPage() {
   })) || [];
 
   return (
-    <OrdersManagementDashboard 
-      initialOrders={mappedOrders}
-      initialCustomers={mappedCustomers}
-      initialEmployees={mappedEmployees}
-      initialEnquiries={mappedEnquiries}
-      userRole="Employee"
-      currentEmployeeName={currentEmployee?.name || ""}
-    />
+    <div className="p-8">
+      <div className="mb-6">
+        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Site Visit Tasks</h1>
+        <p className="text-sm text-slate-500 mt-1">Manage and execute your scheduled site audit checklist items.</p>
+      </div>
+      <OrdersManagementDashboard 
+        initialOrders={mappedOrders}
+        initialCustomers={mappedCustomers}
+        initialEmployees={mappedEmployees}
+        initialEnquiries={mappedEnquiries}
+        userRole="Employee"
+        currentEmployeeName={currentEmployee?.name || ""}
+      />
+    </div>
   );
 }

@@ -173,7 +173,7 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
       value: `₹${(totalRevenue / 100000).toFixed(1)}L`,
       subtext: `${orders.filter(o => o.revenue).length} orders completed`,
       icon: DollarSign,
-      color: "#018F10",
+      color: "var(--color-success)",
     },
     {
       label: "OUTSTANDING AMOUNT",
@@ -201,7 +201,7 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
             onClick={onAddOrder}
             style={{
               padding: "10px 16px",
-              background: "#018F10",
+              background: "var(--color-primary)",
               border: "none",
               borderRadius: "8px",
               cursor: "pointer",
@@ -214,10 +214,10 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#01730c";
+              e.currentTarget.style.background = "var(--color-primary-container)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#018F10";
+              e.currentTarget.style.background = "var(--color-primary)";
             }}
           >
             <Plus size={16} />
@@ -347,8 +347,8 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
               onClick={() => setSelectedStage(null)}
               style={{
                 padding: "10px 12px",
-                background: !selectedStage ? "#018F10" : "white",
-                border: `1px solid ${!selectedStage ? "#018F10" : "#e2e8f0"}`,
+                background: !selectedStage ? "var(--color-primary)" : "white",
+                border: `1px solid ${!selectedStage ? "var(--color-primary)" : "#e2e8f0"}`,
                 borderRadius: "8px",
                 fontSize: "13px",
                 fontWeight: "600",
@@ -451,7 +451,7 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
                           {stageColor.label}
                         </span>
                       </td>
-                      <td style={{ padding: "12px 16px", fontSize: "13px", fontWeight: "600", color: "#018F10" }}>
+                      <td style={{ padding: "12px 16px", fontSize: "13px", fontWeight: "600", color: "var(--color-primary)" }}>
                         ₹{(order.budget / 1000).toFixed(0)}K
                       </td>
                       <td style={{ padding: "12px 16px" }}>
@@ -467,7 +467,7 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
                             </span>
                           )}
                           {!order.isDelayed && !order.isOutstanding && (
-                            <span style={{ fontSize: "11px", fontWeight: "600", color: "#018F10", background: "#dcfce7", padding: "2px 6px", borderRadius: "4px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--color-success)", background: "#dcfce7", padding: "2px 6px", borderRadius: "4px" }}>
                               ✓ On Track
                             </span>
                           )}

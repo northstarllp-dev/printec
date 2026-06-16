@@ -321,7 +321,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
               style={{
                 flex: 1,
                 padding: "10px 16px",
-                background: "#018F10",
+                background: "var(--color-primary)",
                 border: "none",
                 borderRadius: "8px",
                 fontSize: "14px",
@@ -336,10 +336,10 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 gap: "6px",
               }}
               onMouseEnter={(e) => {
-                if (!isSubmitting) e.currentTarget.style.background = "#01730c";
+                if (!isSubmitting) e.currentTarget.style.background = "var(--color-primary-container)";
               }}
               onMouseLeave={(e) => {
-                if (!isSubmitting) e.currentTarget.style.background = "#018F10";
+                if (!isSubmitting) e.currentTarget.style.background = "var(--color-primary)";
               }}
             >
               {isSubmitting ? <Loader size={16} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={16} />}

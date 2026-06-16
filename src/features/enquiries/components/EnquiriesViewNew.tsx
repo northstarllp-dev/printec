@@ -118,7 +118,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       value: `${conversionRate}%`,
       change: "Based on all enquiries",
       icon: CheckCircle,
-      color: "#018F10",
+      color: "var(--color-success)",
     },
   ];
 
@@ -138,7 +138,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           <button
             style={{
               padding: "10px 16px",
-              background: "#018F10",
+              background: "var(--color-primary)",
               border: "none",
               borderRadius: "8px",
               cursor: "pointer",
@@ -151,10 +151,10 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#01730c";
+              e.currentTarget.style.background = "var(--color-primary-container)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#018F10";
+              e.currentTarget.style.background = "var(--color-primary)";
             }}
             onClick={() => setIsAddModalOpen(true)}
           >
@@ -312,9 +312,9 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                                 setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
                                 setConvertModalOpen(true);
                               }}
-                              style={{ padding: "6px 12px", background: "#018F10", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = "#01730c"}
-                              onMouseLeave={(e) => e.currentTarget.style.background = "#018F10"}
+                              style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-primary-container)"}
+                              onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-primary)"}
                             >
                               Convert to Order
                             </button>
@@ -324,7 +324,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                             {enq.customerId && (
                               <a 
                                 href={`/admin/customers`}
-                                style={{ fontSize: "12px", fontWeight: "600", color: "#003568", textDecoration: "underline" }}
+                                style={{ fontSize: "12px", fontWeight: "600", color: "var(--color-secondary)", textDecoration: "underline" }}
                               >
                                 Customer ({enq.customerId})
                               </a>
@@ -332,7 +332,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                             {enq.orderId && (
                               <a 
                                 href={`/admin/orders/${enq.orderId}`}
-                                style={{ fontSize: "12px", fontWeight: "600", color: "#018F10", textDecoration: "underline" }}
+                                style={{ fontSize: "12px", fontWeight: "600", color: "var(--color-primary)", textDecoration: "underline" }}
                               >
                                 Order ({enq.orderId})
                               </a>
@@ -528,7 +528,7 @@ Printec Team`;
         <div style={{ padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px" }}>
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
-              <div style={{ width: "24px", height: "24px", border: "2px solid #018F10", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+              <div style={{ width: "24px", height: "24px", border: "2px solid var(--color-primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
               Generating secure customer link...
             </div>
           ) : (
@@ -605,7 +605,7 @@ Printec Team`;
                   style={{
                     flex: 1,
                     padding: "10px 14px",
-                    background: "#003568",
+                    background: "var(--color-secondary)",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",

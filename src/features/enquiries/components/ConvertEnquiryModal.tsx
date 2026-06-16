@@ -95,7 +95,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
                 outline: "none",
                 transition: "border-color 0.2s"
               }}
-              onFocus={(e) => e.target.style.borderColor = "#018F10"}
+              onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
               onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
             />
           </div>
@@ -120,7 +120,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
                 outline: "none",
                 transition: "border-color 0.2s"
               }}
-              onFocus={(e) => e.target.style.borderColor = "#018F10"}
+              onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
               onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
             />
           </div>
@@ -164,7 +164,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             }}
             style={{
               padding: "10px 16px",
-              background: "#018F10",
+              background: "var(--color-primary)",
               border: "none",
               borderRadius: "8px",
               fontSize: "14px",
@@ -173,8 +173,8 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
               cursor: "pointer",
               transition: "all 0.2s"
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "#01730c"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "#018F10"}
+            onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-primary-container)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-primary)"}
           >
             Create Order
           </button>

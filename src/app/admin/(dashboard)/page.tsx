@@ -1,0 +1,33 @@
+import { getOrders } from "@/features/orders/actions/orderActions";
+import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
+import { AdminDashboardClient } from "@/features/orders/components/AdminDashboardClient";
+
+export default async function AdminDashboardPage() {
+  const [ordersData, enquiriesData] = await Promise.all([
+    getOrders().catch(() => []),
+    getEnquiries().catch(() => []),
+  ]);
+
+  const orders = (ordersData || []).map((o: any) => ({
+    id: o.id,
+    projectName: o.project_name,
+    customerId: o.customer_id,
+    customerName: o.customer_name || "",
+    stage: o.stage,
+    budget: o.budget,
+    urgent: o.urgent,
+    health: o.health || "Active",
+    dateCreated: o.date_created,
+    orderCode: o.order_id || o.id,
+    orderId: o.order_id || o.id,
+    deadlineStatus: o.deadline_status,
+  }));
+
+  const enquiries = (enquiriesData || []).map((e: any) => ({
+    id: e.id,
+    source: e.source,
+    status: e.status,
+  }));
+
+  return <AdminDashboardClient orders={orders} enquiries={enquiries} />;
+}

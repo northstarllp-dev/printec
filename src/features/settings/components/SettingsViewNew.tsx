@@ -75,7 +75,7 @@ export function SettingsViewNew() {
           >
             {/* Section Header */}
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid #e2e8f0" }}>
-              <div style={{ width: "40px", height: "40px", background: "#f1f5f9", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#018F10" }}>
+              <div style={{ width: "40px", height: "40px", background: "#f1f5f9", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-primary)" }}>
                 {section.icon}
               </div>
               <div>
@@ -100,7 +100,7 @@ export function SettingsViewNew() {
                       onClick={() => handleChange(field.key, !settings[field.key as keyof typeof settings])}
                       style={{
                         padding: "8px 16px",
-                        background: settings[field.key as keyof typeof settings] ? "#018F10" : "#e2e8f0",
+                        background: settings[field.key as keyof typeof settings] ? "var(--color-primary)" : "#e2e8f0",
                         color: settings[field.key as keyof typeof settings] ? "white" : "#475569",
                         border: "none",
                         borderRadius: "8px",
@@ -147,7 +147,7 @@ export function SettingsViewNew() {
           style={{
             width: "100%",
             padding: "14px",
-            background: "#018F10",
+            background: "var(--color-primary)",
             color: "white",
             border: "none",
             borderRadius: "8px",
@@ -161,10 +161,10 @@ export function SettingsViewNew() {
             transition: "all 0.2s",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = "#01730c";
+            e.currentTarget.style.background = "var(--color-primary-container)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.background = "#018F10";
+            e.currentTarget.style.background = "var(--color-primary)";
           }}
         >
           <Save size={16} /> Save Settings

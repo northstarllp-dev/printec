@@ -18,19 +18,30 @@
   --color-outline: #737780;
   --color-outline-variant: #c3c6d0;
   
-  /* Primary = Green #018F10 (brand primary per UI_DESIGN_README) */
-  --color-primary: #018F10;
-  --color-primary-container: #01730c;
+  /* 3-COLOR STRATEGY */
+  /* Primary = Navy Blue #003568 (main brand, buttons, primary actions) */
+  --color-primary: #003568;
+  --color-primary-container: #00458a;
   --color-primary-foreground: #ffffff;
   --color-on-primary: #ffffff;
-  --color-on-primary-container: #a2f2b3;
+  --color-on-primary-container: #dce9ff;
   
-  /* Secondary = Navy Blue #003568 (brand secondary per UI_DESIGN_README) */
-  --color-secondary: #003568;
-  --color-secondary-container: #00458a;
+  /* Accent = Orange #F97316 (highlights, CTAs, urgency) */
+  --color-accent: #F97316;
+  --color-accent-container: #ea580c;
+  --color-accent-foreground: #ffffff;
+  
+  /* Success = Green #22c55e (only for completion, success states, trackers) */
+  --color-success: #22c55e;
+  --color-success-container: #16a34a;
+  --color-success-foreground: #ffffff;
+  
+  /* Secondary = Indigo #4F46E5 */
+  --color-secondary: #4F46E5;
+  --color-secondary-container: #EEF2FF;
   --color-secondary-foreground: #ffffff;
   --color-on-secondary: #ffffff;
-  --color-on-secondary-container: #dce9ff;
+  --color-on-secondary-container: #4F46E5;
   
   --color-error: #ba1a1a;
   
@@ -40,9 +51,7 @@
   --color-muted-foreground: var(--color-on-surface-variant);
   --color-border: var(--color-outline-variant);
   --color-input: var(--color-outline-variant);
-  --color-ring: #018F10;
-  --color-accent: var(--color-surface-container-low);
-  --color-accent-foreground: var(--color-on-surface);
+  --color-ring: #003568;
   --color-destructive: #ba1a1a;
   --color-destructive-foreground: #ffffff;
   
@@ -64,11 +73,13 @@
 /* ── LEGACY CSS VARIABLE ALIASES ──────────────────────────────────────────── */
 /* These bridge the gap between the @theme tokens and older inline-style code  */
 :root {
-  /* Brand colours */
-  --secondary-500: #003568;
-  --secondary-fixed: #dce9ff;
-  --secondary-container: rgba(0, 53, 104, 0.08);
-  --primary-900: #018F10;
+  /* 3-COLOR STRATEGY */
+  --primary-900: #003568; /* Navy = Primary */
+  --accent-600: #F97316; /* Orange = Accent */
+  --success-500: #22c55e; /* Green = Success only */
+  --secondary-500: #4F46E5;
+  --secondary-fixed: #e0e7ff;
+  --secondary-container: rgba(79, 70, 229, 0.08);
 
   /* Surfaces & backgrounds */
   --background:               #f8f9ff;
@@ -177,30 +188,30 @@ body {
 }
 
 .prt-btn-primary {
-  background: #018F10;
-  color: #ffffff;
-  border: none;
-}
-.prt-btn-primary:hover {
-  background: #01730c;
-}
-
-.prt-btn-inverted {
   background: #003568;
   color: #ffffff;
   border: none;
 }
-.prt-btn-inverted:hover {
+.prt-btn-primary:hover {
   background: #002a50;
+}
+
+.prt-btn-accent {
+  background: #F97316;
+  color: #ffffff;
+  border: none;
+}
+.prt-btn-accent:hover {
+  background: #ea580c;
 }
 
 .prt-btn-secondary {
   background: var(--color-surface-container-lowest);
-  color: var(--color-primary);
-  border: 1px solid var(--color-outline);
+  color: var(--color-secondary);
+  border: 1px solid var(--color-secondary);
 }
 .prt-btn-secondary:hover {
-  background: var(--color-surface-container-low);
+  background: var(--color-secondary-container);
 }
 
 /* STATUS BADGES */
@@ -336,7 +347,15 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .prt-input:focus {
-  border-color: #018F10;
-  box-shadow: 0 0 0 3px rgba(1, 143, 16, 0.1);
+  border-color: #003568;
+  box-shadow: 0 0 0 3px rgba(0, 53, 104, 0.1);
 }
 
+/* Dropdown animation */
+@keyframes prt-slide-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.prt-animate-in {
+  animation: prt-slide-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

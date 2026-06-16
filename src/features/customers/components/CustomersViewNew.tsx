@@ -83,7 +83,7 @@ export function CustomersViewNew({
       value: totalCustomers.toString(),
       change: "All time",
       icon: MapPin,
-      color: "#018F10",
+      color: "var(--color-primary)",
     },
     {
       label: "ACTIVE ACCOUNTS",
@@ -248,7 +248,7 @@ export function CustomersViewNew({
                           onClick={(e) => handleCopyLink(cust.customerId || cust.id, e)}
                           style={{
                             padding: "6px 12px",
-                            background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "#003568",
+                            background: copiedCustomerId === (cust.customerId || cust.id) ? "#dcfce7" : "var(--color-secondary)",
                             border: "none",
                             borderRadius: "6px",
                             fontSize: "11px",
@@ -349,7 +349,7 @@ export function CustomersViewNew({
                             onClick={(e) => handleCopyOrderLink(selectedCustomer.customerId || selectedCustomer.id, o.orderId || o.id, e)}
                             className={`p-1 rounded border transition ${
                               copiedOrderId === (o.orderId || o.id)
-                                ? "bg-emerald-50 border-emerald-250 text-[#018F10]"
+                                ? "bg-emerald-50 border-emerald-250 text-[var(--color-success)]"
                                 : "bg-white border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50"
                             }`}
                             title={copiedOrderId === (o.orderId || o.id) ? "Copied!" : "Copy Order Magic Link"}
