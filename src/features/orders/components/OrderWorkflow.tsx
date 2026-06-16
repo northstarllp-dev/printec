@@ -32,7 +32,7 @@ export function OrderWorkflow({
       case "completed":
         return { bg: "#dcfce7", text: "#16a34a", border: "#16a34a" };
       case "current":
-        return { bg: "#dbeafe", text: "#0284c7", border: "#018F10" };
+        return { bg: "var(--color-secondary-container)", text: "var(--color-secondary)", border: "var(--color-secondary)" };
       case "delayed":
         return { bg: "#fee2e2", text: "#dc2626", border: "#dc2626" };
       default:
@@ -139,7 +139,7 @@ export function OrderWorkflow({
           <span style={{ color: "#64748b" }}>Completed</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "#dbeafe", border: "2px solid #018F10" }} />
+          <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: "var(--color-secondary-container)", border: "2px solid var(--color-secondary)" }} />
           <span style={{ color: "#64748b" }}>Current</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

@@ -56,11 +56,11 @@ export default function AdminLogin() {
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
           <div style={{ width: 36, height: 36, background: "#0F172A", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, color: "#018F10" }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, color: "var(--color-primary)" }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 20h18" /><path d="M6 20V11" />
-              <circle cx="6" cy="11" r="1.2" fill="#018F10" />
+              <circle cx="6" cy="11" r="1.2" fill="var(--color-primary)" />
               <path d="M6 11l6-4.5" />
-              <circle cx="12" cy="6.5" r="1.2" fill="#018F10" />
+              <circle cx="12" cy="6.5" r="1.2" fill="var(--color-primary)" />
               <path d="M12 6.5l5 3.5" />
             </svg>
           </div>
@@ -146,7 +146,7 @@ export default function AdminLogin() {
           <button
             type="button"
             onClick={() => { setEmail("admin@printec.com"); setPassword("adminpass"); setError(""); }}
-            style={{ fontSize: 12, color: "#018F10", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+            style={{ fontSize: 12, color: "var(--color-primary)", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
           >
             Quick fill credentials →
           </button>

@@ -1,6 +1,9 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { getOrders } from "@/features/orders/actions/orderActions";
+import { getEnquiries } from "@/features/enquiries/actions/enquiryActions";
+import { getCustomers } from "@/features/customers/actions/customerActions";
 import { AdminLayoutClient } from "./AdminLayoutClient";
 
 export default async function AdminLayout({
@@ -15,15 +18,48 @@ export default async function AdminLayout({
     redirect("/admin/login");
   }
 
+  // Fetch counts for sidebar badges (parallel fetches for performance)
+  const [ordersData, enquiriesData, customersData] = await Promise.all([
+    getOrders().catch(() => []),
+    getEnquiries().catch(() => []),
+    getCustomers().catch(() => []),
+  ]);
+
+  const activeOrders = (ordersData || []).filter(
+    (o: any) => o.stage !== "Completed" && o.stage !== "Closed"
+  ).length;
+
+  const openEnquiries = (enquiriesData || []).filter(
+    (e: any) => e.status !== "Converted" && e.status !== "Closed"
+  ).length;
+
+  const productionCount = (ordersData || []).filter(
+    (o: any) => o.stage === "Production" || o.stage === "Ready For Installation"
+  ).length;
+
+  const installationCount = (ordersData || []).filter(
+    (o: any) => o.stage === "Installation Scheduled"
+  ).length;
+
   const mappedProfile = {
     id: profile.id,
     name: profile.name,
     email: profile.email || "",
-    role: profile.role
+    role: profile.role,
+  };
+
+  const counts = {
+    orders: activeOrders,
+    enquiries: openEnquiries,
+    customers: (customersData || []).length,
+    production: productionCount,
+    installation: installationCount,
+    payments: 2, // placeholder
+    support: 1,  // placeholder
   };
 
   return (
-    <AdminLayoutClient profile={mappedProfile}>
+    <AdminLayoutClient profile={mappedProfile} counts={counts}>
       {children}
     </AdminLayoutClient>
   );

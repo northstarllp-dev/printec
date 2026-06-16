@@ -56,7 +56,7 @@ export function EmployeeModal({ isOpen, onClose, onSubmit, initialData }: Employ
         <form onSubmit={handleSubmit} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
           <div>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>Full Name</label>
-            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Amit Sharma" style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none", transition: "border-color 0.2s" }} onFocus={(e) => e.currentTarget.style.borderColor = "#018F10"} onBlur={(e) => e.currentTarget.style.borderColor = "#cbd5e1"} />
+            <input type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Amit Sharma" style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none", transition: "border-color 0.2s" }} onFocus={(e) => e.currentTarget.style.borderColor = "var(--color-primary)"} onBlur={(e) => e.currentTarget.style.borderColor = "#cbd5e1"} />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
@@ -69,14 +69,14 @@ export function EmployeeModal({ isOpen, onClose, onSubmit, initialData }: Employ
             </div>
             <div>
               <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>Phone</label>
-              <input type="text" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 9876543210" style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none" }} />
+              <input type="text" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 9876543210" style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none", transition: "border-color 0.2s" }} onFocus={(e) => e.currentTarget.style.borderColor = "var(--color-primary)"} onBlur={(e) => e.currentTarget.style.borderColor = "#cbd5e1"} />
             </div>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
             <div>
               <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "6px" }}>Email ID</label>
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. amit@printec.com" style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none" }} />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. amit@printec.com" style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none", transition: "border-color 0.2s" }} onFocus={(e) => e.currentTarget.style.borderColor = "var(--color-primary)"} onBlur={(e) => e.currentTarget.style.borderColor = "#cbd5e1"} />
             </div>
           </div>
 
@@ -84,7 +84,7 @@ export function EmployeeModal({ isOpen, onClose, onSubmit, initialData }: Employ
             <button type="button" onClick={onClose} style={{ padding: "10px 16px", background: "none", border: "1px solid #cbd5e1", borderRadius: "8px", color: "#475569", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
               Cancel
             </button>
-            <button type="submit" style={{ padding: "10px 16px", background: "#018F10", border: "none", borderRadius: "8px", color: "white", fontSize: "14px", fontWeight: "600", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.background = "#01730c"} onMouseLeave={(e) => e.currentTarget.style.background = "#018F10"}>
+            <button type="submit" style={{ padding: "10px 16px", background: "var(--color-primary)", border: "none", borderRadius: "8px", color: "white", fontSize: "14px", fontWeight: "600", cursor: "pointer", transition: "background 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-primary-container)"} onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-primary)"}>
               {initialData ? "Save Changes" : "Add Employee"}
             </button>
           </div>

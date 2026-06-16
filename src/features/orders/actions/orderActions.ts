@@ -463,11 +463,13 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   };
 
   // 3. Construct system notification message in chat history
+  const date = scheduleData.auditDate || scheduleData.preferredDate;
+  const time = scheduleData.auditTime || scheduleData.preferredTime;
   const systemMsg = {
     id: `sys-${Date.now()}`,
     sender: "System",
     time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    message: `📅 Site visit scheduled for ${scheduleData.preferredDate} at ${scheduleData.preferredTime} by client.`
+    message: `📅 Site visit scheduled for ${date} at ${time} by client.`
   };
   
   const updatedChat = [...(order.chat_history || []), systemMsg];
@@ -489,12 +491,13 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   }
 
   // 5. Log audit
+  const address = scheduleData.customerAddress;
   await createAuditLogAction(
     "Client",
     "Site Visit Scheduled",
     orderId,
     order.customer_id,
-    `Site visit scheduled for ${scheduleData.preferredDate} at ${scheduleData.preferredTime} (Address: ${scheduleData.customerAddress}).`
+    `Site visit scheduled for ${date} at ${time} (Address: ${address}).`
   );
 
   // 6. Revalidate cache

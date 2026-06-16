@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X } from "lucide-react";
+import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 import { createEnquiry, updateEnquiry, convertEnquiryToOrderAction } from "@/features/enquiries/actions/enquiryActions";
@@ -10,13 +10,76 @@ import { createCustomer } from "@/features/customers/actions/customerActions";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
-    "Pending": { bg: "#e0e7ff", text: "#6366f1", label: "PENDING" },
+    "Pending": { bg: "#dcfce7", text: "#16a34a", label: "PENDING" },
     "Contacted": { bg: "#dbeafe", text: "#0284c7", label: "CONTACTED" },
     "Quoted": { bg: "#fef3c7", text: "#ea580c", label: "QUOTED" },
     "Converted": { bg: "#dcfce7", text: "#16a34a", label: "CONVERTED" },
   };
   return colors[status] || colors["Pending"];
 };
+
+// Success Modal component
+function SuccessModal({ title, message, onClose }: { title: string; message: string; onClose: () => void }) {
+  return (
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(15, 23, 42, 0.4)",
+      backdropFilter: "blur(4px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 2000,
+      padding: "20px"
+    }}>
+      <div style={{
+        background: "white",
+        borderRadius: "16px",
+        width: "100%",
+        maxWidth: "400px",
+        padding: "24px",
+        textAlign: "center",
+        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)"
+      }}>
+        <div style={{
+          width: "56px",
+          height: "56px",
+          background: "#dcfce7",
+          borderRadius: "50%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "0 auto 16px"
+        }}>
+          <Check size={32} style={{ color: "#16a34a" }} />
+        </div>
+        <h2 style={{
+          fontSize: "18px",
+          fontWeight: "800",
+          color: "#0f172a",
+          margin: "0 0 8px"
+        }}>{title}</h2>
+        <p style={{
+          fontSize: "14px",
+          color: "#64748b",
+          margin: "0 0 20px"
+        }}>{message}</p>
+        <button onClick={onClose} style={{
+          width: "100%",
+          padding: "10px 16px",
+          background: "var(--color-primary)",
+          border: "none",
+          borderRadius: "8px",
+          fontSize: "14px",
+          fontWeight: "700",
+          color: "white",
+          cursor: "pointer",
+          transition: "all 0.2s"
+        }} onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-primary-container)"} onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-primary)"}>Okay</button>
+      </div>
+    </div>
+  );
+}
 
 export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initialEnquiries: any[], initialCustomers: any[] }) {
   const [enquiries, setEnquiries] = useState(initialEnquiries);
@@ -29,6 +92,10 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   // Welcome message states
   const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
   const [welcomeCustomerInfo, setWelcomeCustomerInfo] = useState<{ customerId: string; customerName: string; phone: string; email: string; orderId?: string } | null>(null);
+
+  // Success modal states
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [successModalData, setSuccessModalData] = useState({ title: "", message: "" });
 
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
@@ -56,11 +123,17 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           status: result[0].status,
           notes: result[0].notes,
           primaryCommunicationMode: result[0].primary_communication_mode,
-          location: result[0].location
+          location: result[0].location,
+          enquireId: result[0].enquire_id
         };
         setEnquiries([mapped, ...enquiries]);
+        setIsAddModalOpen(false);
+        setSuccessModalData({
+          title: "Enquiry Created Successfully!",
+          message: `Enquiry for ${data.leadName} has been added to the system. (Enquiry ID: ${mapped.enquireId || mapped.id})`
+        });
+        setSuccessModalOpen(true);
       }
-      setIsAddModalOpen(false);
     } catch (error) {
       console.error("Error adding enquiry:", error);
       alert("Failed to add enquiry. Check console.");
@@ -118,7 +191,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       value: `${conversionRate}%`,
       change: "Based on all enquiries",
       icon: CheckCircle,
-      color: "#018F10",
+      color: "var(--color-success)",
     },
   ];
 
@@ -138,7 +211,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           <button
             style={{
               padding: "10px 16px",
-              background: "#018F10",
+              background: "var(--color-primary)",
               border: "none",
               borderRadius: "8px",
               cursor: "pointer",
@@ -151,10 +224,10 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#01730c";
+              e.currentTarget.style.background = "var(--color-primary-container)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#018F10";
+              e.currentTarget.style.background = "var(--color-primary)";
             }}
             onClick={() => setIsAddModalOpen(true)}
           >
@@ -261,7 +334,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CODE</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ENQUIRY ID</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>DATE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>LEAD NAME</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
@@ -282,49 +355,23 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
                         {enq.status !== "Converted" ? (
-                          <>
-                            <button 
-                              onClick={() => {
-                                const customer = customers.find(c => c.phone === enq.phone || c.email === enq.email);
-                                if (customer) {
-                                  setWelcomeCustomerInfo({
-                                    customerId: customer.id,
-                                    customerName: customer.name,
-                                    phone: customer.phone,
-                                    email: customer.email
-                                  });
-                                  setWelcomeModalOpen(true);
-                                } else {
-                                  if (confirm(`This lead (${enq.leadName}) has not been converted to an order/customer profile yet. Would you like to convert it to an order now to generate a portal link?`)) {
-                                    setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
-                                    setConvertModalOpen(true);
-                                  }
-                                }
-                              }}
-                              style={{ padding: "6px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "#475569", cursor: "pointer", transition: "all 0.2s" }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = "#e2e8f0"}
-                              onMouseLeave={(e) => e.currentTarget.style.background = "#f1f5f9"}
-                            >
-                              Send Welcome Msg
-                            </button>
-                            <button 
-                              onClick={() => {
-                                setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
-                                setConvertModalOpen(true);
-                              }}
-                              style={{ padding: "6px 12px", background: "#018F10", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
-                              onMouseEnter={(e) => e.currentTarget.style.background = "#01730c"}
-                              onMouseLeave={(e) => e.currentTarget.style.background = "#018F10"}
-                            >
-                              Convert to Order
-                            </button>
-                          </>
+                          <button 
+                            onClick={() => {
+                              setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
+                              setConvertModalOpen(true);
+                            }}
+                            style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-primary-container)"}
+                            onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-primary)"}
+                          >
+                            Convert to Order
+                          </button>
                         ) : (
                           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                             {enq.customerId && (
                               <a 
                                 href={`/admin/customers`}
-                                style={{ fontSize: "12px", fontWeight: "600", color: "#003568", textDecoration: "underline" }}
+                                style={{ fontSize: "12px", fontWeight: "600", color: "var(--color-secondary)", textDecoration: "underline" }}
                               >
                                 Customer ({enq.customerId})
                               </a>
@@ -332,7 +379,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                             {enq.orderId && (
                               <a 
                                 href={`/admin/orders/${enq.orderId}`}
-                                style={{ fontSize: "12px", fontWeight: "600", color: "#018F10", textDecoration: "underline" }}
+                                style={{ fontSize: "12px", fontWeight: "600", color: "var(--color-primary)", textDecoration: "underline" }}
                               >
                                 Order ({enq.orderId})
                               </a>
@@ -347,7 +394,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               })}
               {enquiries.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
+                  <td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
                     No enquiries found matching your search.
                   </td>
                 </tr>
@@ -397,8 +444,22 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           onClose={() => {
             setWelcomeModalOpen(false);
             setWelcomeCustomerInfo(null);
+            // Show success message after welcome modal is closed
+            setSuccessModalData({
+              title: "Order Converted Successfully!",
+              message: `Enquiry for ${welcomeCustomerInfo.customerName} has been converted to an order, and the welcome message has been sent.`
+            });
+            setSuccessModalOpen(true);
           }}
           customerInfo={welcomeCustomerInfo}
+        />
+      )}
+
+      {successModalOpen && (
+        <SuccessModal
+          title={successModalData.title}
+          message={successModalData.message}
+          onClose={() => setSuccessModalOpen(false)}
         />
       )}
     </div>
@@ -528,7 +589,7 @@ Printec Team`;
         <div style={{ padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px" }}>
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
-              <div style={{ width: "24px", height: "24px", border: "2px solid #018F10", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+              <div style={{ width: "24px", height: "24px", border: "2px solid var(--color-primary)", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
               Generating secure customer link...
             </div>
           ) : (
@@ -605,7 +666,7 @@ Printec Team`;
                   style={{
                     flex: 1,
                     padding: "10px 14px",
-                    background: "#003568",
+                    background: "var(--color-secondary)",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",

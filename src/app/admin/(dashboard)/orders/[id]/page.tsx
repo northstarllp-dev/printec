@@ -1,6 +1,6 @@
 import React from "react";
 import { redirect } from "next/navigation";
-import { getOrderById } from "@/features/orders/actions/orderActions";
+import { getOrderById, getOrders } from "@/features/orders/actions/orderActions";
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
@@ -14,8 +14,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     redirect("/admin/orders");
   }
 
-  const customersData = await getCustomers();
-  const employeesData = await getEmployees();
+  const [customersData, employeesData, allOrdersData] = await Promise.all([
+    getCustomers(),
+    getEmployees(),
+    getOrders(),
+  ]);
 
   const mappedOrder = {
     id: order.id,
@@ -44,10 +47,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     stageAdminNotes: order.stage_admin_notes,
     customerName: order.customer_name || "",
     orderCode: order.order_id || order.id,
-    orderId: order.order_id || order.id
+    orderId: order.order_id || order.id,
+    health: order.health || "Active",
+    lost_reason: order.lost_reason,
   };
 
-  const mappedCustomers = customersData?.map(c => ({
+  const mappedCustomers = customersData?.map((c) => ({
     id: c.id,
     name: c.name,
     phone: c.phone || "",
@@ -57,10 +62,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     shippingAddress: c.shipping_address || "",
     status: c.status || "Active",
     customerCode: c.customer_id || c.id,
-    customerId: c.customer_id || c.id
+    customerId: c.customer_id || c.id,
   })) || [];
 
-  const mappedEmployees = employeesData?.map(e => ({
+  const mappedEmployees = employeesData?.map((e) => ({
     id: e.id,
     name: e.name,
     role: e.staff_role || "",
@@ -68,14 +73,32 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     email: e.email || "",
     status: e.status || "Active",
     rating: Number(e.rating) || 5.0,
-    workload: Number(e.workload) || 0
+    workload: Number(e.workload) || 0,
   })) || [];
 
+  // All orders for the left panel sidebar
+  const mappedAllOrders = (allOrdersData || []).map((o) => ({
+    id: o.id,
+    projectName: o.project_name,
+    customerId: o.customer_id,
+    customerName: o.customer_name || "",
+    stage: o.stage,
+    budget: o.budget,
+    urgent: o.urgent,
+    health: o.health || "Active",
+    dateCreated: o.date_created,
+    orderCode: o.order_id || o.id,
+    orderId: o.order_id || o.id,
+    deadlineStatus: o.deadline_status,
+    assignedEmployees: o.assigned_employees || [],
+  }));
+
   return (
-    <OrderDetailPageClient 
+    <OrderDetailPageClient
       order={mappedOrder}
       customers={mappedCustomers}
       employees={mappedEmployees}
+      allOrders={mappedAllOrders}
       role="Admin"
       currentEmployee={null}
     />

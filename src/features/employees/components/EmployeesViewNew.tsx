@@ -116,7 +116,7 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
       value: activeEmployees.toString(),
       change: `${activePercentage}% of workforce`,
       icon: AlertCircle,
-      color: "#018F10",
+      color: "var(--color-primary)",
     },
     {
       label: "AVG. RATING",
@@ -156,7 +156,7 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
           <button
             style={{
               padding: "10px 16px",
-              background: "#018F10",
+              background: "var(--color-primary)",
               border: "none",
               borderRadius: "8px",
               cursor: "pointer",
@@ -169,10 +169,10 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
               transition: "all 0.2s",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = "#01730c";
+              e.currentTarget.style.background = "var(--color-primary-container)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = "#018F10";
+              e.currentTarget.style.background = "var(--color-primary)";
             }}
             onClick={handleAddEmployee}
           >

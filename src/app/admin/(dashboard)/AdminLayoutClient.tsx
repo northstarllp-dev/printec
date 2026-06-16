@@ -1,14 +1,31 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  Bell, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  Bell,
+  CheckCircle,
+  AlertCircle,
   Info,
   LogOut,
   History,
-  RotateCcw
+  RotateCcw,
+  LayoutDashboard,
+  ShoppingBag,
+  MessageSquare,
+  Users,
+  UserCheck,
+  Factory,
+  Wrench,
+  CreditCard,
+  LifeBuoy,
+  BarChart2,
+  Package,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "@/features/auth/actions/authActions";
@@ -21,27 +38,68 @@ interface AdminLayoutClientProps {
     email: string;
     role: string;
   };
+  counts?: {
+    orders?: number;
+    enquiries?: number;
+    customers?: number;
+    production?: number;
+    installation?: number;
+    payments?: number;
+    support?: number;
+  };
 }
 
-export function AdminLayoutClient({ children, profile }: AdminLayoutClientProps) {
+const NAV_ITEMS = [
+  { id: "/admin", label: "Dashboard", icon: LayoutDashboard, exactMatch: true },
+  { id: "/admin/orders", label: "Orders", icon: ShoppingBag, countKey: "orders" },
+  { id: "/admin/enquire", label: "Enquiries", icon: MessageSquare, countKey: "enquiries" },
+  { id: "/admin/customers", label: "Customers", icon: Users, countKey: "customers" },
+  { id: "/admin/employees", label: "Employees", icon: UserCheck },
+  { id: "/admin/payments", label: "Payments", icon: CreditCard, countKey: "payments" },
+  { id: "/admin/support", label: "Support", icon: LifeBuoy, countKey: "support" },
+  { id: "/admin/reports", label: "Reports", icon: BarChart2 },
+  { id: "/admin/products", label: "Products", icon: Package },
+  { id: "/admin/settings", label: "Settings", icon: Settings },
+] as const;
+
+const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
+  orders:       { bg: "#1E40AF", text: "#FFFFFF" },
+  enquiries:    { bg: "#8B5CF6", text: "#FFFFFF" },
+  customers:    { bg: "#3B82F6", text: "#FFFFFF" },
+  production:   { bg: "#F97316", text: "#FFFFFF" },
+  installation: { bg: "#14B8A6", text: "#FFFFFF" },
+  payments:     { bg: "#EC4899", text: "#FFFFFF" },
+  support:      { bg: "#DC2626", text: "#FFFFFF" },
+};
+
+export function AdminLayoutClient({
+  children,
+  profile,
+  counts = {},
+}: AdminLayoutClientProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const isWorksheetPage = pathname.startsWith("/admin/orders/") && pathname !== "/admin/orders";
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [isHovered, setIsHovered] = useState(false);
+  const isExpanded = !collapsed || isHovered;
+
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  // Layout-scoped in-memory notifications
+  const isWorksheetPage =
+    pathname.startsWith("/admin/orders/") && pathname !== "/admin/orders";
+
   const [notifications, setNotifications] = useState<any[]>([
     {
       id: "NOT-1",
       title: "SLA Warning: Action Required",
-      message: "Lead Rohan Varma has been pending without site visit for 50h. Escalate to call immediately.",
+      message:
+        "Lead Rohan Varma has been pending without site visit for 50h. Escalate immediately.",
       time: "2 hours ago",
       type: "error",
-      read: false
+      read: false,
     },
     {
       id: "NOT-2",
@@ -49,7 +107,7 @@ export function AdminLayoutClient({ children, profile }: AdminLayoutClientProps)
       message: "Lead Amit Sharma has been pending for 25h. Triggering WhatsApp alert.",
       time: "4 hours ago",
       type: "warning",
-      read: false
+      read: false,
     },
     {
       id: "NOT-3",
@@ -57,142 +115,434 @@ export function AdminLayoutClient({ children, profile }: AdminLayoutClientProps)
       message: "New website enquiry logged automatically for Sneha Reddy.",
       time: "1 hour ago",
       type: "success",
-      read: true
-    }
+      read: true,
+    },
   ]);
 
-  // Layout-scoped in-memory operation activities
   const [activities, setActivities] = useState<any[]>([]);
+  const unreadNotifCount = notifications.filter((n) => !n.read).length;
 
-  const unreadNotifCount = notifications.filter(n => !n.read).length;
-
-  const markAllNotificationsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const clearNotifications = () => {
-    setNotifications([]);
-  };
-
-  const undoActivity = (activityId: string) => {
-    setActivities(prev => prev.filter(a => a.id !== activityId));
-  };
+  const markAllNotificationsRead = () =>
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const clearNotifications = () => setNotifications([]);
+  const undoActivity = (id: string) =>
+    setActivities((prev) => prev.filter((a) => a.id !== id));
 
   const handleLogout = async () => {
     await signOut();
     router.push("/admin/login");
   };
 
-  const navigationItems = [
-    { id: "/admin/orders", label: "Orders" },
-    { id: "/admin/enquire", label: "Enquire" },
-    { id: "/admin/employees", label: "Employees" },
-    { id: "/admin/settings", label: "Settings" },
-  ] as const;
-
-  const isActivePath = (itemPath: string) => {
-    if (itemPath === "/admin/orders") {
-      return pathname === "/admin/orders" || pathname === "/admin";
+  const isActivePath = (item: (typeof NAV_ITEMS)[number]) => {
+    if ("exactMatch" in item && item.exactMatch) {
+      return pathname === item.id || pathname === "/admin";
     }
-    return pathname.startsWith(itemPath);
+    if (item.id === "/admin/orders") {
+      return pathname === "/admin/orders" || pathname.startsWith("/admin/orders/");
+    }
+    return pathname.startsWith(item.id);
   };
 
   const initials = profile.name
     .split(" ")
-    .map(n => n[0])
+    .map((n) => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
 
+  const totalActiveOrders = counts.orders || 0;
+  const sidebarW = isExpanded ? "240px" : "64px";
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "var(--color-background)" }}>
-      {/* ── MAIN WORKSPACE ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        
-        {/* Workspace Top Row */}
-        {!isWorksheetPage && (
-          <header style={{ display: "flex", alignItems: "center", width: "100%", height: "56px", background: "white", borderBottom: "1px solid #e2e8f0", paddingLeft: "32px", paddingRight: "32px", position: "sticky", top: 0, zIndex: 40 }}>
-            {/* Logo & Portal Role Indicator */}
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginRight: "32px", flexShrink: 0 }}>
-              <div style={{ width: "28px", height: "28px", background: "#0F172A", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg viewBox="0 0 24 24" style={{ width: "14px", height: "14px", color: "#018F10" }} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 20h18" /><path d="M6 20V11" />
-                  <circle cx="6" cy="11" r="1" fill="#018F10" />
-                  <path d="M6 11l6-4.5" />
-                  <circle cx="12" cy="6.5" r="1" fill="#018F10" />
-                  <path d="M12 6.5l5 3.5" />
-                </svg>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", lineHeight: "1" }}>
-                <span style={{ fontSize: "13px", fontWeight: "800", color: "#0F172A", letterSpacing: "0.03em" }}>PRINTEC</span>
-                <span style={{ fontSize: "9px", color: "#003568", fontWeight: "700", textTransform: "uppercase", marginTop: "1px" }}>Admin Portal</span>
-              </div>
-            </div>
-            
-            <nav style={{ display: "flex", gap: "24px", height: "100%", alignItems: "center" }}>
-              {navigationItems.map(item => {
-                const isActive = isActivePath(item.id);
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => router.push(item.id)}
+    <div style={{ display: "flex", height: "100vh", maxHeight: "100vh", overflow: "hidden", background: "var(--color-background)" }}>
+
+      {/* ── DARK SIDEBAR ── */}
+      <aside
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        style={{
+          width: sidebarW,
+          minHeight: "100vh",
+          background: "var(--sidebar-bg)",
+          display: "flex",
+          flexDirection: "column",
+          flexShrink: 0,
+          transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          overflowY: "auto",
+          overflowX: "hidden",
+          zIndex: 50,
+        }}
+      >
+        {/* Logo */}
+        <div
+          style={{
+            padding: isExpanded ? "20px 20px" : "20px 16px",
+            borderBottom: "1px solid var(--sidebar-border)",
+            display: "flex",
+            alignItems: "center",
+            flexShrink: 0,
+            transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1)",
+          }}
+        >
+          <div
+            style={{
+              width: "32px",
+              height: "32px",
+              background: "var(--sidebar-active-bg)",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              border: "1px solid var(--sidebar-border)",
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              style={{ width: "16px", height: "16px", color: "var(--sidebar-accent)" }}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 20h18" />
+              <path d="M6 20V11" />
+              <circle cx="6" cy="11" r="1" fill="var(--sidebar-accent)" />
+              <path d="M6 11l6-4.5" />
+              <circle cx="12" cy="6.5" r="1" fill="var(--sidebar-accent)" />
+              <path d="M12 6.5l5 3.5" />
+            </svg>
+          </div>
+          <div style={{
+            lineHeight: 1,
+            minWidth: 0,
+            opacity: isExpanded ? 1 : 0,
+            maxWidth: isExpanded ? "150px" : "0px",
+            transition: "opacity 0.15s ease, max-width 0.25s cubic-bezier(0.4,0,0.2,1), margin-left 0.25s cubic-bezier(0.4,0,0.2,1)",
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            marginLeft: isExpanded ? "10px" : "0px",
+          }}>
+            <span
+              style={{
+                fontSize: "13px",
+                fontWeight: "800",
+                color: "var(--sidebar-active-text)",
+                letterSpacing: "0.06em",
+                display: "block",
+              }}
+            >
+              PRINTEC
+            </span>
+            <span
+              style={{
+                fontSize: "9px",
+                color: "var(--sidebar-text)",
+                fontWeight: "700",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                marginTop: "2px",
+                display: "block",
+              }}
+            >
+              Admin Portal 2
+            </span>
+          </div>
+        </div>
+
+        {/* Nav Items */}
+        <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
+          {NAV_ITEMS.map((item) => {
+            const isActive = isActivePath(item);
+            const Icon = item.icon;
+            const countKey = "countKey" in item ? item.countKey : undefined;
+            const count = countKey ? (counts as any)[countKey] : undefined;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  // For routes that don't exist yet, just navigate (will 404 gracefully)
+                  router.push(item.id);
+                }}
+                title={!isExpanded ? item.label : undefined}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  padding: isExpanded ? "10px 16px" : "12px 24px",
+                  justifyContent: isExpanded ? "flex-start" : "center",
+                  background: isActive ? "var(--sidebar-active-bg)" : "transparent",
+                  border: "none",
+                  borderLeft: isActive ? "3px solid var(--sidebar-accent)" : "3px solid transparent",
+                  cursor: "pointer",
+                  transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1), background 0.15s ease, color 0.15s ease",
+                  color: isActive ? "var(--sidebar-active-text)" : "var(--sidebar-text)",
+                  textAlign: "left",
+                  position: "relative",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                    e.currentTarget.style.color = "var(--sidebar-active-text)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--sidebar-text)";
+                  }
+                }}
+              >
+                <Icon
+                  size={16}
+                  style={{
+                    flexShrink: 0,
+                    color: isActive ? "var(--sidebar-accent)" : "inherit",
+                  }}
+                />
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  flex: 1,
+                  opacity: isExpanded ? 1 : 0,
+                  maxWidth: isExpanded ? "200px" : "0px",
+                  transition: "opacity 0.15s ease, max-width 0.25s cubic-bezier(0.4,0,0.2,1), margin-left 0.25s cubic-bezier(0.4,0,0.2,1)",
+                  overflow: "hidden",
+                  whiteSpace: "nowrap",
+                  marginLeft: isExpanded ? "10px" : "0px",
+                }}>
+                  <span
                     style={{
-                      background: "none",
-                      border: "none",
-                      borderBottom: isActive ? "3px solid #018F10" : "none",
-                      color: isActive ? "#018F10" : "#64748b",
-                      fontSize: "14px",
-                      fontWeight: isActive ? "700" : "600",
-                      cursor: "pointer",
-                      padding: "0",
-                      height: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      transition: "all 0.2s",
+                      fontSize: "13px",
+                      fontWeight: isActive ? "700" : "500",
+                      flex: 1,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
                     }}
                   >
                     {item.label}
-                  </button>
-                );
-              })}
-            </nav>
+                  </span>
+                  {count !== undefined && count > 0 && countKey && (
+                    <span
+                      style={{
+                        background: BADGE_COLORS[countKey]?.bg || "#374151",
+                        color: BADGE_COLORS[countKey]?.text || "#FFF",
+                        fontSize: "10px",
+                        fontWeight: "800",
+                        padding: "2px 7px",
+                        borderRadius: "99px",
+                        flexShrink: 0,
+                        marginLeft: "6px",
+                      }}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </nav>
 
-            {/* Right: Actions + Profile */}
-            <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
+        {/* Collapse Button */}
+        <div
+          style={{
+            borderTop: "1px solid var(--sidebar-border)",
+            padding: "12px",
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: isExpanded ? "flex-start" : "center",
+              padding: "8px 12px",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid var(--sidebar-border)",
+              borderRadius: "8px",
+              cursor: "pointer",
+              color: "var(--sidebar-text)",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.color = "var(--sidebar-active-text)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+              e.currentTarget.style.color = "var(--sidebar-text)";
+            }}
+          >
+            {collapsed ? <ChevronRight size={14} style={{ flexShrink: 0 }} /> : <ChevronLeft size={14} style={{ flexShrink: 0 }} />}
+            <span style={{
+              fontSize: "12px",
+              fontWeight: "600",
+              opacity: isExpanded ? 1 : 0,
+              maxWidth: isExpanded ? "100px" : "0px",
+              transition: "opacity 0.15s ease, max-width 0.25s cubic-bezier(0.4,0,0.2,1), margin-left 0.25s cubic-bezier(0.4,0,0.2,1)",
+              overflow: "hidden",
+              whiteSpace: "nowrap",
+              marginLeft: isExpanded ? "8px" : "0px",
+            }}>
+              Collapse
+            </span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ── MAIN WORKSPACE ── */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+
+        {/* Top Bar — hidden on worksheet pages */}
+        {!isWorksheetPage && (
+          <header
+            style={{
+              display: "flex",
+              alignItems: "center",
+              width: "100%",
+              height: "56px",
+              background: "white",
+              borderBottom: "1px solid #E2E8F0",
+              paddingLeft: "24px",
+              paddingRight: "24px",
+              position: "sticky",
+              top: 0,
+              zIndex: 40,
+              gap: "12px",
+              flexShrink: 0,
+            }}
+          >
+            {/* Search */}
+            <div style={{ flex: 1, maxWidth: "480px", position: "relative" }}>
+              <Search
+                size={14}
+                style={{
+                  position: "absolute",
+                  left: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#94A3B8",
+                  pointerEvents: "none",
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Search orders, customers, enquiries..."
+                style={{
+                  width: "100%",
+                  height: "36px",
+                  padding: "0 12px 0 36px",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  background: "#F8FAFC",
+                  color: "#0F172A",
+                  outline: "none",
+                  fontFamily: "inherit",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "var(--color-primary)";
+                  e.currentTarget.style.background = "white";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "#E2E8F0";
+                  e.currentTarget.style.background = "#F8FAFC";
+                }}
+              />
+            </div>
+
+            {/* Revenue + Outstanding Chips */}
+            <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#F0FDF4",
+                  border: "1px solid #BBF7D0",
+                  borderRadius: "8px",
+                  padding: "5px 12px",
+                }}
+              >
+                <TrendingUp size={13} style={{ color: "#16A34A" }} />
+                <div>
+                  <p style={{ margin: 0, fontSize: "9px", fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Revenue
+                  </p>
+                  <p style={{ margin: 0, fontSize: "12px", fontWeight: "800", color: "#16A34A" }}>
+                    ₹4,87,50,000
+                  </p>
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: "#FFF7ED",
+                  border: "1px solid #FED7AA",
+                  borderRadius: "8px",
+                  padding: "5px 12px",
+                }}
+              >
+                <TrendingDown size={13} style={{ color: "#EA580C" }} />
+                <div>
+                  <p style={{ margin: 0, fontSize: "9px", fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Outstanding
+                  </p>
+                  <p style={{ margin: 0, fontSize: "12px", fontWeight: "800", color: "#EA580C" }}>
+                    ₹23,40,000
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", paddingLeft: "12px", borderLeft: "1px solid #E2E8F0" }}>
               {/* History */}
               <div style={{ position: "relative" }}>
                 <button
-                  onClick={() => { setIsHistoryOpen(p => !p); setIsNotifOpen(false); setIsProfileOpen(false); }}
+                  onClick={() => { setIsHistoryOpen((p) => !p); setIsNotifOpen(false); setIsProfileOpen(false); }}
                   title="Action History"
-                  style={{ width: 34, height: 34, borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", transition: "all 0.15s" }}
+                  style={{ width: 34, height: 34, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B", background: "none", border: "none", cursor: "pointer", transition: "all 0.15s" }}
                 >
                   <History size={16} />
                 </button>
                 {isHistoryOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsHistoryOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 340, background: "white", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-pop)", zIndex: 50, overflow: "hidden" }}>
-                      <div style={{ padding: "10px 16px", background: "var(--surface-container-low)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Operation History</span>
-                        <span style={{ fontSize: 10, color: "var(--text-muted)" }}>Rollback enabled</span>
+                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 340, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                      <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Operation History</span>
+                        <span style={{ fontSize: 10, color: "#94A3B8" }}>Rollback enabled</span>
                       </div>
                       <div style={{ maxHeight: 280, overflowY: "auto" }}>
                         {activities.length === 0 ? (
-                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>No actions recorded yet.</div>
+                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>No actions recorded yet.</div>
                         ) : activities.map((act: any) => (
-                          <div key={act.id} style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--background)" }}>
+                          <div key={act.id} style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, borderBottom: "1px solid #F8FAFC" }}>
                             <div style={{ flex: 1 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-primary)", background: "var(--surface-container-low)", padding: "1px 6px", borderRadius: 4 }}>{act.user}</span>
-                                <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>{act.timestamp}</span>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4 }}>{act.user}</span>
+                                <span style={{ fontSize: 10, color: "#94A3B8", fontFamily: "monospace" }}>{act.timestamp}</span>
                               </div>
-                              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{act.description}</span>
+                              <span style={{ fontSize: 12, color: "#64748B" }}>{act.description}</span>
                             </div>
                             <button
                               onClick={() => undoActivity(act.id)}
-                              style={{ fontSize: 11, color: "var(--secondary-500)", background: "var(--secondary-container)", border: "1px solid var(--secondary-fixed)", padding: "3px 8px", borderRadius: "var(--radius-md)", cursor: "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }}
+                              style={{ fontSize: 11, color: "var(--color-secondary)", background: "var(--secondary-container)", border: "1px solid rgba(79,70,229,0.2)", padding: "3px 8px", borderRadius: "6px", cursor: "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }}
                             >
-                              <RotateCcw size={10} />Undo
+                              <RotateCcw size={10} /> Undo
                             </button>
                           </div>
                         ))}
@@ -205,9 +555,9 @@ export function AdminLayoutClient({ children, profile }: AdminLayoutClientProps)
               {/* Notifications */}
               <div style={{ position: "relative" }}>
                 <button
-                  onClick={() => { setIsNotifOpen(p => !p); setIsHistoryOpen(false); setIsProfileOpen(false); }}
+                  onClick={() => { setIsNotifOpen((p) => !p); setIsHistoryOpen(false); setIsProfileOpen(false); }}
                   title="Notifications"
-                  style={{ width: 34, height: 34, borderRadius: "var(--radius-md)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", transition: "all 0.15s", position: "relative" }}
+                  style={{ width: 34, height: 34, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B", background: "none", border: "none", cursor: "pointer", transition: "all 0.15s", position: "relative" }}
                 >
                   <Bell size={16} />
                   {unreadNotifCount > 0 && (
@@ -217,28 +567,28 @@ export function AdminLayoutClient({ children, profile }: AdminLayoutClientProps)
                 {isNotifOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsNotifOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 300, background: "white", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-pop)", zIndex: 50, overflow: "hidden" }}>
-                      <div style={{ padding: "10px 16px", background: "var(--surface-container-low)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Notifications</span>
+                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 300, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                      <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Notifications</span>
                         <div style={{ display: "flex", gap: 10 }}>
-                          <button onClick={markAllNotificationsRead} style={{ fontSize: 11, color: "var(--secondary-500)", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Mark read</button>
+                          <button onClick={markAllNotificationsRead} style={{ fontSize: 11, color: "var(--color-secondary)", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Mark read</button>
                           <button onClick={clearNotifications} style={{ fontSize: 11, color: "#EF4444", fontWeight: 700, background: "none", border: "none", cursor: "pointer" }}>Clear</button>
                         </div>
                       </div>
                       <div style={{ maxHeight: 260, overflowY: "auto" }}>
                         {notifications.length === 0 ? (
-                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "var(--text-muted)" }}>No notifications.</div>
+                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>No notifications.</div>
                         ) : notifications.map((notif: any) => (
-                          <div key={notif.id} style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid var(--background)", background: notif.read ? "white" : "var(--surface-container-low)" }}>
+                          <div key={notif.id} style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", gap: 10, borderBottom: "1px solid #F8FAFC", background: notif.read ? "white" : "#EFF6FF" }}>
                             <span style={{ marginTop: 1 }}>
-                              {notif.type === "success" ? <CheckCircle size={13} color="var(--secondary-500)" /> :
+                              {notif.type === "success" ? <CheckCircle size={13} color="#22C55E" /> :
                                notif.type === "error" || notif.type === "warning" ? <AlertCircle size={13} color="#EF4444" /> :
-                               <Info size={13} color="var(--text-muted)" />}
+                               <Info size={13} color="#94A3B8" />}
                             </span>
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.3 }}>{notif.title}</div>
-                              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{notif.message}</div>
-                              <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3, fontFamily: "monospace" }}>{notif.time}</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", lineHeight: 1.3 }}>{notif.title}</div>
+                              <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{notif.message}</div>
+                              <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 3, fontFamily: "monospace" }}>{notif.time}</div>
                             </div>
                           </div>
                         ))}
@@ -249,29 +599,48 @@ export function AdminLayoutClient({ children, profile }: AdminLayoutClientProps)
               </div>
 
               {/* Profile */}
-              <div className="flex items-center gap-3 cursor-pointer group ml-2 pl-4 border-l border-[var(--color-outline-variant)] relative">
+              <div style={{ position: "relative" }}>
                 <button
-                  onClick={() => { setIsProfileOpen(p => !p); setIsNotifOpen(false); setIsHistoryOpen(false); }}
-                  className="flex items-center gap-3 bg-transparent border-none cursor-pointer"
+                  onClick={() => { setIsProfileOpen((p) => !p); setIsNotifOpen(false); setIsHistoryOpen(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", background: "transparent", border: "none", cursor: "pointer", padding: "4px 0 4px 12px" }}
                 >
-                  <div className="w-10 h-10 rounded-full border-2 border-[var(--color-primary-container)] bg-[var(--color-surface-container-high)] flex items-center justify-center font-bold text-[var(--color-primary)]">
+                  <div
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      background: "var(--color-secondary)",
+                      color: "white",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "12px",
+                      fontWeight: "800",
+                      flexShrink: 0,
+                    }}
+                  >
                     {initials}
                   </div>
-                  <div className="hidden lg:block text-left">
-                    <p className="text-body-md font-bold leading-tight">{profile.name}</p>
-                    <p className="text-[10px] uppercase font-bold text-[var(--color-on-surface-variant)]">Project Admin</p>
+                  <div style={{ textAlign: "left" }}>
+                    <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: "#0F172A", lineHeight: 1.2 }}>
+                      {profile.name}
+                    </p>
+                    <p style={{ margin: 0, fontSize: "10px", color: "#64748B", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      Admin
+                    </p>
                   </div>
                 </button>
                 {isProfileOpen && (
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsProfileOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 180, background: "white", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", boxShadow: "var(--shadow-pop)", zIndex: 50, overflow: "hidden", padding: 4 }}>
+                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 180, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden", padding: 4 }}>
                       <button
                         onClick={handleLogout}
-                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "var(--radius-md)", fontSize: 13, fontWeight: 600, color: "#EF4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "8px", fontSize: 13, fontWeight: 600, color: "#EF4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "#FEF2F2"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "none"; }}
                       >
-                        <LogOut size={14} />
-                        Sign Out
+                        <LogOut size={14} /> Sign Out
                       </button>
                     </div>
                   </>
@@ -281,8 +650,15 @@ export function AdminLayoutClient({ children, profile }: AdminLayoutClientProps)
           </header>
         )}
 
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--color-background)" }}>
-          <div style={isWorksheetPage ? { width: "100%", display: "flex", flexDirection: "column", flex: 1 } : { width: "100%", maxWidth: 1280, margin: "0 auto" }}>
+        {/* Main Content */}
+        <main style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--color-background)", minHeight: 0, overflowY: isWorksheetPage ? "hidden" : "auto" }}>
+          <div
+            style={
+              isWorksheetPage
+                ? { width: "100%", display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%" }
+                : { width: "100%", maxWidth: 1400, margin: "0 auto" }
+            }
+          >
             {children}
           </div>
         </main>
@@ -291,9 +667,6 @@ export function AdminLayoutClient({ children, profile }: AdminLayoutClientProps)
       <style>{`
         @media (max-width: 768px) {
           .hidden-mobile { display: none !important; }
-        }
-        @media (min-width: 769px) {
-          .show-mobile { display: none !important; }
         }
       `}</style>
     </div>

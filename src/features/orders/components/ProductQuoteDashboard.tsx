@@ -107,8 +107,8 @@ export function ProductQuoteDashboard() {
                 padding: "12px 16px",
                 background: "none",
                 border: "none",
-                borderBottom: tab === "Browse" ? "3px solid #018F10" : "none",
-                color: tab === "Browse" ? "#018F10" : "#64748b",
+                borderBottom: tab === "Browse" ? "3px solid var(--color-primary)" : "none",
+                color: tab === "Browse" ? "var(--color-primary)" : "#64748b",
                 cursor: "pointer",
                 fontSize: "13px",
                 fontWeight: "600",
@@ -145,7 +145,7 @@ export function ProductQuoteDashboard() {
                 key={product.id}
                 style={{
                   background: "white",
-                  border: `2px solid ${isSelected ? "#018F10" : "#e2e8f0"}`,
+                  border: `2px solid ${isSelected ? "var(--color-primary)" : "#e2e8f0"}`,
                   borderRadius: "12px",
                   padding: "20px",
                   cursor: "pointer",
@@ -199,7 +199,7 @@ export function ProductQuoteDashboard() {
                     marginBottom: "12px",
                   }}
                 >
-                  <Package size={24} color="#018F10" />
+                  <Package size={24} color="var(--color-primary)" />
                 </div>
 
                 {/* Product Name */}
@@ -234,8 +234,8 @@ export function ProductQuoteDashboard() {
                     width: "20px",
                     height: "20px",
                     borderRadius: "4px",
-                    border: `2px solid ${isSelected ? "#018F10" : "#cbd5e1"}`,
-                    background: isSelected ? "#018F10" : "transparent",
+                    border: `2px solid ${isSelected ? "var(--color-primary)" : "#cbd5e1"}`,
+                    background: isSelected ? "var(--color-primary)" : "transparent",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -395,7 +395,7 @@ export function ProductQuoteDashboard() {
           {/* Total */}
           <div
             style={{
-              background: "#018F10",
+              background: "var(--color-primary)",
               color: "white",
               padding: "16px",
               borderRadius: "8px",
@@ -430,7 +430,7 @@ export function ProductQuoteDashboard() {
               style={{
                 width: "100%",
                 padding: "12px",
-                background: "#018F10",
+                background: "var(--color-primary)",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
@@ -444,10 +444,10 @@ export function ProductQuoteDashboard() {
                 gap: "8px",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#01730c";
+                e.currentTarget.style.background = "var(--color-primary-container)";
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#018F10";
+                e.currentTarget.style.background = "var(--color-primary)";
               }}
             >
               <Plus size={16} /> Send to Customer
