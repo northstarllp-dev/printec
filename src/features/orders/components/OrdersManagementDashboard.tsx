@@ -3,8 +3,6 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Download, 
-  Plus, 
   Search, 
   Filter,
   ChevronDown,
@@ -18,27 +16,26 @@ import {
   AlertTriangle,
   CheckCircle
 } from "lucide-react";
-import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { updateOrder } from "@/features/orders/actions/orderActions";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
-    "Site Visit Pending":     { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "SITE VISIT" },
-    "Site Visit Scheduled":   { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "SCHEDULED" },
-    "Site Visit Completed":   { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "SITE DONE" },
-    "Quotation In Progress":  { bg: "#fef3c7", text: "#F97316", label: "QUOTATION" },
-    "Quotation Sent":         { bg: "#fef3c7", text: "#F97316", label: "QUOTE SENT" },
-    "Quotation Negotiation":  { bg: "#fef3c7", text: "#F97316", label: "NEGOTIATING" },
-    "Quotation Approved":     { bg: "#fef3c7", text: "#F97316", label: "QUOTE OK" },
-    "Design In Progress":     { bg: "#f3e8ff", text: "#a855f7", label: "DESIGN" },
-    "Design Approved":        { bg: "#f3e8ff", text: "#a855f7", label: "DESIGN OK" },
-    "Production":             { bg: "#dbeafe", text: "#0284c7", label: "PRODUCTION" },
-    "Ready For Installation": { bg: "#dbeafe", text: "#0284c7", label: "READY" },
-    "Installation Scheduled": { bg: "#dbeafe", text: "#0284c7", label: "INSTALLATION" },
-    "Completed":              { bg: "#dcfce7", text: "#22c55e", label: "COMPLETED" },
-    "Closed":                 { bg: "#dcfce7", text: "#22c55e", label: "CLOSED" },
+    "Site Visit Pending":     { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "Site Visit Pending" },
+    "Site Visit Scheduled":   { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "Site Visit Scheduled" },
+    "Site Visit Completed":   { bg: "var(--secondary-fixed)", text: "var(--color-secondary)", label: "Site Visit Completed" },
+    "Quotation In Progress":  { bg: "#fef3c7", text: "#F97316", label: "Quotation In Progress" },
+    "Quotation Sent":         { bg: "#fef3c7", text: "#F97316", label: "Quotation Sent" },
+    "Quotation Negotiation":  { bg: "#fef3c7", text: "#F97316", label: "Quotation Negotiation" },
+    "Quotation Approved":     { bg: "#fef3c7", text: "#F97316", label: "Quotation Approved" },
+    "Design In Progress":     { bg: "#f3e8ff", text: "#a855f7", label: "Design In Progress" },
+    "Design Approved":        { bg: "#f3e8ff", text: "#a855f7", label: "Design Approved" },
+    "Production":             { bg: "#dbeafe", text: "#0284c7", label: "Production" },
+    "Ready For Installation": { bg: "#dbeafe", text: "#0284c7", label: "Ready For Installation" },
+    "Installation Scheduled": { bg: "#dbeafe", text: "#0284c7", label: "Installation Scheduled" },
+    "Completed":              { bg: "#dcfce7", text: "#22c55e", label: "Completed" },
+    "Closed":                 { bg: "#dcfce7", text: "#22c55e", label: "Closed" },
   };
-  return colors[status] || { bg: "#f1f5f9", text: "#64748b", label: status.toUpperCase() };
+  return colors[status] || { bg: "#f1f5f9", text: "#64748b", label: status };
 };
 
 const getHealthBadgeColor = (health: string) => {
@@ -86,12 +83,6 @@ export function OrdersManagementDashboard({
   
   // State for options dropdown
   const [optionsOrderId, setOptionsOrderId] = useState<string | null>(null);
-
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const handleAddEnquiry = (data: EnquiryFormData) => {
-    console.log("New Enquiry Data:", data);
-    setIsAddModalOpen(false);
-  };
   
   const assignEmployeesToOrderLocal = async (orderId: string, assigned: string[]) => {
     // Optimistic UI update
@@ -177,10 +168,6 @@ export function OrdersManagementDashboard({
     },
   ];
 
-  const handleExportCSV = () => {
-    alert("Export Started: Downloading orders.csv...");
-  };
-
   const filteredOrders = orders.filter(order => {
     const matchesSearch = 
       order.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -188,7 +175,15 @@ export function OrdersManagementDashboard({
       
     if (!matchesSearch) return false;
 
-    if (stageFilter !== "ALL" && order.stage !== stageFilter) return false;
+    if (stageFilter !== "ALL") {
+      const s = order.stage || "";
+      if (stageFilter === "Site Visit" && !s.includes("Site Visit")) return false;
+      if (stageFilter === "Quotation" && !s.includes("Quotation")) return false;
+      if (stageFilter === "Designing" && !s.includes("Design")) return false;
+      if (stageFilter === "Production" && s !== "Production") return false;
+      if (stageFilter === "Installation" && !s.includes("Installation")) return false;
+      if (stageFilter === "Completed" && !["Completed", "Closed"].includes(s)) return false;
+    }
     if (healthFilter !== "ALL" && (order.health || "Active") !== healthFilter) return false;
 
     if (currentUserRole === "Employee") {
@@ -307,20 +302,12 @@ export function OrdersManagementDashboard({
               }}
             >
               <option value="ALL">All Stages</option>
-              <option value="Site Visit Pending">Site Visit Pending</option>
-              <option value="Site Visit Scheduled">Site Visit Scheduled</option>
-              <option value="Site Visit Completed">Site Visit Completed</option>
-              <option value="Quotation In Progress">Quotation In Progress</option>
-              <option value="Quotation Sent">Quotation Sent</option>
-              <option value="Quotation Negotiation">Quotation Negotiation</option>
-              <option value="Quotation Approved">Quotation Approved</option>
-              <option value="Design In Progress">Design In Progress</option>
-              <option value="Design Approved">Design Approved</option>
+              <option value="Site Visit">Site Visit</option>
+              <option value="Quotation">Quotation</option>
+              <option value="Designing">Designing</option>
               <option value="Production">Production</option>
-              <option value="Ready For Installation">Ready For Installation</option>
-              <option value="Installation Scheduled">Installation Scheduled</option>
+              <option value="Installation">Installation</option>
               <option value="Completed">Completed</option>
-              <option value="Closed">Closed</option>
             </select>
 
             <select
@@ -609,11 +596,7 @@ export function OrdersManagementDashboard({
         </div>
       </div>
       
-      <AddEnquiryModal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)} 
-        onSubmit={handleAddEnquiry} 
-      />
+
     </div>
   );
 }

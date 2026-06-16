@@ -65,43 +65,42 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     location: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(false);
+  const [syncWhatsapp, setSyncWhatsapp] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhoneNumber(e.target.value);
     setFormData(prev => {
       const newData = { ...prev, phone: formatted };
-      // If WhatsApp same as phone is checked, update WhatsApp too
-      if (whatsappSameAsPhone) {
+      if (syncWhatsapp) {
         newData.whatsappNumber = formatted;
       }
       return newData;
     });
-    // Clear error when user types
     if (errors.phone) {
       setErrors(prev => ({ ...prev, phone: "" }));
     }
   };
 
-  const handleWhatsappChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setFormData(prev => ({ ...prev, whatsappNumber: formatted }));
-  };
-
-  const handleCheckboxChange = () => {
-    setWhatsappSameAsPhone(!whatsappSameAsPhone);
-    if (!whatsappSameAsPhone) {
-      setFormData(prev => ({ ...prev, whatsappNumber: prev.phone }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => {
+      const next = { ...prev, [name]: value };
+      if (name === "phone" && syncWhatsapp) {
+        next.whatsappNumber = value;
+      }
+      return next;
+    });
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: "" }));
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    // Clear error when user types
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: "" }));
+  const handleSyncToggle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked;
+    setSyncWhatsapp(checked);
+    if (checked) {
+      setFormData(prev => ({ ...prev, whatsappNumber: prev.phone }));
     }
   };
 
@@ -144,7 +143,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
       notes: "",
       location: "",
     });
-    setWhatsappSameAsPhone(false);
+    setSyncWhatsapp(false);
     setErrors({});
   };
 
@@ -157,7 +156,8 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
         style={{
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.5)",
+          background: "rgba(15, 23, 42, 0.4)",
+          backdropFilter: "blur(4px)",
           zIndex: 50,
           animation: "fadeIn 0.2s ease-out",
         }}
@@ -172,14 +172,14 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
           left: "50%",
           transform: "translate(-50%, -50%)",
           background: "white",
-          borderRadius: "12px",
+          borderRadius: "16px",
           width: "90%",
-          maxWidth: "500px",
+          maxWidth: "600px",
           maxHeight: "90vh",
           overflow: "auto",
           zIndex: 51,
           animation: "slideUp 0.3s ease-out",
-          boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+          boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
         }}
       >
         {/* Header */}
@@ -188,33 +188,47 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "24px",
+            padding: "20px 24px",
+            background: "#f8fafc",
             borderBottom: "1px solid #e2e8f0",
           }}
         >
-          <h2 style={{ fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: 0 }}>
-            New Enquiry
-          </h2>
+          <div>
+            <h2 style={{ fontSize: "18px", fontWeight: "800", color: "#0f172a", margin: 0 }}>
+              New Lead Enquiry
+            </h2>
+            <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0 0" }}>
+              Enter the client's details to log a new enquiry.
+            </p>
+          </div>
           <button
             onClick={onClose}
             style={{
-              background: "none",
-              border: "none",
+              background: "white",
+              border: "1px solid #e2e8f0",
               cursor: "pointer",
               color: "#64748b",
-              padding: 0,
+              padding: "6px",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s"
             }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "#f1f5f9"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "white"}
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ padding: "24px" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+            
             {/* Lead Name */}
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                 Lead Name *
               </label>
               <input
@@ -223,16 +237,20 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 value={formData.leadName}
                 onChange={handleChange}
                 required
-                placeholder="Enter customer name"
+                placeholder="e.g. Ramesh Kumar"
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  border: errors.leadName ? "1px solid #ef4444" : "1px solid #e2e8f0",
+                  padding: "10px 14px",
+                  border: "1px solid #cbd5e1",
                   borderRadius: "8px",
                   fontSize: "14px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
+                  transition: "all 0.2s",
+                  background: "#f8fafc"
                 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
               />
               {errors.leadName && (
                 <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
@@ -243,7 +261,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
 
             {/* Phone */}
             <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                 Phone Number *
               </label>
               <input
@@ -255,13 +273,17 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 placeholder="Enter 10-digit phone number"
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  border: errors.phone ? "1px solid #ef4444" : "1px solid #e2e8f0",
+                  padding: "10px 14px",
+                  border: "1px solid #cbd5e1",
                   borderRadius: "8px",
                   fontSize: "14px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
+                  transition: "all 0.2s",
+                  background: "#f8fafc"
                 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
               />
               {errors.phone && (
                 <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
@@ -272,59 +294,47 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
 
             {/* WhatsApp Number */}
             <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                 WhatsApp Number
               </label>
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                  <button
-                    type="button"
-                    onClick={handleCheckboxChange}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      fontSize: "13px",
-                      color: "#0f172a",
-                    }}
-                  >
-                    {whatsappSameAsPhone ? (
-                      <CheckSquare size={18} style={{ color: "var(--color-primary)" }} />
-                    ) : (
-                      <Square size={18} style={{ color: "#64748b" }} />
-                    )}
-                    Same as Phone
-                  </button>
-                </div>
-                {!whatsappSameAsPhone && (
-                  <input
-                    type="tel"
-                    name="whatsappNumber"
-                    value={formData.whatsappNumber}
-                    onChange={handleWhatsappChange}
-                    placeholder="+91 98765 43210"
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                      boxSizing: "border-box",
-                      fontFamily: "inherit",
-                    }}
-                  />
-                )}
+              <input
+                type="tel"
+                name="whatsappNumber"
+                value={formData.whatsappNumber}
+                onChange={handleChange}
+                placeholder="+91 98765 43210"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
+                  transition: "all 0.2s",
+                  background: "#f8fafc"
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
+              />
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "8px" }}>
+                <input 
+                  type="checkbox" 
+                  id="sync-wa" 
+                  checked={syncWhatsapp} 
+                  onChange={handleSyncToggle} 
+                  style={{ cursor: "pointer", accentColor: "#018F10", width: "14px", height: "14px", margin: 0 }} 
+                />
+                <label htmlFor="sync-wa" style={{ fontSize: "11px", fontWeight: "600", color: "#64748b", cursor: "pointer", userSelect: "none" }}>
+                  Same as phone number
+                </label>
               </div>
             </div>
 
             {/* Email */}
             <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
-                Email *
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                Email Address *
               </label>
               <input
                 type="email"
@@ -332,16 +342,20 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 value={formData.email}
                 onChange={handleChange}
                 required
-                placeholder="customer@example.com"
+                placeholder="client@company.com"
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  border: errors.email ? "1px solid #ef4444" : "1px solid #e2e8f0",
+                  padding: "10px 14px",
+                  border: "1px solid #cbd5e1",
                   borderRadius: "8px",
                   fontSize: "14px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
+                  transition: "all 0.2s",
+                  background: "#f8fafc"
                 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
               />
               {errors.email && (
                 <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
@@ -352,8 +366,8 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
 
             {/* Primary Mode of Communication */}
             <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
-                Primary Mode of Communication *
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                Primary Mode *
               </label>
               <select
                 name="primaryMode"
@@ -361,24 +375,30 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 onChange={handleChange}
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #e2e8f0",
+                  padding: "10px 14px",
+                  border: "1px solid #cbd5e1",
                   borderRadius: "8px",
                   fontSize: "14px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
-                  background: "white",
+                  background: "#f8fafc",
+                  transition: "all 0.2s",
+                  cursor: "pointer"
                 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
               >
+                <option value="phone">Phone Call</option>
+                <option value="email">Email</option>
                 <option value="whatsapp">WhatsApp</option>
                 <option value="email">Email</option>
               </select>
             </div>
 
             {/* Location */}
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
-                Location/Area
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                Location / Area
               </label>
               <input
                 type="text"
@@ -388,19 +408,23 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 placeholder="e.g., WhiteField, JP Nagar"
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #e2e8f0",
+                  padding: "10px 14px",
+                  border: "1px solid #cbd5e1",
                   borderRadius: "8px",
                   fontSize: "14px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
+                  transition: "all 0.2s",
+                  background: "#f8fafc"
                 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
               />
             </div>
 
             {/* Requirements */}
-            <div>
-              <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                 Requirement Notes
               </label>
               <textarea
@@ -410,15 +434,19 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 placeholder="Enter any details about their requirements..."
                 style={{
                   width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #e2e8f0",
+                  padding: "12px 14px",
+                  border: "1px solid #cbd5e1",
                   borderRadius: "8px",
                   fontSize: "14px",
                   minHeight: "100px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
                   resize: "vertical",
+                  transition: "all 0.2s",
+                  background: "#f8fafc"
                 }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
               />
             </div>
           </div>
