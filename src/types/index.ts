@@ -81,6 +81,7 @@ export interface SiteVisitDetails {
   
   // Stage 1: Pending & Details
   customerAddress?: string;
+  landmark?: string;
   preferredDate?: string;
   preferredTime?: string;
   gpsLocation?: string; // e.g. "12.9716° N, 77.5946° E"

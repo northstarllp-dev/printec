@@ -160,7 +160,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         style={{
           width: sidebarW,
           minHeight: "100vh",
-          background: "#0F172A",
+          background: "var(--sidebar-bg)",
           display: "flex",
           flexDirection: "column",
           flexShrink: 0,
@@ -177,7 +177,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         <div
           style={{
             padding: isExpanded ? "20px 20px" : "20px 16px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid var(--sidebar-border)",
             display: "flex",
             alignItems: "center",
             flexShrink: 0,
@@ -188,18 +188,18 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             style={{
               width: "32px",
               height: "32px",
-              background: "#1E293B",
+              background: "var(--sidebar-active-bg)",
               borderRadius: "8px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
-              border: "1px solid rgba(255,255,255,0.1)",
+              border: "1px solid var(--sidebar-border)",
             }}
           >
             <svg
               viewBox="0 0 24 24"
-              style={{ width: "16px", height: "16px", color: "#1e40af" }}
+              style={{ width: "16px", height: "16px", color: "var(--sidebar-accent)" }}
               fill="none"
               stroke="currentColor"
               strokeWidth="2.5"
@@ -208,9 +208,9 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             >
               <path d="M3 20h18" />
               <path d="M6 20V11" />
-              <circle cx="6" cy="11" r="1" fill="#1e40af" />
+              <circle cx="6" cy="11" r="1" fill="var(--sidebar-accent)" />
               <path d="M6 11l6-4.5" />
-              <circle cx="12" cy="6.5" r="1" fill="#1e40af" />
+              <circle cx="12" cy="6.5" r="1" fill="var(--sidebar-accent)" />
               <path d="M12 6.5l5 3.5" />
             </svg>
           </div>
@@ -228,7 +228,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
               style={{
                 fontSize: "13px",
                 fontWeight: "800",
-                color: "#FFFFFF",
+                color: "var(--sidebar-active-text)",
                 letterSpacing: "0.06em",
                 display: "block",
               }}
@@ -238,7 +238,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
             <span
               style={{
                 fontSize: "9px",
-                color: "#64748B",
+                color: "var(--sidebar-text)",
                 fontWeight: "700",
                 textTransform: "uppercase",
                 letterSpacing: "0.05em",
@@ -270,25 +270,25 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                   alignItems: "center",
                   padding: isExpanded ? "10px 16px" : "12px 24px",
                   justifyContent: isExpanded ? "flex-start" : "center",
-                  background: isActive ? "#1E293B" : "transparent",
+                  background: isActive ? "var(--sidebar-active-bg)" : "transparent",
                   border: "none",
-                  borderLeft: isActive ? "3px solid #22C55E" : "3px solid transparent",
+                  borderLeft: isActive ? "3px solid var(--sidebar-accent)" : "3px solid transparent",
                   cursor: "pointer",
                   transition: "padding 0.25s cubic-bezier(0.4,0,0.2,1), background 0.15s ease, color 0.15s ease",
-                  color: isActive ? "#FFFFFF" : "#64748B",
+                  color: isActive ? "var(--sidebar-active-text)" : "var(--sidebar-text)",
                   textAlign: "left",
                   position: "relative",
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-                    e.currentTarget.style.color = "#94A3B8";
+                    e.currentTarget.style.color = "var(--sidebar-active-text)";
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "#64748B";
+                    e.currentTarget.style.color = "var(--sidebar-text)";
                   }
                 }}
               >
@@ -296,7 +296,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                   size={16}
                   style={{
                     flexShrink: 0,
-                    color: isActive ? "#22C55E" : "inherit",
+                    color: isActive ? "var(--sidebar-accent)" : "inherit",
                   }}
                 />
                 <div style={{
@@ -331,7 +331,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
         {/* Collapse Button */}
         <div
           style={{
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            borderTop: "1px solid var(--sidebar-border)",
             padding: "12px",
             flexShrink: 0,
           }}
@@ -345,19 +345,19 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
               justifyContent: isExpanded ? "flex-start" : "center",
               padding: "8px 12px",
               background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              border: "1px solid var(--sidebar-border)",
               borderRadius: "8px",
               cursor: "pointer",
-              color: "#64748B",
+              color: "var(--sidebar-text)",
               transition: "all 0.15s",
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "rgba(255,255,255,0.08)";
-              e.currentTarget.style.color = "#94A3B8";
+              e.currentTarget.style.color = "var(--sidebar-active-text)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = "rgba(255,255,255,0.04)";
-              e.currentTarget.style.color = "#64748B";
+              e.currentTarget.style.color = "var(--sidebar-text)";
             }}
           >
             {collapsed ? <ChevronRight size={14} style={{ flexShrink: 0 }} /> : <ChevronLeft size={14} style={{ flexShrink: 0 }} />}

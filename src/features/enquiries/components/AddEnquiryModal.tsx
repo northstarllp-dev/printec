@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Send, Loader } from "lucide-react";
+import { X, Send, Loader, CheckSquare, Square } from "lucide-react";
 
 interface AddEnquiryModalProps {
   isOpen: boolean;
@@ -14,10 +14,45 @@ export interface EnquiryFormData {
   phone: string;
   whatsappNumber: string;
   email: string;
-  primaryMode: "phone" | "email" | "whatsapp";
+  primaryMode: "email" | "whatsapp";
   notes: string;
   location: string;
 }
+
+const formatPhoneNumber = (value: string): string => {
+  // Remove all non-digit characters
+  let digits = value.replace(/\D/g, "");
+  
+  // If starts with 91, trim it (we'll add it back)
+  if (digits.startsWith("91")) {
+    digits = digits.slice(2);
+  }
+  
+  // If starts with 0, trim it
+  if (digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  
+  // Take only first 10 digits
+  digits = digits.slice(0, 10);
+  
+  // Format with +91 prefix if we have 10 digits
+  if (digits.length === 10) {
+    return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+  
+  return digits;
+};
+
+const validatePhoneNumber = (phone: string): boolean => {
+  const digits = phone.replace(/\D/g, "");
+  return digits.length === 12 && digits.startsWith("91");
+};
+
+const validateEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
 
 export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalProps) {
   const [formData, setFormData] = useState<EnquiryFormData>({
@@ -25,19 +60,74 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     phone: "",
     whatsappNumber: "",
     email: "",
-    primaryMode: "phone",
+    primaryMode: "whatsapp",
     notes: "",
     location: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [whatsappSameAsPhone, setWhatsappSameAsPhone] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setFormData(prev => {
+      const newData = { ...prev, phone: formatted };
+      // If WhatsApp same as phone is checked, update WhatsApp too
+      if (whatsappSameAsPhone) {
+        newData.whatsappNumber = formatted;
+      }
+      return newData;
+    });
+    // Clear error when user types
+    if (errors.phone) {
+      setErrors(prev => ({ ...prev, phone: "" }));
+    }
+  };
+
+  const handleWhatsappChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setFormData(prev => ({ ...prev, whatsappNumber: formatted }));
+  };
+
+  const handleCheckboxChange = () => {
+    setWhatsappSameAsPhone(!whatsappSameAsPhone);
+    if (!whatsappSameAsPhone) {
+      setFormData(prev => ({ ...prev, whatsappNumber: prev.phone }));
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    // Clear error when user types
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: "" }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form
+    const newErrors: { [key: string]: string } = {};
+    
+    if (!formData.leadName.trim()) {
+      newErrors.leadName = "Lead name is required";
+    }
+    
+    if (!validatePhoneNumber(formData.phone)) {
+      newErrors.phone = "Please enter a valid 10-digit phone number";
+    }
+    
+    if (!validateEmail(formData.email)) {
+      newErrors.email = "Please enter a valid email address";
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
     setIsSubmitting(true);
     
     // Simulate API call
@@ -50,10 +140,12 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
       phone: "",
       whatsappNumber: "",
       email: "",
-      primaryMode: "phone",
+      primaryMode: "whatsapp",
       notes: "",
       location: "",
     });
+    setWhatsappSameAsPhone(false);
+    setErrors({});
   };
 
   if (!isOpen) return null;
@@ -135,13 +227,18 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 style={{
                   width: "100%",
                   padding: "10px 12px",
-                  border: "1px solid #e2e8f0",
+                  border: errors.leadName ? "1px solid #ef4444" : "1px solid #e2e8f0",
                   borderRadius: "8px",
                   fontSize: "14px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
                 }}
               />
+              {errors.leadName && (
+                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
+                  {errors.leadName}
+                </p>
+              )}
             </div>
 
             {/* Phone */}
@@ -153,19 +250,24 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 type="tel"
                 name="phone"
                 value={formData.phone}
-                onChange={handleChange}
+                onChange={handlePhoneChange}
                 required
-                placeholder="+91 98765 43210"
+                placeholder="Enter 10-digit phone number"
                 style={{
                   width: "100%",
                   padding: "10px 12px",
-                  border: "1px solid #e2e8f0",
+                  border: errors.phone ? "1px solid #ef4444" : "1px solid #e2e8f0",
                   borderRadius: "8px",
                   fontSize: "14px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
                 }}
               />
+              {errors.phone && (
+                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
+                  {errors.phone}
+                </p>
+              )}
             </div>
 
             {/* WhatsApp Number */}
@@ -173,22 +275,50 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
               <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#0f172a", marginBottom: "6px" }}>
                 WhatsApp Number
               </label>
-              <input
-                type="tel"
-                name="whatsappNumber"
-                value={formData.whatsappNumber}
-                onChange={handleChange}
-                placeholder="+91 98765 43210"
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  boxSizing: "border-box",
-                  fontFamily: "inherit",
-                }}
-              />
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                  <button
+                    type="button"
+                    onClick={handleCheckboxChange}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      padding: 0,
+                      fontSize: "13px",
+                      color: "#0f172a",
+                    }}
+                  >
+                    {whatsappSameAsPhone ? (
+                      <CheckSquare size={18} style={{ color: "var(--color-primary)" }} />
+                    ) : (
+                      <Square size={18} style={{ color: "#64748b" }} />
+                    )}
+                    Same as Phone
+                  </button>
+                </div>
+                {!whatsappSameAsPhone && (
+                  <input
+                    type="tel"
+                    name="whatsappNumber"
+                    value={formData.whatsappNumber}
+                    onChange={handleWhatsappChange}
+                    placeholder="+91 98765 43210"
+                    style={{
+                      width: "100%",
+                      padding: "10px 12px",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                      boxSizing: "border-box",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                )}
+              </div>
             </div>
 
             {/* Email */}
@@ -206,13 +336,18 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 style={{
                   width: "100%",
                   padding: "10px 12px",
-                  border: "1px solid #e2e8f0",
+                  border: errors.email ? "1px solid #ef4444" : "1px solid #e2e8f0",
                   borderRadius: "8px",
                   fontSize: "14px",
                   boxSizing: "border-box",
                   fontFamily: "inherit",
                 }}
               />
+              {errors.email && (
+                <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px", marginBottom: 0 }}>
+                  {errors.email}
+                </p>
+              )}
             </div>
 
             {/* Primary Mode of Communication */}
@@ -235,9 +370,8 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                   background: "white",
                 }}
               >
-                <option value="phone">Phone</option>
-                <option value="email">Email</option>
                 <option value="whatsapp">WhatsApp</option>
+                <option value="email">Email</option>
               </select>
             </div>
 

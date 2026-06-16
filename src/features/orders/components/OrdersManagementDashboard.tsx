@@ -152,7 +152,7 @@ export function OrdersManagementDashboard({
       value: activeOrders.toString(),
       change: "Current orders in pipeline",
       icon: TrendingUp,
-      color: "#003568", // Navy Blue
+      color: "var(--color-primary)",
     },
     {
       label: "WEBSITE LEADS",
@@ -242,7 +242,7 @@ export function OrdersManagementDashboard({
                 onClick={() => setIsAddModalOpen(true)}
                 style={{
                   padding: "10px 16px",
-                  background: "#003568",
+                  background: "var(--color-primary)",
                   border: "none",
                   borderRadius: "8px",
                   cursor: "pointer",
@@ -255,10 +255,10 @@ export function OrdersManagementDashboard({
                   transition: "all 0.2s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = "#002a50";
+                  e.currentTarget.style.background = "var(--color-primary-container)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "#003568";
+                  e.currentTarget.style.background = "var(--color-primary)";
                 }}
               >
                 <Plus size={16} /> New Enquiry
@@ -334,8 +334,8 @@ export function OrdersManagementDashboard({
                 transition: "all 0.2s",
               }}
               onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#003568";
-                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(0, 53, 104, 0.1)";
+                e.currentTarget.style.borderColor = "var(--color-primary)";
+                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(30, 64, 175, 0.1)";
                 e.currentTarget.style.outline = "none";
               }}
               onBlur={(e) => {
@@ -619,7 +619,7 @@ export function OrdersManagementDashboard({
                     {employees.map(staff => {
                       const isAssigned = assignOrder.assignedEmployees?.includes(staff.id);
                       return (
-                        <label key={staff.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px", border: "1px solid", borderColor: isAssigned ? "#003568" : "#e2e8f0", borderRadius: "8px", cursor: "pointer", transition: "all 0.2s", background: isAssigned ? "#eff6ff" : "white" }}>
+                        <label key={staff.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px", border: "1px solid", borderColor: isAssigned ? "var(--color-primary)" : "#e2e8f0", borderRadius: "8px", cursor: "pointer", transition: "all 0.2s", background: isAssigned ? "var(--color-primary-container)" : "white" }}>
                           <input 
                             type="checkbox" 
                             checked={isAssigned || false}
@@ -629,10 +629,10 @@ export function OrdersManagementDashboard({
                               else current = current.filter((x: string) => x !== staff.id);
                               assignEmployeesToOrderLocal(assignOrder.id, current);
                             }}
-                            style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#003568" }}
+                            style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "var(--color-primary)" }}
                           />
                           <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
-                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: isAssigned ? "#003568" : "#f1f5f9", color: isAssigned ? "white" : "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "bold" }}>
+                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: isAssigned ? "var(--color-primary)" : "#f1f5f9", color: isAssigned ? "white" : "#475569", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: "bold" }}>
                               {staff.name.substring(0, 2).toUpperCase()}
                             </div>
                             <div style={{ display: "flex", flexDirection: "column" }}>
@@ -647,12 +647,12 @@ export function OrdersManagementDashboard({
                   
                   <button 
                     onClick={() => setAssignPanelOrderId(null)} 
-                    style={{ width: "100%", marginTop: "24px", padding: "14px", background: "#003568", color: "white", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s" }}
+                    style={{ width: "100%", marginTop: "24px", padding: "14px", background: "var(--color-primary)", color: "white", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer", transition: "all 0.2s" }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "#002a50";
+                      e.currentTarget.style.background = "var(--color-primary-container)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "#003568";
+                      e.currentTarget.style.background = "var(--color-primary)";
                     }}
                   >
                     Save Assignments

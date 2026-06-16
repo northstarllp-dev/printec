@@ -28,7 +28,7 @@ export default async function RootGateway() {
     }}>
       {/* Logo */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 48, userSelect: "none" }}>
-        <div style={{ width: 44, height: 44, background: "#0F172A", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <div style={{ width: 44, height: 44, background: "#0C0F1A", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <svg viewBox="0 0 24 24" style={{ width: 22, height: 22, color: "var(--color-primary)" }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 20h18" />
             <path d="M5 20l-1.5 2.5" /><path d="M9 20l-1.5 2.5" /><path d="M13 20l-1.5 2.5" /><path d="M17 20l-1.5 2.5" />
@@ -77,7 +77,7 @@ export default async function RootGateway() {
             color: "inherit",
           }}
         >
-          <div style={{ width: 40, height: 40, background: "#003568", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, background: "var(--color-primary)", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
             <Shield size={18} color="white" />
           </div>
           <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Admin Portal</div>

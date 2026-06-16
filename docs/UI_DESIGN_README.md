@@ -2,18 +2,63 @@
 
 This document outlines the core UI design rules and tokens for the Printec Order Management System. It ensures that the specific UI color codes are **ALWAYS FOLLOWED** for consistency across the application.
 
-## 4-Color Strategy
+## Core Color Strategy
 
-The application uses a strict 4-color palette to maintain brand identity while allowing for visual variety:
+The application uses a unified color palette to maintain brand identity while allowing for visual variety:
 
-*   **Primary (Navy Blue):** `#003568`
-    *   Used for: Buttons, main brand, primary actions, sidebar active state, input focus
-*   **Secondary (Indigo):** `#4F46E5`
-    *   Used for: Secondary actions, filter/select tabs, sub-indicators, worksheet workflows, dashboard stat cards
+*   **Primary (Deep Blue):** `#1E40AF`
+    *   Used for: Buttons, main brand, primary actions, input focus, focus rings
 *   **Accent (Orange):** `#F97316`
-    *   Used for: Highlights, CTAs, urgency, badges, Customer Portal button
-*   **Success (Green):** `#22c55e`
-    *   Used **ONLY** for: Success states, completion stages, trackers, positive metrics, sidebar active indicator
+    *   Used for: Highlights, CTAs, urgency, badges
+*   **Success (Green):** `#10B981`
+    *   Used for: Success states, completion stages, trackers, positive metrics
+
+## Main UI Tokens
+
+*   **Page Background:** `#F4F5F8`
+*   **Card/Panel:** `#FFFFFF`
+*   **Foreground Text:** `#111827`
+*   **Muted Text:** `#6B7280`
+*   **Muted Surface:** `#F1F3F6`
+*   **Border:** `rgba(17, 24, 39, 0.08)`
+*   **Input Background:** `#F9FAFB`
+*   **Focus Ring:** `#1E40AF`
+
+## Dark Sidebar Color Tokens
+
+The portal and admin layout uses a dark sidebar with the following design:
+
+*   **Background:** `#0C0F1A`
+*   **Text/Icons:** `#94A3B8`
+*   **Active Item Background:** `#1A2035`
+*   **Active Item Text:** `#E2E8F0`
+*   **Accent (Orange):** `#F97316`
+*   **Border:** `rgba(255,255,255,0.06)`
+
+## Status Colors
+
+| Stage | Color | Styling Rule / Badge Tint |
+|---|---|---|
+| **Enquiry** | `#8B5CF6` (violet) | 10% opacity bg, 20% opacity border |
+| **Site Visit** | `#3B82F6` (blue) | 10% opacity bg, 20% opacity border |
+| **Quote** | `#F59E0B` (amber) | 10% opacity bg, 20% opacity border |
+| **Design** | `#EC4899` (pink) | **Dot only** color, badge uses text-pink-700 / bg-pink-50 |
+| **Installation** | `#14B8A6` (teal) | 10% opacity bg, 20% opacity border |
+| **Completed** | `#10B981` (green) | 10% opacity bg, 20% opacity border |
+
+## Priority & Urgency Colors
+
+| Priority | Text Color | Background |
+|---|---|---|
+| **High** | `#DC2626` | `bg-red-50` (`#FEF2F2`) |
+| **Medium** | `#D97706` | `bg-amber-50` (`#FFFBEB`) |
+| **Low** | `#6B7280` | `bg-gray-100` (`#F3F4F6`) |
+
+## Semantic Colors
+
+*   **Success Green:** `#10B981`
+*   **Warning Amber:** `#F59E0B`
+*   **Destructive Red:** `#DC2626`
 
 ## CSS Variables (`src/app/globals.css`)
 
@@ -21,61 +66,22 @@ Always use the following CSS variables defined in Tailwind rather than hardcodin
 
 ```css
   /* Core Colors */
-  --color-primary: #003568;       /* Navy Blue */
-  --color-secondary: #4F46E5;     /* Indigo */
-  --color-accent: #F97316;        /* Orange */
-  --color-success: #22c55e;       /* Green (success only) */
+  --color-primary: #1E40AF;
+  --color-accent: #F97316;
+  --color-success: #10B981;
 
   /* Backgrounds & Surfaces */
-  --color-background: #f8f9ff;
-  --color-surface-container-lowest: #ffffff; /* White cards */
-  --color-surface-container-low: #eff4ff; /* Light hovers */
+  --color-background: #F4F5F8;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #F1F3F6;
 ```
-
-## Dark Sidebar Color Tokens
-
-The admin layout uses a dark sidebar (extracted from UI screenshots):
-
-```css
-  /* Sidebar */
-  --sidebar-bg: #0F172A;          /* Main sidebar background */
-  --sidebar-active-bg: #1E293B;   /* Active nav item background */
-  --sidebar-active-border: #22C55E; /* Active nav item left border (green indicator) */
-  --sidebar-text: #64748B;        /* Inactive nav item text */
-  --sidebar-text-active: #FFFFFF; /* Active nav item text */
-  --sidebar-icon-active: #22C55E; /* Active nav item icon */
-
-  /* Active orders badge */
-  --sidebar-badge-bg: #1E3A5F;
-  --sidebar-badge-border: #2563EB;
-```
-
-### Sidebar Badge Colors (per nav item)
-
-| Section      | Badge Color |
-|---|---|
-| Orders       | `#1E40AF` (blue) |
-| Enquiries    | `#22C55E` (green) |
-| Customers    | `#7C3AED` (purple) |
-| Production   | `#F97316` (orange) |
-| Installation | `#0EA5E9` (sky) |
-| Payments     | `#EC4899` (pink) |
-| Support      | `#EF4444` (red) |
-
-## Priority Badges (Order Cards)
-
-| Priority | Background | Text | Border |
-|---|---|---|---|
-| High   | `#FEF2F2` | `#DC2626` | `#FECACA` |
-| Medium | `#FFFBEB` | `#D97706` | `#FDE68A` |
-| Low    | `#F0FDF4` | `#16A34A` | `#BBF7D0` |
 
 ### Usage with Tailwind
 
-Instead of `bg-[#003568]`, use the defined variables:
+Instead of `bg-[#1E40AF]`, use the defined variables or Tailwind theme mappings:
 *   Text: `text-[var(--color-primary)]`
 *   Background: `bg-[var(--color-primary)]`
-*   Border: `border-[var(--color-primary)]`
+*   Border: `border-[var(--color-outline-variant)]`
 
 ## UI/UX Principles (Precision Minimalism)
 
@@ -83,18 +89,3 @@ Instead of `bg-[#003568]`, use the defined variables:
 2.  **Typography:** Use the **Inter** font family. Tabular data should use tabular numbers (`tabular-nums`) for perfect alignment.
 3.  **Status Badges:** Use outlined badge styles with an extremely faint background tint (10% opacity) and 20% opacity borders.
 4.  **Icons:** Use `lucide-react` icons consistently across the application.
-
-## Layout Principles
-
-*   **Sidebar:** Dark (`#0F172A`), `240px` wide, collapsible to `64px`. Active items have a green left-border indicator (`#22C55E`).
-*   **Top Bar:** White, `56px` height. Contains search bar, revenue/outstanding chips, notifications, user profile.
-*   **Order Worksheet:** 3-panel layout — Left (order list 220px), Center (workflow steps 240px), Right (module content, flex-1).
-*   **Dashboard:** Stats grid (4 cols), recent orders table, pending tickets sidebar, pipeline bar.
-
-## Recreating the UI Layouts
-
-To recreate the clean dashboards:
-*   Use white backgrounds for the cards (`bg-white` or `bg-[var(--color-surface-container-lowest)]`).
-*   Keep the page background extremely light (`#f8fafc`).
-*   Avoid gradients and rounded bubbly corners. Use subtle border radii (`rounded-lg` or `rounded-xl`).
-*   The sidebar is the ONLY dark element — everything else is light/white.

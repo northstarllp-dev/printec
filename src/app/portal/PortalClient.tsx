@@ -5,7 +5,8 @@ import {
   Printer, MapPin, FileText, CheckSquare, CheckCircle2, 
   MessageSquare, Send, ZoomIn, ZoomOut, Check, X, 
   AlertCircle, AlertTriangle, CreditCard, QrCode, Calendar, 
-  Ruler, Activity, ChevronRight, User, Phone, Mail, Clock, ClipboardList
+  Ruler, Activity, ChevronRight, User, Phone, Mail, Clock, ClipboardList,
+  FolderOpen, Layout, FileCheck, DollarSign
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
@@ -231,7 +232,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     return (
       <div className="min-h-screen bg-[#f8f9ff] flex items-center justify-center p-6 font-sans">
         <div className="bg-white border border-[#c3c6d0] rounded-2xl p-8 max-w-md w-full text-center shadow-lg">
-          <AlertCircle size={48} className="text-[#003568] mx-auto mb-4" />
+          <AlertCircle size={48} className="text-[var(--color-primary)] mx-auto mb-4" />
           <h1 className="text-xl font-bold text-[#0b1c30] mb-2">No Active Orders</h1>
           <p className="text-sm text-[#43474f] mb-6">We couldn't find any active orders for your account at this time.</p>
           <p className="text-xs text-[#737780]">Printec Signage Solutions</p>
@@ -517,108 +518,162 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   return (
     <div className="min-h-screen bg-[#f8f9ff] text-[#0b1c30] flex flex-col md:flex-row font-sans">
       
-      {/* ── LEFT PANEL: ORDERS LIST (Rendered only if client has multiple orders) ── */}
-      {orders.length > 1 && (
-        <aside className="w-full md:w-[320px] bg-white border-r border-[#cbd5e1] shrink-0 flex flex-col select-none md:h-screen sticky top-0 z-20">
-          <div className="p-6 border-b border-[#cbd5e1] flex items-center space-x-3 bg-[#f8f9ff]/50">
-            <div className="bg-[#0b1c30] text-white p-2 rounded-lg">
-              <Printer size={18} className="text-[var(--color-primary)]" />
+      {/* ── LEFT SIDEBAR ── */}
+      <aside className="w-full md:w-[280px] bg-white border-r border-gray-200 shrink-0 flex flex-col select-none md:h-screen sticky top-0 z-20">
+        {/* Top Section */}
+        <div className="p-6 border-b border-gray-100">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center text-white">
+              <Printer size={20} />
             </div>
             <div>
-              <h2 className="text-sm font-extrabold text-[#0b1c30] tracking-wider uppercase leading-none">PRINTEC</h2>
-              <p className="text-[10px] text-[var(--color-primary)] font-bold uppercase tracking-widest mt-1">Customer Hub</p>
+              <h2 className="text-lg font-extrabold text-gray-800 leading-tight">Printec</h2>
+              <p className="text-sm text-gray-500">{customer.name}</p>
             </div>
           </div>
+        </div>
 
-          <div className="p-4 border-b border-[#cbd5e1]">
-            <span className="text-[10px] font-black text-[#737780] uppercase tracking-widest block mb-2">My Orders</span>
-            <p className="text-xs text-[#43474f]">Select an order reference below to review progress, designs, and billing.</p>
-          </div>
+        {/* Navigation */}
+        <div className="p-4 flex-1 overflow-y-auto">
+          <nav className="space-y-2">
+            {/* My Orders */}
+            <button
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-blue-50 text-blue-600 font-semibold text-sm transition-all hover:bg-blue-100"
+            >
+              <div className="flex items-center space-x-3">
+                <FolderOpen size={20} />
+                <span>My Orders</span>
+              </div>
+              <span className="bg-blue-200 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{orders.length}</span>
+            </button>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {orders.map(o => {
-              const active = o.id === activeOrderId;
-              const isUrgent = o.urgent;
-              const stageIdx = getVisualStageIndex(o.stage);
-              return (
-                <button
-                  key={o.id}
-                  onClick={() => {
-                     setActiveOrderId(o.id);
-                     setActiveTab("progress");
-                  }}
-                  className={`w-full text-left p-4 rounded-xl transition-all border flex flex-col gap-2 relative ${
-                    active 
-                      ? "bg-[#eff4ff] border-[var(--color-primary)] shadow-sm" 
-                      : "bg-white border-[#cbd5e1] hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-mono text-xs font-bold text-[#003568]">{o.orderCode || o.id}</span>
-                    {isUrgent && (
-                      <span className="bg-red-100 text-red-700 text-[8px] font-extrabold px-2 py-0.5 rounded-full uppercase">Urgent</span>
-                    )}
-                  </div>
-                  <h3 className="text-xs font-black text-slate-800 line-clamp-1">{o.projectName}</h3>
-                  
-                  <div className="flex items-center justify-between text-[10px] text-[#737780] mt-1 pt-2 border-t border-slate-100">
-                    <span className="font-semibold">{o.stage}</span>
-                    <span className="font-mono font-bold text-[var(--color-primary)]">{stageIdx * 20}%</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="p-4 border-t border-[#cbd5e1] bg-slate-50 text-[11px] text-slate-400 font-medium text-center">
-            Logged in as <span className="font-bold text-slate-600 block">{customer.name}</span>
-          </div>
-        </aside>
-      )}
+            {/* Payments */}
+            <button
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-gray-600 font-semibold text-sm transition-all hover:bg-gray-50"
+            >
+              <div className="flex items-center space-x-3">
+                <DollarSign size={20} />
+                <span>Payments</span>
+              </div>
+            </button>
+          </nav>
+        </div>
+      </aside>
 
       {/* ── MAIN WORKSPACE CONTENT ── */}
       <div className="flex-1 flex flex-col min-w-0 md:h-screen md:overflow-y-auto">
         
         {/* Portal Header */}
-        <header className="bg-white border-b border-[#cbd5e1] px-6 md:px-10 py-5 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sticky top-0 z-10 shadow-xs">
-          <div>
-            <div className="flex items-center space-x-2 text-[10px] font-bold text-[#737780] uppercase tracking-widest">
-              <span>Customer Portal</span>
-              <span>&gt;</span>
-              <span>Account Hub</span>
-              <span>&gt;</span>
-              <span className="text-[var(--color-primary)] font-mono">{activeOrder?.orderCode || activeOrder?.id}</span>
-            </div>
-            <h1 className="text-xl md:text-2xl font-black text-[#0b1c30] mt-1 flex items-center gap-3">
-              {activeOrder?.projectName}
-              {activeOrder?.urgent && (
-                <span className="bg-red-50 text-red-700 text-[10px] font-black border border-red-200 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Priority Fabricate</span>
-              )}
-            </h1>
-          </div>
-
-          {/* Client Company Quick Summary */}
-          <div className="flex items-center space-x-3 bg-[#eff4ff] border border-[#cbd5e0] px-4 py-2.5 rounded-xl">
-            <div className="w-8 h-8 rounded-full bg-[#003568] text-white flex items-center justify-center font-black text-xs">
-              {customer.name.slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-xs font-bold leading-none text-[#0b1c30]">{customer.name}</p>
-              <p className="text-[9px] uppercase font-bold text-[#737780] mt-1">{customer.city || "Bangalore"}</p>
+        <header className="bg-gray-50 border-b border-gray-200 px-6 md:px-10 py-6 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sticky top-0 z-10">
+          <h1 className="text-2xl font-extrabold text-gray-800">My Orders</h1>
+          
+          <div className="flex items-center gap-4">
+            <button className="flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 bg-white text-gray-700 font-semibold text-sm transition-all hover:bg-gray-100">
+              <MessageSquare size={18} />
+              Chat with Us
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">{customer.name}</span>
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-bold text-sm">
+                {customer.name.charAt(0)}
+              </div>
             </div>
           </div>
         </header>
 
         <div className="p-6 md:p-10 space-y-8 max-w-5xl mx-auto w-full">
-
-          {/* ── SITE VISIT STATUS CARD & WORKFLOW STEPPER ── */}
+          {/* Orders List */}
+          <div className="space-y-4">
+            {orders.map((o) => {
+              const isActive = o.id === activeOrderId;
+              const stageIdx = getVisualStageIndex(o.stage);
+              
+              const stages = ["Quotation", "Design", "In Production", "Installation", "Completed"];
+              
+              return (
+                <div
+                  key={o.id}
+                  className="p-6 rounded-2xl border cursor-pointer transition-all bg-white border-gray-100 hover:border-gray-200 hover:shadow-sm"
+                >
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="text-2xl font-extrabold text-gray-800">{o.orderCode || o.id}</div>
+                      <span className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-bold rounded-full">active</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-gray-800">₹{(o.budget || 0).toLocaleString("en-IN")}</div>
+                      <div className="text-sm text-gray-500 mt-1">Paid: ₹{(o.depositPaid || 0).toLocaleString("en-IN")}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <div className="text-xl font-semibold text-gray-800 mb-3">{o.stage}</div>
+                      <div className="flex items-center gap-2">
+                        {/* Progress dots and lines */}
+                        <div className="flex items-center gap-1">
+                          {stages.map((stageName, idx) => (
+                            <React.Fragment key={idx}>
+                              <div
+                                className={`w-3 h-3 rounded-full ${
+                                  idx < stageIdx 
+                                    ? (idx === 0 ? "bg-green-500" : idx === 1 ? "bg-pink-500" : idx === 2 ? "bg-orange-500" : "bg-gray-800")
+                                    : "bg-gray-200"
+                                }`}
+                              />
+                              {idx < stages.length - 1 && (
+                                <div className={`w-16 h-2 rounded-full ${
+                                  idx < stageIdx 
+                                    ? (idx === 0 ? "bg-green-500" : idx === 1 ? "bg-pink-500" : idx === 2 ? "bg-orange-500" : "bg-gray-800")
+                                    : "bg-gray-200"
+                                }`} />
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-1 ml-4">
+                          <div className="w-2 h-2 bg-orange-500 rounded-full" />
+                          <span className="text-sm text-gray-600">{o.stage}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-sm text-gray-600">2 products</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-2">
+                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-lg border border-gray-200">ACP Sign Board</span>
+                      <span className="px-3 py-1.5 bg-gray-100 text-gray-700 text-sm rounded-lg border border-gray-200">LED Channel Letters</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        // Open in current tab with customer_id and token
+                        const url = new URL(`/portal/order/${o.orderCode || o.id}`, window.location.origin);
+                        url.searchParams.set("customer_id", customer.customerCode || customer.id);
+                        url.searchParams.set("token", token);
+                        window.location.href = url.toString();
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      View Order
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          {/* Show order details when an order is selected */}
+          {activeOrder && (
+            <div className="mt-8">
+              {/* ── SITE VISIT STATUS CARD & WORKFLOW STEPPER ── */}
           <section className="bg-white border border-[#cbd5e1] rounded-2xl p-6 shadow-sm space-y-6">
             
             {/* Status Card Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-5 text-xs font-medium">
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Order ID</span>
-                <p className="font-mono text-sm font-black text-[#003568]">{activeOrder?.orderCode || activeOrder?.id}</p>
+                <p className="font-mono text-sm font-black text-[var(--color-primary)]">{activeOrder?.orderCode || activeOrder?.id}</p>
               </div>
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider block">Current Stage</span>
@@ -664,8 +719,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   circleBg = "bg-emerald-50 text-[#16a34a] border-[#16a34a]";
                   titleColor = "text-[#16a34a]";
                 } else if (isCurrent) {
-                  circleBg = "bg-[#eff4ff] text-[#003568] border-[var(--color-primary)] ring-4 ring-indigo-50";
-                  titleColor = "text-[#003568] font-bold";
+                  circleBg = "bg-[#eff4ff] text-[var(--color-primary)] border-[var(--color-primary)] ring-4 ring-indigo-50";
+                  titleColor = "text-[var(--color-primary)] font-bold";
                 }
 
                 return (
@@ -759,7 +814,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                   }}
                                   className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center min-w-[70px] transition-all cursor-pointer ${
                                     isSelected
-                                      ? "bg-[#eff4ff] border-[var(--color-primary)] text-[#003568] ring-2 ring-blue-100 font-bold"
+                                      ? "bg-[#eff4ff] border-[var(--color-primary)] text-[var(--color-primary)] ring-2 ring-blue-100 font-bold"
                                       : "bg-white border-slate-200 text-slate-600 hover:border-slate-350"
                                   }`}
                                 >
@@ -793,8 +848,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                       isBooked
                                         ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
                                         : isSelected
-                                          ? "bg-[#eff4ff] border-[var(--color-primary)] text-[#003568] ring-2 ring-blue-100"
-                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
+                                          ? "bg-[#eff4ff] border-[var(--color-primary)] text-[var(--color-primary)] ring-2 ring-blue-100"
+                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-330 cursor-pointer"
                                     }`}
                                   >
                                     {timeSlot}
@@ -1320,7 +1375,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
                   {/* Rescheduling Helper Panel */}
                   {sv.auditDate && sv.completed === false && !isRescheduling && (
-                    <div className="bg-[#eff4ff] border border-blue-200 rounded-2xl p-5 text-xs text-[#003568] space-y-2">
+                    <div className="bg-[#eff4ff] border border-blue-200 rounded-2xl p-5 text-xs text-[var(--color-primary)] space-y-2">
                       <span className="font-bold block">Need to Reschedule?</span>
                       <p className="text-[11px] leading-relaxed text-slate-600">
                         You can reschedule your appointment at any time before our audit representative visits your site. Rescheduling releases your current time slot back to the public pool.
@@ -1403,7 +1458,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           <td className="py-3.5 text-right font-mono">₹{(qd.tax || 0).toLocaleString("en-IN")}</td>
                         </tr>
                         <tr className="font-black text-sm border-t border-dashed border-slate-200">
-                          <td className="py-4 text-[#003568]">Grand Total Amount</td>
+                          <td className="py-4 text-[var(--color-primary)]">Grand Total Amount</td>
                           <td className="py-4 text-right text-emerald-700 font-mono text-base">₹{(qd.grandTotal || 0).toLocaleString("en-IN")}</td>
                         </tr>
                       </tbody>
@@ -1414,7 +1469,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   {qd.status !== "Approved" && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation") && (
                     <div className="bg-[#eff4ff] border border-[#cbd5e0] rounded-2xl p-5 space-y-4">
                       <div>
-                        <span className="text-xs font-black text-[#003568] block">Review and Approve Quotation Invoice</span>
+                        <span className="text-xs font-black text-[var(--color-primary)] block">Review and Approve Quotation Invoice</span>
                         <p className="text-[11px] text-slate-500 leading-normal mt-1">
                           Please verify the financial cost sheet above. Approving will notify Printec Admin to schedule design draft creation.
                         </p>
@@ -1517,7 +1572,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       {dd.status !== "Approved" && (
                         <div className="bg-[#f8f9ff] border border-slate-200 rounded-2xl p-5 space-y-4">
                           <div>
-                            <span className="text-xs font-black text-[#003568] block">Approve or Request Revisions for Design Mockup</span>
+                            <span className="text-xs font-black text-[var(--color-primary)] block">Approve or Request Revisions for Design Mockup</span>
                             <p className="text-[11px] text-slate-500 leading-normal mt-1">
                               Please review the alignment, letter fonts, dimensions, and styling proofs. Revisions can be specified below.
                             </p>
@@ -1657,7 +1712,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   {/* Chat Header */}
                   <div className="px-6 py-4 border-b border-[#cbd5e1] bg-[#f8f9ff] flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-[#003568] text-white flex items-center justify-center font-bold text-xs">
+                      <div className="w-8 h-8 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center font-bold text-xs">
                         P
                       </div>
                       <div>
@@ -1722,6 +1777,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               </div>
             )}
           </main>
+            </div>
+          )}
         </div>
       </div>
 

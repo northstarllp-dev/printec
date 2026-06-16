@@ -222,14 +222,14 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
             style={{
               display: "flex", alignItems: "center", gap: "6px",
               padding: "9px 16px", borderRadius: "8px",
-              border: "none", background: "#003568",
+              border: "none", background: "var(--color-primary)",
               fontSize: "13px", fontWeight: "700", color: "white",
               cursor: "pointer", transition: "all 0.15s",
             }}
-            onMouseEnter={e => e.currentTarget.style.background = "#002a50"}
-            onMouseLeave={e => e.currentTarget.style.background = "#003568"}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--color-primary-container)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--color-primary)"}
           >
-            <Plus size={14} /> New Order
+            <Plus size={14} /> Add Enquiry
           </button>
         </div>
       </div>
@@ -283,7 +283,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
             <h2 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Recent Orders</h2>
             <button
               onClick={() => router.push("/admin/orders")}
-              style={{ fontSize: "12px", fontWeight: "700", color: "#003568", background: "none", border: "none", cursor: "pointer" }}
+              style={{ fontSize: "12px", fontWeight: "700", color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}
             >
               View All
             </button>

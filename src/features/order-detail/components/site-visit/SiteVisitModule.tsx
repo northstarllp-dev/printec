@@ -250,6 +250,121 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   return (
     <div className="space-y-6 text-slate-800">
       
+      {/* ── SCHEDULED VISIT DETAILS (from customer portal) ── */}
+      {(siteVisit.auditDate || siteVisit.customerAddress) && (
+        <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar size={18} className="text-indigo-600" />
+            <h3 className="text-sm font-extrabold text-indigo-900 uppercase tracking-wider">
+              Scheduled Site Visit
+            </h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Date & Time */}
+            {(siteVisit.auditDate || siteVisit.auditTime) && (
+              <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock size={14} className="text-indigo-500" />
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                    Visit Schedule
+                  </span>
+                </div>
+                <p className="text-sm font-extrabold text-indigo-900">
+                  {siteVisit.auditDate && new Date(siteVisit.auditDate).toLocaleDateString('en-IN', { 
+                    weekday: 'short', 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}
+                </p>
+                {siteVisit.auditTime && (
+                  <p className="text-xs font-semibold text-indigo-700 mt-1">
+                    At {siteVisit.auditTime}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Address */}
+            {siteVisit.customerAddress && (
+              <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm md:col-span-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin size={14} className="text-indigo-500" />
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                    Site Address
+                  </span>
+                </div>
+                <p className="text-sm font-semibold text-slate-800">
+                  {siteVisit.customerAddress}
+                </p>
+                {siteVisit.landmark && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    Near: {siteVisit.landmark}
+                  </p>
+                )}
+                {siteVisit.gpsLocation && (
+                  <p className="text-xs text-slate-400 mt-1 font-mono">
+                    GPS: {siteVisit.gpsLocation}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Contact Person */}
+            {siteVisit.contactPerson && (
+              <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <User size={14} className="text-indigo-500" />
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                    Contact Person
+                  </span>
+                </div>
+                <p className="text-sm font-extrabold text-slate-800">
+                  {siteVisit.contactPerson}
+                </p>
+                {siteVisit.customerContact && (
+                  <p className="text-xs font-semibold text-indigo-700 mt-1">
+                    {siteVisit.customerContact}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Site Type & Instructions */}
+            <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm md:col-span-2">
+              {siteVisit.siteType && (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                    Site Type: {siteVisit.siteType}
+                  </span>
+                </div>
+              )}
+              {siteVisit.notes && (
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Special Instructions
+                  </span>
+                  <p className="text-xs text-slate-600">
+                    {siteVisit.notes}
+                  </p>
+                </div>
+              )}
+              {siteVisit.sitePersonnel && (
+                <div className="mt-3 pt-3 border-t border-indigo-50">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    Assigned Auditor: 
+                  </span>
+                  <span className="text-xs font-extrabold text-indigo-700 ml-2">
+                    {siteVisit.sitePersonnel}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300">
         
