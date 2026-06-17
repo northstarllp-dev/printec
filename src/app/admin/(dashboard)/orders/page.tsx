@@ -29,7 +29,8 @@ export default async function OrdersPage() {
     deadlineStatus: o.deadline_status,
     customerName: o.customer_name || "",
     orderCode: o.order_id || o.id,
-    orderId: o.order_id || o.id
+    orderId: o.order_id || o.id,
+    siteVisitDetails: o.site_visit_details || null
   })) || [];
 
   const mappedCustomers = customers?.map(c => ({

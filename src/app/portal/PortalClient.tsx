@@ -8,11 +8,10 @@ import {
   Ruler, Activity, ChevronRight, Phone, Mail, Clock, ClipboardList,
   Download, HeadphonesIcon, Building2, User2, Star, ArrowRight,
   Package, Wrench, Palette, FileCheck, BarChart3, ChevronDown,
-  RefreshCw, AlertTriangle, Loader2
+  RefreshCw, AlertTriangle, Loader2, Maximize2, Minimize2, CheckCheck
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
-import { OrderCommunicationCenter } from "@/components/communication/OrderCommunicationCenter";
 
 interface Customer {
   id: string;
@@ -25,6 +24,7 @@ interface Customer {
   shippingAddress: string;
   status?: string;
   customerCode?: string;
+  customerId?: string;
 }
 
 interface Order {
@@ -550,11 +550,11 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                             <button
                               type="submit"
                               disabled={!selectedDate || !selectedTime || schedulingLoading}
-                              className="flex items-center gap-2 px-5 py-2.5 bg-[#0b1c30] text-white rounded-xl text-sm font-bold hover:bg-[#1a2f47] transition-all disabled:opacity-50 shadow-sm"
+                              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 shadow-sm"
                             >
                               {schedulingLoading ? <Loader2 size={14} className="animate-spin" /> : null}
-                              Pick Date & Time
-                              <ArrowRight size={14} />
+                              Confirm Site Visit
+                              <Check size={14} />
                             </button>
                             <button type="button" className="px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors">
                               Request Callback
@@ -894,25 +894,14 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
             </div>
 
             {/* Updates & Chat */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden" style={{ height: "420px", display: "flex", flexDirection: "column" }}>
-              <div className="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
-                <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest">Updates & Chat</h3>
-                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />
-              </div>
-
-              <div className="flex-1 overflow-hidden">
-                {activeOrder && (
-                  <OrderCommunicationCenter
-                    orderId={activeOrder.orderId || activeOrder.id}
-                    currentUserRole="Customer"
-                    currentUserName={customer.name}
-                    employees={[]}
-                    customers={[customer]}
-                    defaultTab="customer"
-                  />
-                )}
-              </div>
-            </div>
+            {activeOrder && (
+              <CustomerChat
+                orderId={activeOrder.orderId || activeOrder.id}
+                customerId={customer.customerId || customer.id}
+                token={token}
+                customerName={customer.name}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -942,6 +931,384 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── MOBILE FLOATING CHAT BUTTON (hidden on lg+) ─── */}
+      {activeOrder && (
+        <MobileChatButton
+          orderId={activeOrder.orderId || activeOrder.id}
+          customerId={customer.customerId || customer.id}
+          token={token}
+          customerName={customer.name}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
+// CustomerChat — sidebar version (desktop)
+// ─────────────────────────────────────────────────
+interface ChatProps {
+  orderId: string;
+  customerId: string;
+  token: string;
+  customerName: string;
+}
+
+interface ChatMsg {
+  id: string;
+  order_id: string;
+  tab: string;
+  sender_name: string;
+  sender_role: string;
+  content: string;
+  created_at: string;
+  is_read: boolean;
+}
+
+function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  async function fetchMessages() {
+    try {
+      const res = await fetch(
+        `/api/portal/messages?order_id=${encodeURIComponent(orderId)}&customer_id=${encodeURIComponent(customerId)}&token=${encodeURIComponent(token)}`
+      );
+      if (res.ok) {
+        const { messages: msgs } = await res.json();
+        setMessages(msgs || []);
+      }
+    } catch (e) {
+      console.error("Chat fetch error:", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchMessages();
+    pollRef.current = setInterval(fetchMessages, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [orderId]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim() || sending) return;
+    setSending(true);
+    const optimistic: ChatMsg = {
+      id: `opt-${Date.now()}`,
+      order_id: orderId,
+      tab: "customer",
+      sender_name: customerName,
+      sender_role: "Customer",
+      content: input.trim(),
+      created_at: new Date().toISOString(),
+      is_read: false,
+    };
+    setMessages(prev => [...prev, optimistic]);
+    const text = input.trim();
+    setInput("");
+    try {
+      await fetch("/api/portal/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: orderId,
+          customer_id: customerId,
+          token,
+          content: text,
+          sender_name: customerName,
+        }),
+      });
+      await fetchMessages();
+    } catch (e) {
+      console.error("Send error:", e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const chatBody = (
+    <>
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" />
+          <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest">Updates & Chat</h3>
+        </div>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="p-1.5 text-slate-400 hover:text-[#1E40AF] hover:bg-blue-50 rounded-lg transition-all"
+          title={expanded ? "Minimize" : "Expand to fullscreen"}
+        >
+          {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FCFCFD]">
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 size={18} className="animate-spin text-slate-300" />
+          </div>
+        )}
+        {!loading && messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
+            <MessageSquare size={24} className="stroke-1 opacity-50" />
+            <p className="text-xs font-medium text-center">No messages yet.<br />Send a message to start chatting with the Printec team.</p>
+          </div>
+        )}
+        {messages.map((msg) => {
+          const isMe = msg.sender_role === "Customer";
+          const initials = msg.sender_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+          const time = new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          if (msg.sender_role === "System") {
+            return (
+              <div key={msg.id} className="flex justify-center">
+                <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full font-medium">{msg.content}</span>
+              </div>
+            );
+          }
+          return (
+            <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${
+                isMe ? "bg-[#1E40AF] text-white" : "bg-slate-200 text-slate-600"
+              }`}>{initials}</div>
+              <div className={`flex flex-col max-w-[78%] ${isMe ? "items-end" : "items-start"}`}>
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.sender_name}</span>
+                <div className={`px-3 py-2 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                  isMe
+                    ? "bg-[#1E40AF] text-white rounded-br-sm"
+                    : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm"
+                }`}>{msg.content}</div>
+                <span className="text-[9px] text-slate-400 mt-1 px-1 font-mono">{time}{isMe && <CheckCheck size={9} className="inline ml-1 text-slate-300" />}</span>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={scrollRef} />
+      </div>
+
+      {/* Input */}
+      <form onSubmit={handleSend} className="p-3 border-t border-slate-200 bg-white flex items-center gap-2 flex-shrink-0">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder="Type a message..."
+          className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+          disabled={sending}
+        />
+        <button
+          type="submit"
+          disabled={!input.trim() || sending}
+          className="p-2.5 bg-[#1E40AF] text-white rounded-xl hover:bg-blue-700 transition-all disabled:opacity-40 flex items-center justify-center"
+        >
+          {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+        </button>
+      </form>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar card (hidden on mobile) */}
+      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-col" style={{ height: "440px" }}>
+        {chatBody}
+      </div>
+
+      {/* Expanded popup modal */}
+      {expanded && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="w-full max-w-xl h-[85vh] bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col">
+            {chatBody}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────
+// MobileChatButton — floating button for mobile
+// ─────────────────────────────────────────────────
+function MobileChatButton({ orderId, customerId, token, customerName }: ChatProps) {
+  const [open, setOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const seenRef = useRef<Set<string>>(new Set());
+
+  async function fetchMessages() {
+    try {
+      const res = await fetch(
+        `/api/portal/messages?order_id=${encodeURIComponent(orderId)}&customer_id=${encodeURIComponent(customerId)}&token=${encodeURIComponent(token)}`
+      );
+      if (res.ok) {
+        const { messages: msgs } = await res.json();
+        const newMsgs: ChatMsg[] = msgs || [];
+        setMessages(newMsgs);
+        if (!open) {
+          const newUnread = newMsgs.filter(
+            (m: ChatMsg) => m.sender_role !== "Customer" && m.sender_role !== "System" && !seenRef.current.has(m.id)
+          ).length;
+          if (newUnread > 0) setUnread(prev => prev + newUnread);
+          newMsgs.forEach((m: ChatMsg) => seenRef.current.add(m.id));
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 5000);
+    return () => clearInterval(interval);
+  }, [orderId]);
+
+  useEffect(() => {
+    if (open) { setUnread(0); scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }
+  }, [open, messages]);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim() || sending) return;
+    setSending(true);
+    const text = input.trim();
+    setInput("");
+    const optimistic: ChatMsg = {
+      id: `opt-${Date.now()}`, order_id: orderId, tab: "customer",
+      sender_name: customerName, sender_role: "Customer",
+      content: text, created_at: new Date().toISOString(), is_read: false
+    };
+    setMessages(prev => [...prev, optimistic]);
+    try {
+      await fetch("/api/portal/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order_id: orderId, customer_id: customerId, token, content: text, sender_name: customerName }),
+      });
+      await fetchMessages();
+    } catch (e) {
+      console.error("Send error:", e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="lg:hidden">
+      {/* Floating Button */}
+      {!open && (
+        <button
+          onClick={() => setOpen(true)}
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-[#1E40AF] text-white rounded-full shadow-xl hover:bg-blue-700 transition-all hover:scale-105 flex items-center justify-center"
+        >
+          <MessageSquare size={22} />
+          {unread > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
+      )}
+
+      {/* Mobile Chat Panel */}
+      {open && (
+        <div className="fixed inset-0 z-[60] flex flex-col bg-white">
+          {/* Header */}
+          <div className="px-4 py-3 bg-[#0b1c30] text-white flex items-center justify-between flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={16} className="text-blue-300" />
+              <span className="text-sm font-black">Chat with Printec</span>
+              <span className="text-[9px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-bold">LIVE</span>
+            </div>
+            <button
+              onClick={() => setOpen(false)}
+              className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-all"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#FCFCFD]">
+            {loading && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 size={18} className="animate-spin text-slate-300" />
+              </div>
+            )}
+            {!loading && messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full py-20 text-slate-400 gap-3">
+                <MessageSquare size={32} className="stroke-1 opacity-40" />
+                <p className="text-sm font-medium text-center">No messages yet.<br />Send us a message!</p>
+              </div>
+            )}
+            {messages.map((msg) => {
+              const isMe = msg.sender_role === "Customer";
+              const initials = msg.sender_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+              const time = new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+              if (msg.sender_role === "System") {
+                return (
+                  <div key={msg.id} className="flex justify-center">
+                    <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full font-medium">{msg.content}</span>
+                  </div>
+                );
+              }
+              return (
+                <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                    isMe ? "bg-[#1E40AF] text-white" : "bg-slate-200 text-slate-600"
+                  }`}>{initials}</div>
+                  <div className={`flex flex-col max-w-[75%] ${isMe ? "items-end" : "items-start"}`}>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.sender_name}</span>
+                    <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed break-words ${
+                      isMe
+                        ? "bg-[#1E40AF] text-white rounded-br-sm"
+                        : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm shadow-sm"
+                    }`}>{msg.content}</div>
+                    <span className="text-[9px] text-slate-400 mt-1 px-1 font-mono">{time}</span>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={scrollRef} />
+          </div>
+
+          {/* Input */}
+          <form onSubmit={handleSend} className="p-4 border-t border-slate-200 bg-white flex items-center gap-3 flex-shrink-0 pb-safe">
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 px-4 py-3 border border-slate-200 rounded-2xl text-sm bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              disabled={sending}
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || sending}
+              className="w-11 h-11 bg-[#1E40AF] text-white rounded-full hover:bg-blue-700 transition-all disabled:opacity-40 flex items-center justify-center flex-shrink-0"
+            >
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          </form>
         </div>
       )}
     </div>

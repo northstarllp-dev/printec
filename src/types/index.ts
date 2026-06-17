@@ -184,20 +184,29 @@ export interface SiteVisitDetails {
   }>;
 }
 
+export interface QuoteItem {
+  id: string; // Unique ID for the item
+  description: string;
+  quantity: number;
+  costPerSqFt: number; // Cost per square foot
+  totalSqFt: number; // Total square feet
+  unitPrice: number;
+  gstRate: number; // GST percentage (0, 5, 12, 18, 28)
+}
+
 export interface QuoteDetails {
-  signageType: "ACP Panels" | "LED Letters" | "Vinyl Graphics";
-  width: number;
-  height: number;
-  depth: number;
-  material: string;
-  mounting: string;
-  baseACPPrice: number;
-  hardwarePrice: number;
-  polishingPrice: number;
-  discount: number;
-  subtotal: number;
-  tax: number;
+  signageType?: "ACP Panels" | "LED Letters" | "Vinyl Graphics";
+  width?: number;
+  height?: number;
+  depth?: number;
+  material?: string;
+  mounting?: string;
+  items: QuoteItem[]; // Array of line items
+  discount: number; // Total discount in INR
+  subtotal: number; // Sum of (qty * unitPrice) for all items
+  tax: number; // Total tax (sum of (qty * unitPrice * (gstRate / 100)))
   grandTotal: number;
+  status?: "Draft" | "Sent" | "Approved" | "Rejected";
 }
 
 export interface DesignDetails {

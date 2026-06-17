@@ -353,6 +353,9 @@ export function OrdersManagementDashboard({
                   CUSTOMER
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  SITE VISIT
+                </th>
+                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   STAGE
                 </th>
                 <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -399,6 +402,24 @@ export function OrdersManagementDashboard({
                     </td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "500" }}>
                       {customerName}
+                    </td>
+                    <td style={{ padding: "16px 20px", textAlign: "left" }}>
+                      {order.siteVisitDetails?.auditDate && order.siteVisitDetails?.auditTime ? (
+                        <div style={{ textAlign: "left" }}>
+                          <div style={{ fontSize: "12px", fontWeight: "600", color: "#0f172a" }}>
+                            {order.siteVisitDetails.auditDate} • {order.siteVisitDetails.auditTime}
+                          </div>
+                          {order.siteVisitDetails.customerAddress && (
+                            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                              {order.siteVisitDetails.customerAddress}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: "12px", color: "#94a3b8", fontStyle: "italic" }}>
+                          Not yet booked
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: "16px 20px", textAlign: "center" }}>
                       <span
@@ -499,7 +520,7 @@ export function OrdersManagementDashboard({
               })}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
+                  <td colSpan={9} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
                     No orders found matching your search.
                   </td>
                 </tr>

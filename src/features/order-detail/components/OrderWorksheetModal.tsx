@@ -747,12 +747,48 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 {order.versionHistory && order.versionHistory.length > 0 ? `• ${order.versionHistory.length} versions` : ""}
               </p>
             </div>
-            {/* Stage approval status */}
-            {order.stageStatus && order.stageStatus !== "Normal" && (
-              <span style={{ fontSize: "11px", fontWeight: "800", color: "#EA580C", background: "#FFF7ED", border: "1px solid #FED7AA", padding: "4px 12px", borderRadius: "6px" }}>
-                Pending Approval
-              </span>
-            )}
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              {/* Manual stage selector for admin */}
+              {!isEmployee && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B" }}>Stage:</span>
+                  <select
+                    value={order.stage}
+                    onChange={async (e) => {
+                      try {
+                        await updateOrderStageAction(order.id, e.target.value);
+                        router.refresh();
+                        triggerLocalAlert(`Stage changed to ${e.target.value}`, "success");
+                      } catch (err) {
+                        console.error(err);
+                        triggerLocalAlert("Failed to change stage", "error");
+                      }
+                    }}
+                    style={{
+                      padding: "6px 10px",
+                      border: "1px solid #E2E8F0",
+                      borderRadius: "6px",
+                      fontSize: "12px",
+                      fontWeight: "600",
+                      outline: "none",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {Object.keys(STAGE_LABEL).map((stage) => (
+                      <option key={stage} value={stage}>{STAGE_LABEL[stage].label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              
+              {/* Stage approval status */}
+              {order.stageStatus && order.stageStatus !== "Normal" && (
+                <span style={{ fontSize: "11px", fontWeight: "800", color: "#EA580C", background: "#FFF7ED", border: "1px solid #FED7AA", padding: "4px 12px", borderRadius: "6px" }}>
+                  Pending Approval
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Module body (scrollable) */}
