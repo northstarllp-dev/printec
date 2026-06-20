@@ -65,7 +65,7 @@ export default function AdminLogin() {
             </svg>
           </div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", letterSpacing: "0.05em" }}>PRINTEC</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", letterSpacing: "0.05em" }}>NORTHSTAR</div>
             <div style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>Management Portal</div>
           </div>
         </div>

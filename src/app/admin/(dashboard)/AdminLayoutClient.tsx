@@ -16,16 +16,11 @@ import {
   UserCheck,
   Factory,
   Wrench,
-  CreditCard,
-  LifeBuoy,
   BarChart2,
   Package,
   Settings,
   ChevronLeft,
   ChevronRight,
-  Search,
-  TrendingUp,
-  TrendingDown,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "@/features/auth/actions/authActions";
@@ -55,8 +50,6 @@ const NAV_ITEMS = [
   { id: "/admin/enquire", label: "Enquiries", icon: MessageSquare, countKey: "enquiries" },
   { id: "/admin/customers", label: "Customers", icon: Users, countKey: "customers" },
   { id: "/admin/employees", label: "Employees", icon: UserCheck },
-  { id: "/admin/payments", label: "Payments", icon: CreditCard, countKey: "payments" },
-  { id: "/admin/support", label: "Support", icon: LifeBuoy, countKey: "support" },
   { id: "/admin/reports", label: "Reports", icon: BarChart2 },
   { id: "/admin/products", label: "Products", icon: Package },
   { id: "/admin/settings", label: "Settings", icon: Settings },
@@ -68,8 +61,6 @@ const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
   customers:    { bg: "#3B82F6", text: "#FFFFFF" },
   production:   { bg: "#F97316", text: "#FFFFFF" },
   installation: { bg: "#14B8A6", text: "#FFFFFF" },
-  payments:     { bg: "#EC4899", text: "#FFFFFF" },
-  support:      { bg: "#DC2626", text: "#FFFFFF" },
 };
 
 export function AdminLayoutClient({
@@ -236,7 +227,7 @@ export function AdminLayoutClient({
                 display: "block",
               }}
             >
-              PRINTEC
+              NORTHSTAR
             </span>
             <span
               style={{
@@ -421,94 +412,8 @@ export function AdminLayoutClient({
               flexShrink: 0,
             }}
           >
-            {/* Search */}
-            <div style={{ flex: 1, maxWidth: "480px", position: "relative" }}>
-              <Search
-                size={14}
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  color: "#94A3B8",
-                  pointerEvents: "none",
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Search orders, customers, enquiries..."
-                style={{
-                  width: "100%",
-                  height: "36px",
-                  padding: "0 12px 0 36px",
-                  border: "1px solid #E2E8F0",
-                  borderRadius: "8px",
-                  fontSize: "13px",
-                  background: "#F8FAFC",
-                  color: "#0F172A",
-                  outline: "none",
-                  fontFamily: "inherit",
-                  transition: "border-color 0.15s",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "var(--color-primary)";
-                  e.currentTarget.style.background = "white";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "#E2E8F0";
-                  e.currentTarget.style.background = "#F8FAFC";
-                }}
-              />
-            </div>
-
-            {/* Revenue + Outstanding Chips */}
-            <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: "#F0FDF4",
-                  border: "1px solid #BBF7D0",
-                  borderRadius: "8px",
-                  padding: "5px 12px",
-                }}
-              >
-                <TrendingUp size={13} style={{ color: "#16A34A" }} />
-                <div>
-                  <p style={{ margin: 0, fontSize: "9px", fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Revenue
-                  </p>
-                  <p style={{ margin: 0, fontSize: "12px", fontWeight: "800", color: "#16A34A" }}>
-                    ₹4,87,50,000
-                  </p>
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: "#FFF7ED",
-                  border: "1px solid #FED7AA",
-                  borderRadius: "8px",
-                  padding: "5px 12px",
-                }}
-              >
-                <TrendingDown size={13} style={{ color: "#EA580C" }} />
-                <div>
-                  <p style={{ margin: 0, fontSize: "9px", fontWeight: "700", color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Outstanding
-                  </p>
-                  <p style={{ margin: 0, fontSize: "12px", fontWeight: "800", color: "#EA580C" }}>
-                    ₹23,40,000
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Actions */}
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", paddingLeft: "12px", borderLeft: "1px solid #E2E8F0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>
               {/* History */}
               <div style={{ position: "relative" }}>
                 <button

@@ -1,6 +1,10 @@
-import { createHash } from "crypto";
 import { cookies } from "next/headers";
 import { createClient } from "@/utils/supabase/server";
+import {
+  verifyPortalToken,
+  isTokenRevoked,
+} from "@/utils/portal-tokens";
+import { checkRateLimit } from "@/utils/rate-limiter";
 import { PortalClient } from "./PortalClient";
 import React from "react";
 
@@ -12,57 +16,77 @@ export default async function PortalPage({
   searchParams: Promise<{ customer_id?: string; token?: string; order_id?: string }>;
 }) {
   const params = await searchParams;
-  const tokenBase64 = params.token;
+  const tokenParam = params.token;
 
-  if (!tokenBase64) {
-    return <PortalError title="Invalid Magic Link" message="The magic link you clicked is incomplete or has expired. Please ask Printec Admin to send it again." />;
+  if (!tokenParam) {
+    return (
+      <PortalError
+        title="Invalid Magic Link"
+        message="The magic link you clicked is incomplete or has expired. Please ask Printec Admin to send it again."
+      />
+    );
   }
 
-  let customerId = "";
-  let orderId = "";
-  let signature = "";
-
-  try {
-    const decoded = Buffer.from(tokenBase64, "base64url").toString("utf-8");
-    const parts = decoded.split(":");
-    customerId = parts[0] || "";
-    orderId = parts[1] || "";
-    signature = parts[2] || "";
-  } catch (err) {
-    return <PortalError title="Invalid Magic Link" message="The magic link you clicked is corrupt. Please ask Printec Admin to send it again." />;
+  // ── Rate limiting ──
+  const clientIp = "anonymous"; // In production, use request IP from headers
+  const rate = checkRateLimit(`portal-page-${clientIp}`);
+  if (!rate.allowed) {
+    return (
+      <PortalError
+        title="Too Many Requests"
+        message="Please wait a few minutes and try again."
+      />
+    );
   }
 
-  if (!customerId || !signature) {
-    return <PortalError title="Invalid Magic Link" message="The magic link you clicked is incomplete or has expired." />;
+  // ── Verify HMAC + expiry ──
+  const payload = verifyPortalToken(tokenParam);
+  if (!payload) {
+    return (
+      <PortalError
+        title="Invalid or Expired Link"
+        message="This secure portal link is invalid or has expired. Please request a new link from Printec."
+      />
+    );
   }
 
-  // Verify the salted signature
-  const salt = process.env.PORTAL_SALT || "printec_portal_salt_secure_2026";
-  const expectedSignature = createHash("sha256")
-    .update(`${customerId}-${salt}`)
-    .digest("hex")
-    .substring(0, 16);
-
-  if (signature !== expectedSignature) {
-    return <PortalError title="Access Denied" message="This secure portal link is invalid. Please request a new link from Printec." />;
-  }
-
-  // Valid token. Fetch customer data and orders from Supabase using the server client.
+  // ── DB Revocation check ──
   const cookieStore = await cookies();
   const supabase = createClient(cookieStore);
 
-  // Fetch customer using friendly customer_id
+  let isRevoked: boolean;
+  try {
+    isRevoked = await isTokenRevoked(supabase, payload.jti);
+  } catch {
+    isRevoked = true; // treat DB errors as revoked for safety
+  }
+
+  if (isRevoked) {
+    return (
+      <PortalError
+        title="Access Revoked"
+        message="This portal link has been revoked. Please contact Printec support for a new link."
+      />
+    );
+  }
+
+  // ── Fetch data from Supabase ──
   const { data: customerData, error: customerError } = await supabase
     .from("customers")
     .select("*")
-    .eq("customer_id", customerId)
+    .eq("customer_id", payload.customerId)
     .single();
 
   if (customerError || !customerData) {
-    return <PortalError title="Customer Not Found" message={`Could not locate a customer profile for ID ${customerId}.`} />;
+    return (
+      <PortalError
+        title="Customer Not Found"
+        message={`Could not locate a customer profile for ID ${payload.customerId}.`}
+      />
+    );
   }
 
-  // Fetch orders using customer's UUID id
+  // Fetch all orders for this customer
   const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
     .select("*")
@@ -70,19 +94,29 @@ export default async function PortalPage({
     .order("date_created", { ascending: false });
 
   if (ordersError) {
-    return <PortalError title="Database Error" message="Unable to load order details. Please try again later." />;
+    return (
+      <PortalError
+        title="Database Error"
+        message="Unable to load order details. Please try again later."
+      />
+    );
   }
 
   // If orderId is provided, perform an explicit IDOR verification check:
   // ensure the requested order_id belongs to the validated customer_id.
-  if (orderId) {
-    const hasOrder = ordersData.some((o) => o.order_id === orderId);
+  if (payload.orderId) {
+    const hasOrder = ordersData.some((o) => o.order_id === payload.orderId);
     if (!hasOrder) {
-      return <PortalError title="Access Denied" message="You do not have permission to view the requested order details." />;
+      return (
+        <PortalError
+          title="Access Denied"
+          message="You do not have permission to view the requested order details."
+        />
+      );
     }
   }
 
-  // Map database structures to our camelCase frontend props
+  // ── Map to camelCase for frontend ──
   const customer = {
     id: customerData.id,
     name: customerData.name,
@@ -94,7 +128,7 @@ export default async function PortalPage({
     shippingAddress: customerData.shipping_address,
     status: customerData.status,
     customerCode: customerData.customer_id || customerData.id,
-    customerId: customerData.customer_id || customerData.id
+    customerId: customerData.customer_id || customerData.id,
   };
 
   const orders = ordersData.map((o: any) => ({
@@ -124,59 +158,82 @@ export default async function PortalPage({
     stageStatus: o.stage_status,
     stageAdminNotes: o.stage_admin_notes,
     orderCode: o.order_id || o.id,
-    orderId: o.order_id || o.id
+    orderId: o.order_id || o.id,
   }));
 
   return (
     <PortalClient
       customer={customer}
       orders={orders}
-      initialActiveOrderId={orderId || null}
-      token={tokenBase64}
+      initialActiveOrderId={payload.orderId || null}
+      token={tokenParam}
     />
   );
 }
 
 function PortalError({ title, message }: { title: string; message: string }) {
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "#f8f9ff",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 24,
-      fontFamily: "var(--font-sans), sans-serif"
-    }}>
-      <div style={{
-        background: "white",
-        border: "1px solid #c3c6d0",
-        borderRadius: 16,
-        padding: "40px 32px",
-        maxWidth: 480,
-        width: "100%",
-        textAlign: "center",
-        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)"
-      }}>
-        <div style={{
-          width: 56,
-          height: 56,
-          background: "#FFF1F2",
-          borderRadius: "50%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          margin: "0 auto 24px",
-          color: "#EF4444"
-        }}>
-          <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f8f9ff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        fontFamily: "var(--font-sans), sans-serif",
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          border: "1px solid #c3c6d0",
+          borderRadius: 16,
+          padding: "40px 32px",
+          maxWidth: 480,
+          width: "100%",
+          textAlign: "center",
+          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
+        }}
+      >
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            background: "#FFF1F2",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 auto 24px",
+            color: "#EF4444",
+          }}
+        >
+          <svg
+            width="24"
+            height="24"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2.5"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
           </svg>
         </div>
-        <h1 style={{ fontSize: 20, fontWeight: 900, color: "#0b1c30", margin: "0 0 12px" }}>{title}</h1>
-        <p style={{ fontSize: 13, color: "#43474f", lineHeight: 1.6, margin: 0 }}>{message}</p>
+        <h1 style={{ fontSize: 20, fontWeight: 900, color: "#0b1c30", margin: "0 0 12px" }}>
+          {title}
+        </h1>
+        <p style={{ fontSize: 13, color: "#43474f", lineHeight: 1.6, margin: 0 }}>
+          {message}
+        </p>
         <div style={{ marginTop: 32 }}>
-          <p style={{ fontSize: 12, color: "#737780", margin: 0, fontWeight: 700 }}>PRINTEC Signage Solutions</p>
+          <p style={{ fontSize: 12, color: "#737780", margin: 0, fontWeight: 700 }}>
+            PRINTEC Signage Solutions
+          </p>
         </div>
       </div>
     </div>

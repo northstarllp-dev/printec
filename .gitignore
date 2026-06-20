@@ -44,3 +44,5 @@ next-env.d.ts
 supabase/.temp/
 CLAUDE.md
 .CLAUDE
+
+__pycache__/

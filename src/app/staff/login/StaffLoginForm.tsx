@@ -72,7 +72,7 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
             </svg>
           </div>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", letterSpacing: "0.05em" }}>PRINTEC</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", letterSpacing: "0.05em" }}>NORTHSTAR</div>
             <div style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>Staff Portal</div>
           </div>
         </div>

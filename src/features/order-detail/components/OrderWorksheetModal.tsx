@@ -18,6 +18,7 @@ import { SiteVisitModule } from "./site-visit/SiteVisitModule";
 import { QuotationModule } from "./quotation/QuotationModule";
 import { DesignModule } from "./design/DesignModule";
 import { ProductionModule } from "./production/ProductionModule";
+import { AdminControlModule } from "./admin/AdminControlModule";
 import { InstallationModule } from "./installation/InstallationModule";
 import {
   updateSiteVisitDetailsAction,
@@ -32,6 +33,7 @@ import {
   addChatMessageAction,
   updateOrderHealthAction,
   reopenOrderAction,
+  approveSiteVisitAction,
 } from "@/features/orders/actions/orderActions";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
@@ -224,19 +226,32 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleAdminApprove = async () => {
     try {
       await adminApproveStageAction(order.id);
+      setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
       router.refresh();
       triggerLocalAlert("Stage approved and advanced.", "success");
       setShowRejectInput(false);
     } catch (err) { triggerLocalAlert("Failed to approve stage.", "error"); }
   };
-  const handleAdminReject = async () => {
-    if (!rejectNotes.trim()) { triggerLocalAlert("Please provide rejection feedback.", "warning"); return; }
+  const handleAdminRequestChanges = async (notes: string) => {
+    if (!notes.trim()) { triggerLocalAlert("Please provide rejection feedback.", "warning"); return; }
     try {
-      await adminRejectStageAction(order.id, rejectNotes);
+      await adminRejectStageAction(order.id, notes);
+      setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
       router.refresh();
       setRejectNotes(""); setShowRejectInput(false);
       triggerLocalAlert("Feedback sent back.", "info");
     } catch (err) { triggerLocalAlert("Failed to submit rejection.", "error"); }
+  };
+  const handleUpdateOrderStage = async (orderId: string, stage: string) => {
+    try {
+      await updateOrderStageAction(orderId, stage);
+      setOrder(prev => ({ ...prev, stage: stage as PipelineStage }));
+      router.refresh();
+      triggerLocalAlert(`Stage changed to ${stage}`, "success");
+    } catch (err) {
+      console.error(err);
+      triggerLocalAlert("Failed to change stage", "error");
+    }
   };
   const handleRequestAdvancement = async () => {
     try {
@@ -350,12 +365,36 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onSubmitForApproval={async (): Promise<void> => { await requestStageAdvancementAction(order.id); }}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
           onAdminRequestChanges={async (notes: string): Promise<void> => { setRejectNotes(notes); await adminRejectStageAction(order.id, notes); }}
+          onStaffApproveVisit={async (): Promise<void> => {
+            try {
+              const res = await approveSiteVisitAction(order.id);
+              if (res.success && res.order) {
+                setOrder((prev) => ({ ...prev, stage: res.order.stage, siteVisitDetails: res.order.site_visit_details }));
+                triggerLocalAlert("Site visit schedule approved successfully.", "success");
+                router.refresh();
+              }
+            } catch (err) {
+              console.error(err);
+              triggerLocalAlert("Failed to approve site visit.", "error");
+            }
+          }}
         />
       );
       case 1: return <QuotationModule order={order} isEmployee={isEmployee} updateQuoteDetails={updateQuoteDetails} />;
       case 2: return <DesignModule order={order} isEmployee={isEmployee} updateDesignDetails={updateDesignDetails} />;
       case 3: return <ProductionModule order={order} isEmployee={isEmployee} updateProductionDetails={updateProductionDetails} />;
       case 4: return <InstallationModule order={order} isEmployee={isEmployee} updateInstallationDetails={updateInstallationDetails} />;
+      case 99: return (
+        <AdminControlModule 
+          order={order} 
+          customers={customers} 
+          employees={employees} 
+          onAdminApprove={handleAdminApprove}
+          onAdminRequestChanges={handleAdminRequestChanges}
+          updateSiteVisitDetails={updateSiteVisitDetails}
+          updateOrderStage={handleUpdateOrderStage}
+        />
+      );
       default: return null;
     }
   };
@@ -363,13 +402,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /* ── Workflow steps for middle panel ── */
   const workflowSteps = [
     ...(isEmployee ? [] : [{ label: "Enquiry",     tabIndex: -1, done: true }]),
+    ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: 99, done: false }]),
     { label: "Site Visit",  tabIndex: 0, done: currentStageIndex > 0 },
     { label: "Quote",       tabIndex: 1, done: currentStageIndex > 1 },
     { label: "Design",      tabIndex: 2, done: currentStageIndex > 2 },
     { label: "Installation",tabIndex: 4, done: currentStageIndex > 4 },
   ];
 
-  const activeModuleTitle = ["Site Visit Audit", "Product Quote", "Design Proof", "Fabrication Checklist", "Field Installation"][activeStepTab] || "Order Details";
+  const activeModuleTitle = activeStepTab === 99 ? "Admin Control Panel" : ["Site Visit Audit", "Product Quote", "Design Proof", "Fabrication Checklist", "Field Installation"][activeStepTab] || "Order Details";
 
   /* ── Counts for top bar pills ── */
   const activeCount = allOrders.filter((o) => o.stage !== "Completed" && o.stage !== "Closed").length;
@@ -390,7 +430,46 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <div style={{ width: "1px", height: "20px", background: "#E2E8F0" }} />
         <span style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Order Management</span>
 
-        <div style={{ display: "flex", gap: "8px", marginLeft: "auto" }}>
+        <div style={{ display: "flex", gap: "8px", marginLeft: "auto", alignItems: "center" }}>
+          {/* Order Hub Toggle */}
+          <button
+            onClick={() => setActiveRightPanel(activeRightPanel ? null : "chat")}
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: activeRightPanel ? "var(--color-secondary)" : "white",
+              color: activeRightPanel ? "white" : "#64748B",
+              border: `1px solid ${activeRightPanel ? "var(--color-secondary)" : "#E2E8F0"}`,
+              borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "700",
+              cursor: "pointer", transition: "all 0.15s"
+            }}
+          >
+            💬 Order Hub
+            {(logsCount > 0 || chatCount > 0) && (
+              <span style={{ background: "#EF4444", color: "white", padding: "2px 6px", borderRadius: "10px", fontSize: "10px", marginLeft: "4px" }}>
+                {logsCount + chatCount}
+              </span>
+            )}
+          </button>
+
+          {/* Admin Controls Toggle */}
+          {!isEmployee && (
+            <button
+              onClick={() => setActiveStepTab(99)}
+              style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                background: activeStepTab === 99 ? "var(--color-secondary)" : "white",
+                color: activeStepTab === 99 ? "white" : "#64748B",
+                border: `1px solid ${activeStepTab === 99 ? "var(--color-secondary)" : "#E2E8F0"}`,
+                borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "700",
+                cursor: "pointer", transition: "all 0.15s"
+              }}
+            >
+              ⚙️ Manage Order
+            </button>
+          )}
+
+          <div style={{ width: "1px", height: "20px", background: "#E2E8F0", margin: "0 4px" }} />
+
           <span style={{ display: "flex", alignItems: "center", gap: "4px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", fontWeight: "700", color: "#2563EB" }}>
             ↑ {activeCount} Active
           </span>
@@ -512,232 +591,116 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </aside>
         )}
 
-        {/* ══ PANEL 2: WORKFLOW STEPS ══ */}
-        <aside style={{ width: "240px", flexShrink: 0, borderRight: "1px solid #E2E8F0", background: "#FAFAFA", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          
-          {/* Order header */}
-          {isEmployee && (
-            <div style={{ padding: "16px", borderBottom: "1px solid #E2E8F0" }}>
-              <div style={{ fontSize: "10px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>
-                {order.orderCode}
-              </div>
-              <h2 style={{ margin: "0 0 6px", fontSize: "14px", fontWeight: "800", color: "#0F172A", lineHeight: 1.3 }}>
-                {order.projectName}
-              </h2>
-              {(() => {
-                const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, color: "#94A3B8" };
-                return (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: "700", background: stageInfo.color + "15", color: stageInfo.color, border: `1px solid ${stageInfo.color}30` }}>
-                    ● {stageInfo.label}
-                  </span>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* Workflow steps */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "16px 12px" }}>
-            {workflowSteps.map((step, i) => {
-              const isActive = activeStepTab === step.tabIndex;
-              const isDone = step.done || step.tabIndex < currentStageIndex;
-              return (
-                <button
-                  key={step.label}
-                  onClick={() => { if (step.tabIndex >= 0) setActiveStepTab(step.tabIndex); }}
-                  disabled={step.tabIndex < 0}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: "12px",
-                    padding: "10px 12px", marginBottom: "4px",
-                    background: isActive ? "var(--color-secondary)" : isDone ? "#F0FDF4" : "white",
-                    border: `1px solid ${isActive ? "var(--color-secondary)" : isDone ? "#BBF7D0" : "#E2E8F0"}`,
-                    borderRadius: "10px", cursor: step.tabIndex >= 0 ? "pointer" : "default",
-                    transition: "all 0.15s", textAlign: "left",
-                  }}
-                >
-                  {/* Step indicator */}
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
-                    background: isActive ? "rgba(255,255,255,0.15)" : isDone ? "#22C55E" : "#F1F5F9",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    border: `2px solid ${isActive ? "rgba(255,255,255,0.3)" : isDone ? "#16A34A" : "#E2E8F0"}`,
-                  }}>
-                    {isDone ? (
-                      <Check size={13} style={{ color: isActive ? "white" : "white" }} />
-                    ) : (
-                      <span style={{ fontSize: "11px", fontWeight: "800", color: isActive ? "white" : "#94A3B8" }}>
-                        {i + 1}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "12px", fontWeight: "700", color: isActive ? "white" : "#0F172A" }}>
-                      {step.label}
-                    </div>
-                    <div style={{ fontSize: "10px", color: isActive ? "rgba(255,255,255,0.7)" : "#94A3B8", fontWeight: "500" }}>
-                      Step {i + 1}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-            
-            {/* Divider Line */}
-            <hr style={{ border: "none", borderTop: "1px solid #cbd5e1", margin: "16px 4px" }} />
-
-            {/* Project Logs (Admin only) */}
-            {!isEmployee && (
-              <button
-                onClick={() => {
-                  setActiveRightPanel(activeRightPanel === "logs" ? null : "logs");
-                }}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: "12px",
-                  padding: "10px 12px", marginBottom: "8px",
-                  background: activeRightPanel === "logs" ? "var(--color-secondary)" : "white",
-                  border: `1px solid ${activeRightPanel === "logs" ? "var(--color-secondary)" : "#E2E8F0"}`,
-                  borderRadius: "10px",
-                  cursor: "pointer", transition: "all 0.15s", textAlign: "left"
-                }}
-                onMouseEnter={e => { if (activeRightPanel !== "logs") e.currentTarget.style.background = "#F8FAFC"; }}
-                onMouseLeave={e => { if (activeRightPanel !== "logs") e.currentTarget.style.background = "white"; }}
-              >
-                <div style={{
-                  width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
-                  background: activeRightPanel === "logs" ? "rgba(255,255,255,0.15)" : "#F1F5F9",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  border: `2px solid ${activeRightPanel === "logs" ? "rgba(255,255,255,0.3)" : "#E2E8F0"}`
-                }}>
-                  <span style={{ fontSize: "12px" }}>📋</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flex: 1 }}>
-                  <div>
-                    <div style={{ fontSize: "12px", fontWeight: "700", color: activeRightPanel === "logs" ? "white" : "#0F172A" }}>
-                      Project Logs
-                    </div>
-                    <div style={{ fontSize: "10px", color: activeRightPanel === "logs" ? "rgba(255,255,255,0.7)" : "#94A3B8", fontWeight: "500" }}>
-                      System trail & logs
-                    </div>
-                  </div>
-                  {logsCount > 0 && (
-                    <span style={{
-                      fontSize: "10px", fontWeight: "800", padding: "2px 6px", borderRadius: "10px",
-                      background: activeRightPanel === "logs" ? "white" : "#F1F5F9",
-                      color: activeRightPanel === "logs" ? "var(--color-secondary)" : "#64748B",
-                      border: activeRightPanel === "logs" ? "none" : "1px solid #E2E8F0"
-                    }}>
-                      {logsCount}
-                    </span>
-                  )}
-                </div>
-              </button>
-            )}
-
-            {/* Team Chat (Admin & Staff) */}
-            <button
-              onClick={() => {
-                setActiveRightPanel(activeRightPanel === "chat" ? null : "chat");
-              }}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: "12px",
-                padding: "10px 12px", marginBottom: "8px",
-                background: activeRightPanel === "chat" ? "var(--color-secondary)" : "white",
-                border: `1px solid ${activeRightPanel === "chat" ? "var(--color-secondary)" : "#E2E8F0"}`,
-                borderRadius: "10px",
-                cursor: "pointer", transition: "all 0.15s", textAlign: "left"
-              }}
-              onMouseEnter={e => { if (activeRightPanel !== "chat") e.currentTarget.style.background = "#F8FAFC"; }}
-              onMouseLeave={e => { if (activeRightPanel !== "chat") e.currentTarget.style.background = "white"; }}
-            >
-              <div style={{
-                width: "28px", height: "28px", borderRadius: "50%", flexShrink: 0,
-                background: activeRightPanel === "chat" ? "rgba(255,255,255,0.15)" : "#F1F5F9",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                border: `2px solid ${activeRightPanel === "chat" ? "rgba(255,255,255,0.3)" : "#E2E8F0"}`
-              }}>
-                <span style={{ fontSize: "12px" }}>💬</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flex: 1 }}>
-                <div>
-                  <div style={{ fontSize: "12px", fontWeight: "700", color: activeRightPanel === "chat" ? "white" : "#0F172A" }}>
-                    Team Chat
-                  </div>
-                  <div style={{ fontSize: "10px", color: activeRightPanel === "chat" ? "rgba(255,255,255,0.7)" : "#94A3B8", fontWeight: "500" }}>
-                    Internal communication
-                  </div>
-                </div>
-                {chatCount > 0 && (
-                  <span style={{
-                    fontSize: "10px", fontWeight: "800", padding: "2px 6px", borderRadius: "10px",
-                    background: activeRightPanel === "chat" ? "white" : "#F1F5F9",
-                    color: activeRightPanel === "chat" ? "var(--color-secondary)" : "#64748B",
-                    border: activeRightPanel === "chat" ? "none" : "1px solid #E2E8F0"
-                  }}>
-                    {chatCount}
-                  </span>
-                )}
-              </div>
-            </button>
-          </div>
-
-          {/* Customer info (Moved to complete bottom, borderTop instead of borderBottom) */}
-          <div style={{ borderTop: "1px solid #E2E8F0", padding: "14px", background: "white", flexShrink: 0 }}>
-            <div style={{ fontSize: "9px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>Customer</div>
-            {client ? (
-              <>
-                <div style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", marginBottom: "3px" }}>{client.name}</div>
-                {client.phone && (
-                  <div style={{ fontSize: "11px", color: "#64748B", marginBottom: "2px" }}>
-                    📞 {isEmployee ? (client.phone.replace(/\D/g, "").length < 4 ? "****" : client.phone.replace(/\D/g, "").slice(0, 2) + "******" + client.phone.replace(/\D/g, "").slice(-2)) : client.phone}
-                  </div>
-                )}
-                {client.email && (
-                  <div style={{ fontSize: "11px", color: "#64748B", marginBottom: "8px" }}>
-                    ✉ {isEmployee ? (client.email.split("@").length === 2 ? client.email.split("@")[0].slice(0, 1) + "*****" + client.email.split("@")[0].slice(-1) + "@" + client.email.split("@")[1] : "*****@***.***") : client.email}
-                  </div>
-                )}
-                <button
-                  onClick={isEmployee ? undefined : handleCopyMagicLink}
-                  disabled={isEmployee}
-                  style={{
-                    width: "100%", padding: "8px", borderRadius: "8px", fontSize: "12px", fontWeight: "700",
-                    background: isEmployee ? "#CBD5E1" : "#F97316",
-                    color: isEmployee ? "#64748B" : "white",
-                    border: "none",
-                    cursor: isEmployee ? "not-allowed" : "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
-                    transition: "all 0.15s",
-                  }}
-                  onMouseEnter={e => { if (!isEmployee) e.currentTarget.style.background = "#ea580c"; }}
-                  onMouseLeave={e => { if (!isEmployee) e.currentTarget.style.background = "#F97316"; }}
-                >
-                  {isEmployee ? <Lock size={12} /> : <Share2 size={12} />} {isEmployee ? "Portal Link Locked" : (copiedLink ? "Copied!" : "Customer Portal")}
-                </button>
-                <button
-                  onClick={isEmployee ? undefined : handleCopyMagicLink}
-                  disabled={isEmployee}
-                  style={{
-                    width: "100%", marginTop: "6px", padding: "7px", borderRadius: "8px", fontSize: "11px", fontWeight: "600",
-                    background: isEmployee ? "#F8FAFC" : "white",
-                    color: isEmployee ? "#94A3B8" : "#64748B",
-                    border: "1px solid #E2E8F0",
-                    cursor: isEmployee ? "not-allowed" : "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: "5px"
-                  }}
-                >
-                  {isEmployee ? <Lock size={11} /> : <Share2 size={11} />} Copy portal link
-                </button>
-              </>
-            ) : (
-              <p style={{ margin: 0, fontSize: "12px", color: "#94A3B8" }}>No client linked</p>
-            )}
-          </div>
-        </aside>
+        {/* ══ PANEL 2: REMOVED (Replaced by horizontal timeline) ══ */}
 
         {/* ══ PANEL 3: MODULE CONTENT ══ */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", background: "#F1F5F9" }}>
 
-          {/* Module header */}
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid #E2E8F0", background: "white", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          {/* Customer Strip & Horizontal Timeline Header */}
+          <div style={{ background: "white", flexShrink: 0, padding: "0 24px" }}>
+            
+            {/* Top row: Order Info & Customer */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: "1px solid #F1F5F9" }}>
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>
+                  {order.orderCode}
+                </div>
+                <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#0F172A", lineHeight: 1.2 }}>
+                  {order.projectName}
+                </h2>
+              </div>
+              
+              {/* Customer Info Mini-Bar */}
+              {client && (
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", background: "#F8FAFC", padding: "6px 16px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "700", color: "#0F172A" }}>{client.name}</div>
+                  {client.phone && (
+                    <div style={{ fontSize: "12px", color: "#64748B" }}>
+                      📞 {isEmployee ? (client.phone.replace(/\D/g, "").length < 4 ? "****" : client.phone.replace(/\D/g, "").slice(0, 2) + "******" + client.phone.replace(/\D/g, "").slice(-2)) : client.phone}
+                    </div>
+                  )}
+                  {!isEmployee && (
+                    <>
+                      <div style={{ width: "1px", height: "14px", background: "#CBD5E1" }} />
+                      <button
+                        onClick={handleCopyMagicLink}
+                        style={{ background: "none", border: "none", color: "#F97316", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                      >
+                        <Share2 size={12} /> {copiedLink ? "Copied!" : "Portal"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Horizontal Timeline */}
+            {activeStepTab !== 99 && (
+              <div style={{ position: "relative", paddingTop: "24px", paddingBottom: "0px", display: "flex", justifyContent: "space-between" }}>
+                {/* Background Connecting Line */}
+                <div style={{ position: "absolute", top: "36px", left: "40px", right: "40px", height: "2px", background: "#E2E8F0", zIndex: 0 }} />
+                
+                {workflowSteps.filter(s => s.tabIndex !== 99).map((step, i) => {
+                  const isActive = activeStepTab === step.tabIndex;
+                  const isDone = step.done || step.tabIndex < currentStageIndex;
+                  const isFuture = !isActive && !isDone;
+
+                  return (
+                    <button
+                      key={step.label}
+                      onClick={() => { if (step.tabIndex >= 0) setActiveStepTab(step.tabIndex); }}
+                      disabled={step.tabIndex < 0}
+                      style={{
+                        position: "relative", zIndex: 1, background: "none", border: "none", padding: "0 10px", 
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: "8px", 
+                        cursor: step.tabIndex >= 0 ? "pointer" : "default", width: "100px",
+                        outline: "none"
+                      }}
+                    >
+                      {/* Node */}
+                      <div style={{
+                        width: "26px", height: "26px", borderRadius: "50%",
+                        background: isActive ? "var(--color-secondary)" : isDone ? "#22C55E" : "white",
+                        border: `2px solid ${isActive ? "var(--color-secondary)" : isDone ? "#22C55E" : "#CBD5E1"}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        boxShadow: isActive ? "0 0 0 4px #EFF6FF" : "none",
+                        transition: "all 0.2s ease",
+                        zIndex: 2
+                      }}>
+                        {isDone ? (
+                          <Check size={14} color="white" strokeWidth={3} />
+                        ) : (
+                          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: isActive ? "white" : "transparent" }} />
+                        )}
+                      </div>
+                      
+                      {/* Label Tab matching bottom area */}
+                      <div style={{
+                        background: isActive ? "#F1F5F9" : "transparent",
+                        padding: "8px 16px",
+                        borderTopLeftRadius: "8px",
+                        borderTopRightRadius: "8px",
+                        color: isActive ? "var(--color-secondary)" : isDone ? "#475569" : "#94A3B8",
+                        fontWeight: isActive ? "800" : "600",
+                        fontSize: "12px",
+                        width: "120px",
+                        textAlign: "center",
+                        borderBottom: isActive ? "none" : "1px solid transparent",
+                        marginBottom: "-1px", // seamlessly connect to the background of the form area
+                        position: "relative",
+                        zIndex: isActive ? 3 : 1
+                      }}>
+                        {step.label}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Module Header (if not 99, we can still show a clean title) */}
+          <div style={{ padding: activeStepTab === 99 ? "24px 24px 0 24px" : "16px 24px 0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
             <div>
               <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#0F172A" }}>
                 {activeModuleTitle}
@@ -750,7 +713,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               {/* Manual stage selector for admin */}
-              {!isEmployee && (
+              {!isEmployee && activeStepTab !== 99 && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B" }}>Stage:</span>
                   <select
@@ -792,52 +755,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </div>
 
           {/* Module body (scrollable) */}
-          <div style={{ flex: 1, overflowY: "auto", padding: "24px", paddingBottom: "100px" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 24px 24px" }}>
 
-            {/* Admin approval banner */}
-            {order.stageStatus && order.stageStatus !== "Normal" && !isEmployee && (
-              <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: "10px", padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", marginBottom: "20px" }}>
-                <div>
-                  <p style={{ margin: 0, fontSize: "13px", fontWeight: "700", color: "#92400E" }}>Advancement Approval Requested</p>
-                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#B45309" }}>Staff has requested to advance this order. Review and approve or reject.</p>
-                </div>
-                <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-                  <button onClick={() => setShowRejectInput(!showRejectInput)} style={{ padding: "7px 14px", border: "1px solid #FDE68A", background: "white", color: "#D97706", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>
-                    Reject
-                  </button>
-                  <button onClick={handleAdminApprove} style={{ padding: "7px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
-                    <Check size={13} /> Approve
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Reject input */}
-            {showRejectInput && !isEmployee && (
-              <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "10px", padding: "16px", marginBottom: "20px" }}>
-                <label style={{ display: "block", fontSize: "10px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Rejection Feedback</label>
-                <textarea
-                  rows={2}
-                  placeholder="Specify edits needed..."
-                  value={rejectNotes}
-                  onChange={(e) => setRejectNotes(e.target.value)}
-                  style={{ width: "100%", padding: "10px 12px", border: "1px solid #E2E8F0", borderRadius: "8px", fontSize: "12px", outline: "none", resize: "none", fontFamily: "inherit" }}
-                />
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "10px" }}>
-                  <button onClick={() => setShowRejectInput(false)} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "7px", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>Cancel</button>
-                  <button onClick={handleAdminReject} style={{ padding: "6px 14px", background: "#EF4444", border: "none", color: "white", borderRadius: "7px", fontSize: "12px", fontWeight: "700", cursor: "pointer" }}>Submit Notes</button>
-                </div>
-              </div>
-            )}
-
-            {/* Module content */}
-            <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", overflow: "hidden" }}>
-              <div style={{ padding: "20px" }}>
+            <div style={{ background: "white", border: "1px solid #E2E8F0", borderTop: "none", borderBottomLeftRadius: "12px", borderBottomRightRadius: "12px", borderTopRightRadius: "12px", overflow: "hidden", minHeight: "100%", borderTopLeftRadius: activeStepTab === 99 ? "12px" : "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+              <div style={{ padding: "24px" }}>
                 {renderModule()}
               </div>
             </div>
-
-
 
           </div>
 

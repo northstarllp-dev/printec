@@ -3,7 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createHash } from "crypto";
+import { generateAndStorePortalToken } from "@/utils/portal-tokens";
 import { createAuditLogAction } from "@/features/audit/actions/auditActions";
 
 async function getSupabase() {
@@ -58,7 +58,7 @@ export async function updateEnquiry(id: string, updates: any) {
   return data;
 }
 
-export async function convertEnquiryToOrderAction(enquiryId: string, projectName: string, budget: number) {
+export async function convertEnquiryToOrderAction(enquiryId: string, projectName: string, budget: number, typeOfSign?: string, additionalNotes?: string) {
   const supabase = await getSupabase();
   
   // 1. Fetch enquiry
@@ -136,6 +136,8 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
       health: "Active",
       budget: budget,
       deposit_paid: 0,
+      dimensions: typeOfSign || "",
+      notes: additionalNotes || "",
       version_history: [
         { version: "v1.0", date: new Date().toLocaleDateString(), notes: "Order initialized via Enquiry conversion." }
       ],
@@ -152,6 +154,15 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
   const orderId = newOrder[0].id;
   const friendlyOrderId = newOrder[0].order_id;
 
+  // 4b. Sync to order_messages timeline
+  await supabase.from("order_messages").insert({
+    order_id: friendlyOrderId,
+    tab: "timeline",
+    sender_name: "System",
+    sender_role: "System",
+    content: "Order created successfully from Enquiry."
+  });
+
   // 5. Update enquiry record
   const { error: updateEnqErr } = await supabase
     .from("enquiries")
@@ -166,16 +177,13 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
     console.error("Failed to update enquiry status:", updateEnqErr.message);
   }
 
-  // 6. Generate secure magic customer portal access token using friendly ID
-  const salt = process.env.PORTAL_SALT || "printec_portal_salt_secure_2026";
-  const signature = createHash("sha256")
-    .update(`${friendlyCustomerId}-${salt}`)
-    .digest("hex")
-    .substring(0, 16);
-    
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-  const tokenPayload = Buffer.from(`${friendlyCustomerId}:${friendlyOrderId}:${signature}`).toString("base64url");
-  const portalLink = `${baseUrl}/portal?token=${tokenPayload}`;
+  // 6. Generate secure HMAC-signed portal token and store for revocation tracking
+  const { url: portalLink } = await generateAndStorePortalToken(
+    supabase,
+    friendlyCustomerId,
+    friendlyOrderId,
+    { expiresInDays: 30, createdBy: "enquiry_conversion" }
+  );
 
   // 7. Trigger customer notification workflow (Simulated send)
   const notificationMsg = `WhatsApp & Email notification sent to client. Order ID: ${friendlyOrderId}. Portal Link: ${portalLink}`;
@@ -195,6 +203,15 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
     .from("orders")
     .update({ chat_history: updatedChat })
     .eq("id", orderId);
+
+  // Sync portal link notification to order_messages
+  await supabase.from("order_messages").insert({
+    order_id: friendlyOrderId,
+    tab: "timeline",
+    sender_name: "System",
+    sender_role: "System",
+    content: `Secure portal link generated for client. Order ID: ${friendlyOrderId}.`
+  });
 
   // 8. Log order creation audit
   await createAuditLogAction(

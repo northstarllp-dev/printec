@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
+import { AssignTeamModal } from "./AssignTeamModal";
 import { createEnquiry, updateEnquiry, convertEnquiryToOrderAction } from "@/features/enquiries/actions/enquiryActions";
 import { createOrder } from "@/features/orders/actions/orderActions";
 import { createCustomer } from "@/features/customers/actions/customerActions";
@@ -87,6 +88,8 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [convertModalOpen, setConvertModalOpen] = useState(false);
+  const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
+  const [assignedOrderId, setAssignedOrderId] = useState("");
   const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, leadName: string} | null>(null);
 
   // Welcome message states
@@ -140,9 +143,9 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
     }
   };
   
-  const convertEnquiryToOrderLocal = async (enquiryId: string, projectName: string, budget: number) => {
+  const convertEnquiryToOrderLocal = async (enquiryId: string, projectName: string, budget: number, typeOfSign?: string, additionalNotes?: string) => {
     try {
-      const res = await convertEnquiryToOrderAction(enquiryId, projectName, budget);
+      const res = await convertEnquiryToOrderAction(enquiryId, projectName, budget, typeOfSign, additionalNotes);
       if (res && res.success) {
         setEnquiries(prev => prev.map(e => e.id === enquiryId ? { 
           ...e, 
@@ -348,7 +351,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                 return (
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>{enq.enquireId || enq.id}</td>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{new Date(enq.dateReceived).toLocaleDateString()}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{enq.leadName}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{enq.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>{enq.source}</td>
@@ -418,9 +421,9 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             setSelectedEnquiry(null);
           }}
           defaultProjectName={`New Project for ${selectedEnquiry.leadName}`}
-          onSubmit={async (projectName, budget) => {
+          onSubmit={async (projectName, budget, typeOfSign, additionalNotes) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
-            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, projectName, budget);
+            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, projectName, budget, typeOfSign, additionalNotes);
             setConvertModalOpen(false);
             
             if (res && res.success) {
@@ -443,15 +446,36 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           isOpen={welcomeModalOpen}
           onClose={() => {
             setWelcomeModalOpen(false);
+            setAssignedOrderId(welcomeCustomerInfo.orderId || "");
             setWelcomeCustomerInfo(null);
-            // Show success message after welcome modal is closed
+            
+            // Show AssignTeamModal
+            setAssignTeamModalOpen(true);
+          }}
+          customerInfo={welcomeCustomerInfo}
+        />
+      )}
+
+      {assignTeamModalOpen && (
+        <AssignTeamModal 
+          isOpen={assignTeamModalOpen}
+          orderId={assignedOrderId}
+          onClose={() => {
+            setAssignTeamModalOpen(false);
             setSuccessModalData({
-              title: "Order Converted Successfully!",
-              message: `Enquiry for ${welcomeCustomerInfo.customerName} has been converted to an order, and the welcome message has been sent.`
+              title: "Order Converted & Team Assigned!",
+              message: `Enquiry has been successfully converted to an order, welcome message sent, and team assignment skipped/completed.`
             });
             setSuccessModalOpen(true);
           }}
-          customerInfo={welcomeCustomerInfo}
+          onSuccess={() => {
+            setAssignTeamModalOpen(false);
+            setSuccessModalData({
+              title: "Order Converted & Team Assigned!",
+              message: `Enquiry has been successfully converted to an order, welcome message sent, and team assigned successfully.`
+            });
+            setSuccessModalOpen(true);
+          }}
         />
       )}
 

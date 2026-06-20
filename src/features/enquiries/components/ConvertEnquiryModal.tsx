@@ -4,12 +4,14 @@ import { X } from "lucide-react";
 interface ConvertEnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (projectName: string, budget: number) => void;
+  onSubmit: (projectName: string, budget: number, typeOfSign: string, additionalNotes: string) => void;
   defaultProjectName: string;
 }
 
 export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectName }: ConvertEnquiryModalProps) {
   const [projectName, setProjectName] = useState(defaultProjectName);
+  const [typeOfSign, setTypeOfSign] = useState("");
+  const [additionalNotes, setAdditionalNotes] = useState("");
 
   if (!isOpen) return null;
 
@@ -99,16 +101,67 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             />
           </div>
 
+          {/* Type of Sign */}
+          <div>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
+              Type of Board/Sign
+            </label>
+            <input 
+              type="text" 
+              value={typeOfSign}
+              onChange={(e) => setTypeOfSign(e.target.value)}
+              placeholder="e.g. ACP LED Glow Sign"
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                fontSize: "14px",
+                color: "#0f172a",
+                outline: "none",
+                transition: "border-color 0.2s"
+              }}
+              onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
+              onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+            />
+          </div>
+
+          {/* Additional Notes */}
+          <div>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
+              Additional Notes & Requirements
+            </label>
+            <textarea 
+              value={additionalNotes}
+              onChange={(e) => setAdditionalNotes(e.target.value)}
+              placeholder="Mention any specific requirements, materials, or details for the team..."
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                fontSize: "14px",
+                color: "#0f172a",
+                outline: "none",
+                resize: "vertical",
+                transition: "border-color 0.2s"
+              }}
+              onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
+              onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
+            />
+          </div>
+
         </div>
 
         {/* Footer */}
         <div style={{
           padding: "16px 24px",
           borderTop: "1px solid #e2e8f0",
+          background: "#f8fafc",
           display: "flex",
           justifyContent: "flex-end",
-          gap: "12px",
-          background: "#f8fafc"
+          gap: "12px"
         }}>
           <button 
             onClick={onClose}
@@ -117,9 +170,9 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
               background: "white",
               border: "1px solid #cbd5e1",
               borderRadius: "8px",
+              color: "#475569",
               fontSize: "14px",
               fontWeight: "600",
-              color: "#475569",
               cursor: "pointer",
               transition: "all 0.2s"
             }}
@@ -129,26 +182,20 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             Cancel
           </button>
           <button 
-            onClick={() => {
-              if (!projectName.trim()) {
-                alert("Please enter a project name.");
-                return;
-              }
-              onSubmit(projectName, 0);
-            }}
+            onClick={() => onSubmit(projectName, 0, typeOfSign, additionalNotes)}
+            disabled={!projectName.trim()}
             style={{
               padding: "10px 16px",
               background: "var(--color-primary)",
-              border: "none",
+              border: "1px solid var(--color-primary)",
               borderRadius: "8px",
+              color: "white",
               fontSize: "14px",
               fontWeight: "600",
-              color: "white",
-              cursor: "pointer",
+              cursor: projectName.trim() ? "pointer" : "not-allowed",
+              opacity: projectName.trim() ? 1 : 0.6,
               transition: "all 0.2s"
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "var(--color-primary-container)"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "var(--color-primary)"}
           >
             Create Order
           </button>

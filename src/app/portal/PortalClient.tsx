@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Printer, MapPin, FileText, CheckSquare, CheckCircle2,
   MessageSquare, Send, ZoomIn, ZoomOut, Check, X,
   AlertCircle, CreditCard, QrCode, Calendar,
   Ruler, Activity, ChevronRight, Phone, Mail, Clock, ClipboardList,
-  Download, HeadphonesIcon, Building2, User2, Star, ArrowRight,
+  Building2, User2, Star, ArrowRight,
   Package, Wrench, Palette, FileCheck, BarChart3, ChevronDown,
   RefreshCw, AlertTriangle, Loader2, Maximize2, Minimize2, CheckCheck
 } from "lucide-react";
@@ -84,67 +84,29 @@ function getStepIndex(stage: string): number {
   return 0;
 }
 
-function getStageScopeItems(stage: string) {
-  const s = (stage || "").toLowerCase();
-  if (s.includes("site visit") || s.includes("enqui")) {
-    return [
-      {
-        label: "Initial Consultation & Brand Audit",
-        detail: "Comprehensive review of existing branding and identification of key navigation points across the 3-acre campus.",
-        status: "completed",
-      },
-      {
-        label: "Technical Site Survey",
-        detail: "Measurement of 12 distinct points, load-bearing tests for wall-mounted elements, and utility scanning for pylon foundations.",
-        status: "in_progress",
-      },
-      {
-        label: "Structural Design & Engineering",
-        detail: "Creation of detailed CAD drawings and load calculations for council approval. Estimated value: ₹40,000.",
-        status: "pending",
-      },
-    ];
-  }
-  if (s.includes("quotation")) {
-    return [
-      { label: "Site Audit Completed", detail: "All measurements verified and approved.", status: "completed" },
-      { label: "Quotation Prepared", detail: "Detailed cost breakdown including materials, labour and installation.", status: "completed" },
-      { label: "Client Review & Approval", detail: "Awaiting client sign-off on quoted amount.", status: "in_progress" },
-    ];
-  }
-  if (s.includes("design")) {
-    return [
-      { label: "Site Audit Completed", detail: "", status: "completed" },
-      { label: "Quotation Approved", detail: "", status: "completed" },
-      { label: "Design Concept Draft", detail: "Mockup layouts and proof sent for client review.", status: "in_progress" },
-      { label: "Final Design Sign-off", detail: "Pending client approval before production begins.", status: "pending" },
-    ];
-  }
-  if (s.includes("production") || s.includes("fabricat") || s.includes("ready")) {
-    return [
-      { label: "Site Audit Completed", detail: "", status: "completed" },
-      { label: "Quotation Approved", detail: "", status: "completed" },
-      { label: "Design Approved", detail: "", status: "completed" },
-      { label: "Workshop Fabrication", detail: "Printing, cutting, welding and LED wiring in progress.", status: "in_progress" },
-    ];
-  }
-  if (s.includes("installation") || s.includes("completed")) {
-    return [
-      { label: "Site Audit Completed", detail: "", status: "completed" },
-      { label: "Quotation Approved", detail: "", status: "completed" },
-      { label: "Design Approved", detail: "", status: "completed" },
-      { label: "Fabrication Completed", detail: "", status: "completed" },
-      { label: "Field Installation", detail: "Team on-site for final setup and sign-off.", status: "in_progress" },
-    ];
-  }
-  return [
-    { label: "Enquiry Received", detail: "Your project enquiry has been logged.", status: "completed" },
-    { label: "Site Visit Scheduling", detail: "Awaiting site visit appointment.", status: "in_progress" },
-  ];
-}
-
 export function PortalClient({ customer, orders: initialOrders, initialActiveOrderId, token }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
+
+  // Step 4: Establish session cookie on first load (avoids keeping token in URL)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/portal/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
+        if (mounted && !res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.warn("[Portal] Session cookie setup failed:", err.error || res.status);
+        }
+      } catch (e) {
+        console.warn("[Portal] Session cookie setup error:", e);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [token]);
   const [activeOrderId, setActiveOrderId] = useState<string>(
     initialActiveOrderId || (initialOrders.length > 0 ? initialOrders[0].id : "")
   );
@@ -172,7 +134,6 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
   const activeOrder = orders.find(o => o.id === activeOrderId || o.orderId === activeOrderId || o.orderCode === activeOrderId) || orders[0];
   const currentStep = activeOrder ? getStepIndex(activeOrder.stage) : 0;
-  const scopeItems = activeOrder ? getStageScopeItems(activeOrder.stage) : [];
 
   // Sync site visit details
   useEffect(() => {
@@ -199,8 +160,10 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
       if (count !== null) setUnreadCount(count);
     }
     loadUnread();
+    // Use unique channel name per mount to avoid Supabase channel cache collision (Strict Mode)
+    const channelName = `unread-${activeOrder.id}-${Date.now()}`;
     const ch = supabase
-      .channel(`unread-${activeOrder.id}`)
+      .channel(channelName)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_messages", filter: `order_id=eq.${activeOrder.orderId || activeOrder.id}` }, (p) => {
         const msg = p.new as any;
         if (msg.tab === "customer" && msg.sender_role !== "Customer") {
@@ -208,7 +171,10 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
         }
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    return () => {
+      ch.unsubscribe();
+      supabase.removeChannel(ch);
+    };
   }, [activeOrder?.id]);
 
   const getBusinessDays = () => {
@@ -338,7 +304,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               <div className="w-8 h-8 bg-[#1E40AF] rounded-lg flex items-center justify-center">
                 <Printer size={16} className="text-white" />
               </div>
-              <span className="font-black text-[#0b1c30] text-sm tracking-tight">PRINTEC</span>
+              <span className="font-black text-[#0b1c30] text-sm tracking-tight">NORTHSTAR</span>
             </div>
             <div className="w-px h-6 bg-slate-200" />
             <div>
@@ -351,7 +317,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
             </div>
           </div>
 
-          {/* Right: Action Buttons + Avatar */}
+          {/* Right: Action Buttons */}
           <div className="flex items-center gap-2.5">
             {orders.length > 1 && (
               <select
@@ -364,17 +330,6 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 ))}
               </select>
             )}
-            <button className="flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 bg-white text-[#0b1c30] text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors">
-              <Download size={13} />
-              Download Proposal
-            </button>
-            <button className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1E40AF] text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
-              <HeadphonesIcon size={13} />
-              Support Center
-            </button>
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-black text-xs ml-1">
-              {customer.name.charAt(0)}
-            </div>
           </div>
         </div>
       </header>
@@ -422,7 +377,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
       {/* ─── MAIN CONTENT ─── */}
       <div className="max-w-7xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-6">
 
           {/* ── LEFT: Stage Content ── */}
           <div className="space-y-5">
@@ -763,47 +718,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               </div>
             </div>
 
-            {/* ── DETAILED SCOPE OF WORK ── */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-              <div className="px-6 py-4 border-b border-slate-100">
-                <h3 className="text-sm font-black text-[#0b1c30] flex items-center gap-2">
-                  <ClipboardList size={15} className="text-slate-400" />
-                  Detailed Scope of Work
-                </h3>
-              </div>
-              <div className="p-6 space-y-4">
-                {scopeItems.map((item, idx) => (
-                  <div key={idx} className="flex gap-3 scope-item">
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
-                      item.status === "completed"
-                        ? "bg-emerald-500 border-emerald-500"
-                        : item.status === "in_progress"
-                          ? "border-[#1E40AF] bg-white"
-                          : "border-slate-300 bg-white"
-                    }`}>
-                      {item.status === "completed" && <Check size={10} className="text-white stroke-[3]" />}
-                      {item.status === "in_progress" && <div className="w-1.5 h-1.5 rounded-full bg-[#1E40AF]" />}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className={`text-sm font-semibold ${item.status === "pending" ? "text-slate-400" : "text-[#0b1c30]"}`}>
-                          {item.label}
-                        </p>
-                        {item.status === "completed" && (
-                          <span className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded-full">COMPLETED</span>
-                        )}
-                        {item.status === "in_progress" && (
-                          <span className="text-[9px] font-black uppercase bg-blue-100 text-[#1E40AF] border border-blue-200 px-1.5 py-0.5 rounded-full">IN PROGRESS</span>
-                        )}
-                      </div>
-                      {item.detail && (
-                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.detail}</p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+
 
             {/* ── PAYMENT (if applicable) ── */}
             {(currentStep >= 2) && (qd.grandTotal || activeOrder?.budget) && (
@@ -948,7 +863,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 }
 
 // ─────────────────────────────────────────────────
-// CustomerChat — sidebar version (desktop)
+// Shared Chat Types
 // ─────────────────────────────────────────────────
 interface ChatProps {
   orderId: string;
@@ -968,16 +883,22 @@ interface ChatMsg {
   is_read: boolean;
 }
 
-function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
+// ─────────────────────────────────────────────────
+// useOrderMessages — shared hook with Supabase Realtime
+// ─────────────────────────────────────────────────
+function useOrderMessages(
+  orderId: string,
+  customerId: string,
+  token: string,
+  customerName: string
+) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const [sending, setSending] = useState(false);
+  const prevCountRef = useRef(0);
 
-  async function fetchMessages() {
+  // Initial fetch
+  const fetchMessages = useCallback(async () => {
     try {
       const res = await fetch(
         `/api/portal/messages?order_id=${encodeURIComponent(orderId)}&customer_id=${encodeURIComponent(customerId)}&token=${encodeURIComponent(token)}`
@@ -991,13 +912,134 @@ function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [orderId, customerId, token]);
 
+  // Subscribe to Supabase Realtime for instant updates
   useEffect(() => {
     fetchMessages();
-    pollRef.current = setInterval(fetchMessages, 5000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [orderId]);
+    const supabase = createClient();
+    // Use unique channel name per mount to avoid Supabase channel cache collision (Strict Mode)
+    const channelName = `portal-chat-${orderId}-${Date.now()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "order_messages",
+          filter: `order_id=eq.${orderId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as ChatMsg;
+          if (newMsg.tab !== "customer") return; // Only show customer-tab messages in portal
+          setMessages((prev) => {
+            // Prevent duplicates
+            if (prev.some((m) => m.id === newMsg.id || (m.id.startsWith("opt-") && m.content === newMsg.content))) {
+              // Replace optimistic message with real one
+              if (newMsg.sender_role === "Customer") {
+                return prev.map((m) => (m.id.startsWith("opt-") && m.content === newMsg.content ? newMsg : m));
+              }
+              return prev;
+            }
+            return [...prev, newMsg];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      // Unsubscribe and remove to prevent "already subscribed" errors on re-mount
+      channel.unsubscribe();
+      supabase.removeChannel(channel);
+    };
+  }, [orderId, fetchMessages]);
+
+  // Mark messages as read when count grows (for mobile badge)
+  const unreadCount = useMemo(() => {
+    let count = 0;
+    messages.forEach((m) => {
+      if (m.sender_role !== "Customer" && m.sender_role !== "System" && !m.is_read) {
+        count++;
+      }
+    });
+    return count;
+  }, [messages]);
+
+  const sendMessage = useCallback(
+    async (text: string, optimisticId: string): Promise<boolean> => {
+      const trimmed = text.trim();
+      if (!trimmed || sending) return false;
+      setSending(true);
+      try {
+        const res = await fetch("/api/portal/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: orderId,
+            customer_id: customerId,
+            token,
+            content: trimmed,
+            sender_name: customerName,
+          }),
+        });
+        if (!res.ok) throw new Error("Send failed");
+        return true;
+      } catch (e) {
+        console.error("Send error:", e);
+        return false;
+      } finally {
+        setSending(false);
+      }
+    },
+    [orderId, customerId, token, customerName]
+  );
+
+  // Optimistic send with rollback
+  const sendWithOptimistic = useCallback(
+    async (input: string, setInput: (val: string) => void) => {
+      const trimmed = input.trim();
+      if (!trimmed) return;
+      setInput("");
+      const optimisticId = `opt-${Date.now()}`;
+      const optimistic: ChatMsg = {
+        id: optimisticId,
+        order_id: orderId,
+        tab: "customer",
+        sender_name: customerName,
+        sender_role: "Customer",
+        content: trimmed,
+        created_at: new Date().toISOString(),
+        is_read: false,
+      };
+      // Add optimistic message
+      setMessages((prev) => [...prev, optimistic]);
+      // Try to send
+      const success = await sendMessage(trimmed, optimisticId);
+      if (!success) {
+        // Rollback: remove the optimistic message
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+      }
+    },
+    [orderId, customerName, sendMessage]
+  );
+
+  return { messages, loading, sending, unreadCount, sendWithOptimistic };
+}
+
+// ─────────────────────────────────────────────────
+// CustomerChat — sidebar version (desktop)
+// ─────────────────────────────────────────────────
+function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
+  const [input, setInput] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { messages, loading, sending, sendWithOptimistic } = useOrderMessages(
+    orderId,
+    customerId,
+    token,
+    customerName
+  );
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1005,39 +1047,8 @@ function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || sending) return;
-    setSending(true);
-    const optimistic: ChatMsg = {
-      id: `opt-${Date.now()}`,
-      order_id: orderId,
-      tab: "customer",
-      sender_name: customerName,
-      sender_role: "Customer",
-      content: input.trim(),
-      created_at: new Date().toISOString(),
-      is_read: false,
-    };
-    setMessages(prev => [...prev, optimistic]);
-    const text = input.trim();
-    setInput("");
-    try {
-      await fetch("/api/portal/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id: orderId,
-          customer_id: customerId,
-          token,
-          content: text,
-          sender_name: customerName,
-        }),
-      });
-      await fetchMessages();
-    } catch (e) {
-      console.error("Send error:", e);
-    } finally {
-      setSending(false);
-    }
+    if (!input.trim()) return;
+    await sendWithOptimistic(input, setInput);
   }
 
   const chatBody = (
@@ -1125,7 +1136,7 @@ function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
   return (
     <>
       {/* Desktop sidebar card (hidden on mobile) */}
-      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-col" style={{ height: "440px" }}>
+      <div className="hidden lg:flex bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-col" style={{ height: "600px" }}>
         {chatBody}
       </div>
 
@@ -1146,70 +1157,33 @@ function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
 // ─────────────────────────────────────────────────
 function MobileChatButton({ orderId, customerId, token, customerName }: ChatProps) {
   const [open, setOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const seenRef = useRef<Set<string>>(new Set());
+  const { messages, loading, sending, unreadCount, sendWithOptimistic } = useOrderMessages(
+    orderId,
+    customerId,
+    token,
+    customerName
+  );
 
-  async function fetchMessages() {
-    try {
-      const res = await fetch(
-        `/api/portal/messages?order_id=${encodeURIComponent(orderId)}&customer_id=${encodeURIComponent(customerId)}&token=${encodeURIComponent(token)}`
-      );
-      if (res.ok) {
-        const { messages: msgs } = await res.json();
-        const newMsgs: ChatMsg[] = msgs || [];
-        setMessages(newMsgs);
-        if (!open) {
-          const newUnread = newMsgs.filter(
-            (m: ChatMsg) => m.sender_role !== "Customer" && m.sender_role !== "System" && !seenRef.current.has(m.id)
-          ).length;
-          if (newUnread > 0) setUnread(prev => prev + newUnread);
-          newMsgs.forEach((m: ChatMsg) => seenRef.current.add(m.id));
-        }
-      }
-    } finally {
-      setLoading(false);
+  // Scroll to bottom when chat opens
+  useEffect(() => {
+    if (open) {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }
+  }, [open]);
 
+  // Scroll to bottom when new messages arrive while chat is open
   useEffect(() => {
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 5000);
-    return () => clearInterval(interval);
-  }, [orderId]);
-
-  useEffect(() => {
-    if (open) { setUnread(0); scrollRef.current?.scrollIntoView({ behavior: "smooth" }); }
-  }, [open, messages]);
+    if (open) {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, open]);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim() || sending) return;
-    setSending(true);
-    const text = input.trim();
-    setInput("");
-    const optimistic: ChatMsg = {
-      id: `opt-${Date.now()}`, order_id: orderId, tab: "customer",
-      sender_name: customerName, sender_role: "Customer",
-      content: text, created_at: new Date().toISOString(), is_read: false
-    };
-    setMessages(prev => [...prev, optimistic]);
-    try {
-      await fetch("/api/portal/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ order_id: orderId, customer_id: customerId, token, content: text, sender_name: customerName }),
-      });
-      await fetchMessages();
-    } catch (e) {
-      console.error("Send error:", e);
-    } finally {
-      setSending(false);
-    }
+    if (!input.trim()) return;
+    await sendWithOptimistic(input, setInput);
   }
 
   return (
@@ -1221,9 +1195,9 @@ function MobileChatButton({ orderId, customerId, token, customerName }: ChatProp
           className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-[#1E40AF] text-white rounded-full shadow-xl hover:bg-blue-700 transition-all hover:scale-105 flex items-center justify-center"
         >
           <MessageSquare size={22} />
-          {unread > 0 && (
+          {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-white">
-              {unread > 9 ? "9+" : unread}
+              {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
         </button>
@@ -1231,9 +1205,10 @@ function MobileChatButton({ orderId, customerId, token, customerName }: ChatProp
 
       {/* Mobile Chat Panel */}
       {open && (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-white">
-          {/* Header */}
-          <div className="px-4 py-3 bg-[#0b1c30] text-white flex items-center justify-between flex-shrink-0">
+        <div className="fixed inset-0 z-[60] flex flex-col justify-end bg-slate-900/50 backdrop-blur-sm transition-all" onClick={() => setOpen(false)}>
+          <div className="w-full h-[85vh] bg-white rounded-t-2xl flex flex-col overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.1)]" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-4 py-3 bg-[#0b1c30] text-white flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2">
               <MessageSquare size={16} className="text-blue-300" />
               <span className="text-sm font-black">Chat with Printec</span>
@@ -1309,6 +1284,7 @@ function MobileChatButton({ orderId, customerId, token, customerName }: ChatProp
               {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             </button>
           </form>
+          </div>
         </div>
       )}
     </div>

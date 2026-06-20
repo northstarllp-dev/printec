@@ -67,6 +67,7 @@ interface SiteVisitModuleProps {
   onSubmitForApproval?: () => Promise<void>;
   onAdminApprove?: () => Promise<void>;
   onAdminRequestChanges?: (notes: string) => Promise<void>;
+  onStaffApproveVisit?: () => Promise<void>;
 }
 
 // Default initial data
@@ -93,7 +94,8 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   onUpdate,
   onSubmitForApproval,
   onAdminApprove,
-  onAdminRequestChanges
+  onAdminRequestChanges,
+  onStaffApproveVisit
 }) => {
   // Current client
   const client = customers.find(c => c.id === order.customerId);
@@ -253,11 +255,28 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       {/* ── SCHEDULED VISIT DETAILS (from customer portal) ── */}
       {(siteVisit.auditDate || siteVisit.customerAddress) && (
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar size={18} className="text-indigo-600" />
-            <h3 className="text-sm font-extrabold text-indigo-900 uppercase tracking-wider">
-              Scheduled Site Visit
-            </h3>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <Calendar size={18} className="text-indigo-600" />
+              <h3 className="text-sm font-extrabold text-indigo-900 uppercase tracking-wider">
+                Scheduled Site Visit
+              </h3>
+            </div>
+            {order.stage === "Site Visit Pending" && siteVisit.reviewStatus === "Pending" && currentUserRole === "Employee" && onStaffApproveVisit && (
+              <button
+                onClick={async () => {
+                  try {
+                    await onStaffApproveVisit();
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-sm"
+              >
+                <CheckCircle2 size={14} />
+                Approve Date & Time
+              </button>
+            )}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -680,97 +699,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             </div>
           </SectionCard>
 
-          {/* ── INTERNAL NOTES (Admin only) ── */}
-          {currentUserRole === "Admin" && (
-            <SectionCard
-              title="Internal Administrative Settings"
-              icon="🔒"
-              isCollapsed={collapsed.internalNotes}
-              onToggle={() => toggleSection("internalNotes")}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Customer Preferences / Demands</label>
-                  <textarea
-                    value={activeLoc.internalNotes?.customerPreferences || ""}
-                    onChange={(e) => updateActiveLocationFields({
-                      internalNotes: {
-                        ...(activeLoc.internalNotes || {}),
-                        customerPreferences: e.target.value
-                      }
-                    })}
-                    rows={3}
-                    placeholder="e.g. Strongly prefers warm white LEDs over cool white..."
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Internal Budgeting Notes</label>
-                  <textarea
-                    value={activeLoc.internalNotes?.budgetNotes || ""}
-                    onChange={(e) => updateActiveLocationFields({
-                      internalNotes: {
-                        ...(activeLoc.internalNotes || {}),
-                        budgetNotes: e.target.value
-                      }
-                    })}
-                    rows={3}
-                    placeholder="e.g. Scaffolding rental is max ₹5k..."
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Suggested Signage Board Style</label>
-                  <input
-                    type="text"
-                    value={activeLoc.internalNotes?.suggestedProductType || ""}
-                    onChange={(e) => updateActiveLocationFields({
-                      internalNotes: {
-                        ...(activeLoc.internalNotes || {}),
-                        suggestedProductType: e.target.value
-                      }
-                    })}
-                    placeholder="e.g. Neon lit, dual-sided projecting flange"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Competitor Quotes / Notes</label>
-                  <input
-                    type="text"
-                    value={activeLoc.internalNotes?.competitorReferences || ""}
-                    onChange={(e) => updateActiveLocationFields({
-                      internalNotes: {
-                        ...(activeLoc.internalNotes || {}),
-                        competitorReferences: e.target.value
-                      }
-                    })}
-                    placeholder="e.g. Third-party vendor bid is ₹72,000"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all"
-                  />
-                </div>
-                
-                <div className="md:col-span-2">
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Internal Installation Strategy</label>
-                  <textarea
-                    value={activeLoc.internalNotes?.specialInstallationNotes || ""}
-                    onChange={(e) => updateActiveLocationFields({
-                      internalNotes: {
-                        ...(activeLoc.internalNotes || {}),
-                        specialInstallationNotes: e.target.value
-                      }
-                    })}
-                    rows={3}
-                    placeholder="e.g. Scaffold needs to be set up on Sunday morning due to market traffic..."
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none"
-                  />
-                </div>
-              </div>
-            </SectionCard>
-          )}
+          {/* ── INTERNAL NOTES REMOVED ── */}
         </>
       )}
     </div>

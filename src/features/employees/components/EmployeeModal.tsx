@@ -65,6 +65,7 @@ export function EmployeeModal({ isOpen, onClose, onSubmit, initialData }: Employ
               <select value={role} onChange={(e) => setRole(e.target.value)} style={{ width: "100%", padding: "10px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "14px", color: "#0f172a", outline: "none", background: "white", cursor: "pointer" }}>
                 <option value="Marketer">Marketer</option>
                 <option value="Designer">Designer</option>
+                <option value="Site Visitor">Site Visitor</option>
               </select>
             </div>
             <div>

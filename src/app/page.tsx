@@ -41,7 +41,7 @@ export default async function RootGateway() {
           </svg>
         </div>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: "var(--text-primary)", letterSpacing: "0.06em", lineHeight: 1 }}>PRINTEC</div>
+          <div style={{ fontSize: 20, fontWeight: 900, color: "var(--text-primary)", letterSpacing: "0.06em", lineHeight: 1 }}>NORTHSTAR</div>
           <div style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 500, marginTop: 2, letterSpacing: "0.03em" }}>Operations Gateway</div>
         </div>
       </div>
