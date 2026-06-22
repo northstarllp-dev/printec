@@ -7,6 +7,8 @@ import {
 import { checkRateLimit } from "@/utils/rate-limiter";
 import { PortalClient } from "./PortalClient";
 import React from "react";
+import { ShieldAlert, LogOut, Share2, ClipboardList, AlertCircle, FileText } from "lucide-react";
+import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
 
 export const dynamic = "force-dynamic";
 
@@ -86,10 +88,9 @@ export default async function PortalPage({
     );
   }
 
-  // Fetch all orders for this customer
   const { data: ordersData, error: ordersError } = await supabase
     .from("orders")
-    .select("*")
+    .select("*, site_visits(*, site_visit_measurements(*))")
     .eq("customer_id", customerData.id)
     .order("date_created", { ascending: false });
 
@@ -137,20 +138,17 @@ export default async function PortalPage({
     customerId: o.customer_id,
     customerName: o.customer_name,
     stage: o.stage,
-    budget: Number(o.budget || 0),
-    depositPaid: Number(o.deposit_paid || 0),
-    dimensions: o.dimensions,
-    notes: o.notes,
-    urgent: Boolean(o.urgent),
+                productType: o.product_type,
+    requirements: o.requirements,
+        urgent: Boolean(o.urgent),
     assignedEmployees: o.assigned_employees || [],
     assignedDesigners: o.assigned_designers || [],
     assignedMarketers: o.assigned_marketers || [],
     dateCreated: o.date_created,
     deadlineStatus: o.deadline_status,
-    imageMockup: o.image_mockup,
-    versionHistory: o.version_history || [],
+        versionHistory: o.version_history || [],
     chatHistory: o.chat_history || [],
-    siteVisitDetails: o.site_visit_details,
+    siteVisitDetails: mapSiteVisitFromDb(o.site_visits?.[0] || null),
     quoteDetails: o.quote_details,
     designDetails: o.design_details,
     productionDetails: o.production_details,

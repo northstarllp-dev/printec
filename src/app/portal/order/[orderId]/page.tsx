@@ -5,6 +5,8 @@ import {
   isTokenRevoked,
 } from "@/utils/portal-tokens";
 import { checkRateLimit } from "@/utils/rate-limiter";
+import { Info, Clock, CheckCircle, Check, Loader2, PlayCircle, MapPin, Search } from "lucide-react";
+import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
 import { OrderDetailClient } from "./OrderDetailClient";
 import React from "react";
 
@@ -92,8 +94,8 @@ export default async function OrderDetailPage({
   // Fetch the specific order
   const { data: orderData, error: orderError } = await supabase
     .from("orders")
-    .select("*")
-    .eq("order_id", orderId)
+    .select("*, site_visits(*, site_visit_measurements(*))")
+    .eq("id", payload.orderId)
     .single();
 
   if (orderError || !orderData) {
@@ -136,20 +138,17 @@ export default async function OrderDetailPage({
     customerId: orderData.customer_id,
     customerName: orderData.customer_name,
     stage: orderData.stage,
-    budget: Number(orderData.budget || 0),
-    depositPaid: Number(orderData.deposit_paid || 0),
-    dimensions: orderData.dimensions,
-    notes: orderData.notes,
-    urgent: Boolean(orderData.urgent),
+                productType: orderData.product_type,
+    requirements: orderData.requirements,
+        urgent: Boolean(orderData.urgent),
     assignedEmployees: orderData.assigned_employees || [],
     assignedDesigners: orderData.assigned_designers || [],
     assignedMarketers: orderData.assigned_marketers || [],
     dateCreated: orderData.date_created,
     deadlineStatus: orderData.deadline_status,
-    imageMockup: orderData.image_mockup,
-    versionHistory: orderData.version_history || [],
+        versionHistory: orderData.version_history || [],
     chatHistory: orderData.chat_history || [],
-    siteVisitDetails: orderData.site_visit_details,
+    siteVisitDetails: mapSiteVisitFromDb(orderData.site_visits?.[0] || null),
     quoteDetails: orderData.quote_details,
     designDetails: orderData.design_details,
     productionDetails: orderData.production_details,

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check } from "lucide-react";
+import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check, ArrowRight } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 import { AssignTeamModal } from "./AssignTeamModal";
@@ -143,9 +143,9 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
     }
   };
   
-  const convertEnquiryToOrderLocal = async (enquiryId: string, projectName: string, budget: number, typeOfSign?: string, additionalNotes?: string) => {
+  const convertEnquiryToOrderLocal = async (enquiryId: string, projectName: string, productType?: string, requirements?: string) => {
     try {
-      const res = await convertEnquiryToOrderAction(enquiryId, projectName, budget, typeOfSign, additionalNotes);
+      const res = await convertEnquiryToOrderAction(enquiryId, projectName, productType, requirements);
       if (res && res.success) {
         setEnquiries(prev => prev.map(e => e.id === enquiryId ? { 
           ...e, 
@@ -421,9 +421,9 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             setSelectedEnquiry(null);
           }}
           defaultProjectName={`New Project for ${selectedEnquiry.leadName}`}
-          onSubmit={async (projectName, budget, typeOfSign, additionalNotes) => {
+          onSubmit={async (projectName, productType, requirements) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
-            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, projectName, budget, typeOfSign, additionalNotes);
+            const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, projectName, productType, requirements);
             setConvertModalOpen(false);
             
             if (res && res.success) {
@@ -594,18 +594,21 @@ Printec Team`;
           <button 
             onClick={onClose}
             style={{
-              background: "transparent",
+              background: "var(--color-primary)",
               border: "none",
-              color: "#94a3b8",
+              color: "white",
               cursor: "pointer",
-              padding: "4px",
+              padding: "6px 12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              borderRadius: "6px"
+              borderRadius: "6px",
+              fontSize: "13px",
+              fontWeight: "600",
+              gap: "6px"
             }}
           >
-            <X size={18} />
+            Assign Employees <ArrowRight size={14} />
           </button>
         </div>
 

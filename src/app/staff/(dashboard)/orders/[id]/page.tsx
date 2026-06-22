@@ -9,6 +9,9 @@ import { OrderDetailPageClient } from "@/app/admin/(dashboard)/orders/[id]/Order
 export default async function StaffOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const profile = await getCurrentUser();
+  if (!profile) {
+    redirect("/staff/login");
+  }
 
   const order = await getOrderById(id);
   if (!order) {
@@ -23,20 +26,17 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     projectName: order.project_name,
     customerId: order.customer_id,
     stage: order.stage,
-    budget: order.budget,
-    depositPaid: order.deposit_paid,
-    dimensions: order.dimensions,
-    notes: order.notes,
-    urgent: order.urgent,
+                productType: order.product_type,
+    requirements: order.requirements,
+        urgent: order.urgent,
     assignedEmployees: order.assigned_employees || [],
     assignedDesigners: order.assigned_designers || [],
     assignedMarketers: order.assigned_marketers || [],
     dateCreated: order.date_created,
     deadlineStatus: order.deadline_status,
-    imageMockup: order.image_mockup,
-    versionHistory: order.version_history || [],
+        versionHistory: order.version_history || [],
     chatHistory: order.chat_history || [],
-    siteVisitDetails: order.site_visit_details,
+    siteVisitDetails: order.siteVisitDetails,
     quoteDetails: order.quote_details,
     designDetails: order.design_details,
     productionDetails: order.production_details,

@@ -177,6 +177,8 @@ export async function deleteOrder(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/admin/orders");
   revalidatePath("/staff/orders");
+  revalidatePath("/admin/orders");
+  revalidatePath("/staff/orders");
   if (o) {
     revalidatePath(`/admin/orders/${o.order_id}`);
     revalidatePath(`/staff/orders/${o.order_id}`);

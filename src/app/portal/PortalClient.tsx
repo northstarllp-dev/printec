@@ -33,17 +33,12 @@ interface Order {
   customerId: string;
   customerName?: string;
   stage: string;
-  budget: number;
-  depositPaid: number;
-  dimensions: string;
-  notes: string;
   urgent: boolean;
   assignedEmployees: string[];
   assignedDesigners?: string[];
   assignedMarketers?: string[];
   dateCreated: string;
   deadlineStatus: string;
-  imageMockup: string;
   versionHistory: any[];
   chatHistory: any[];
   siteVisitDetails?: any;
@@ -198,7 +193,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
       const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, sitePersonnel: "Hari", completed: false, reviewStatus: "Pending" };
       const res = await scheduleSiteVisitAction(activeOrder.id, payload);
       if (res.success && res.order) {
-        setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: res.order.stage, siteVisitDetails: res.order.site_visit_details } : o));
+        setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: res.order.stage, siteVisitDetails: res.order.siteVisitDetails } : o));
         setIsRescheduling(false);
       }
     } catch (err) { console.error(err); }
@@ -253,13 +248,10 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     if (!activeOrder) return;
     setPaymentLoading(true);
     const qd = activeOrder.quoteDetails || {};
-    const total = qd.grandTotal || activeOrder.budget || 0;
-    const amount = activeOrder.depositPaid === 0 ? Math.round(total * 0.3) : total - activeOrder.depositPaid;
-    const newDeposit = activeOrder.depositPaid + amount;
+    const total = qd.grandTotal || 0;
+    const amount = 0;
     const supabase = createClient();
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, depositPaid: newDeposit } : o));
-    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: `💳 Client confirmed mock UPI payment of ₹${amount.toLocaleString("en-IN")}. Pending admin verification.` });
-    await supabase.from("orders").update({ deposit_paid: newDeposit }).eq("id", activeOrder.id);
+    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: `💳 Client confirmed mock UPI payment. Pending admin verification.` });
     setTimeout(() => { setPaymentLoading(false); setShowPaymentModal(false); }, 800);
   };
 
@@ -583,7 +575,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           ))}
                           <tr className="bg-slate-50">
                             <td className="px-4 py-3.5 font-black text-[#1E40AF] text-sm">Grand Total</td>
-                            <td className="px-4 py-3.5 text-right font-black text-emerald-700 text-sm font-mono">₹{(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}</td>
+                            <td className="px-4 py-3.5 text-right font-black text-emerald-700 text-sm font-mono">₹{(qd.grandTotal || 0).toLocaleString("en-IN")}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -721,7 +713,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
 
             {/* ── PAYMENT (if applicable) ── */}
-            {(currentStep >= 2) && (qd.grandTotal || activeOrder?.budget) && (
+            {(currentStep >= 2) && (
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
                 <h3 className="text-sm font-black text-[#0b1c30] flex items-center gap-2">
                   <CreditCard size={15} className="text-slate-400" />
@@ -729,9 +721,9 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 </h3>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: "Total Value", val: `₹${(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}`, color: "slate" },
-                    { label: "Paid", val: `₹${(activeOrder?.depositPaid || 0).toLocaleString("en-IN")}`, color: "emerald" },
-                    { label: "Balance", val: `₹${Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}`, color: "amber" },
+                    { label: "Total Value", val: `₹0`, color: "slate" },
+                    { label: "Paid", val: `₹0`, color: "emerald" },
+                    { label: "Balance", val: `₹0`, color: "amber" },
                   ].map((card, i) => (
                     <div key={i} className={`rounded-xl p-3.5 text-center border ${
                       card.color === "emerald" ? "bg-emerald-50 border-emerald-100" :
@@ -746,13 +738,6 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                     </div>
                   ))}
                 </div>
-                {Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0) > 0 && (
-                  <div className="flex justify-end">
-                    <button onClick={() => setShowPaymentModal(true)} className="px-4 py-2 bg-[#F97316] text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-all flex items-center gap-2">
-                      <CreditCard size={13} /> Make Payment
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -834,7 +819,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Amount Due</span>
                 <p className="text-xl font-black text-slate-800 font-mono mt-1">
-                  ₹{Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}
+                  ₹0
                 </p>
               </div>
               <p className="text-xs text-slate-500">Scan or transfer via netbanking, then confirm below.</p>

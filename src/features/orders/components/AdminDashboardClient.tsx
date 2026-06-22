@@ -332,12 +332,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
                     </p>
                   </div>
 
-                  {/* Budget */}
-                  {order.budget && (
-                    <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", fontVariantNumeric: "tabular-nums" }}>
-                      ₹{order.budget.toLocaleString("en-IN")}
-                    </span>
-                  )}
+
 
                   {/* Stage */}
                   <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>

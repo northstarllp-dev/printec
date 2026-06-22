@@ -38,7 +38,7 @@ export function CustomersViewNew({
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
   const customerOrders = selectedCustomer ? initialOrders.filter(o => o.customerId === selectedCustomer.id) : [];
-  const totalSpend = customerOrders.reduce((sum, o) => sum + (Number(o.budget) || 0), 0);
+  const totalSpend = 0;
 
   const handleCopyLink = async (customerId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent row selection when copying portal link
@@ -101,7 +101,7 @@ export function CustomersViewNew({
     },
     {
       label: "YTD REVENUE",
-      value: "₹" + (initialOrders.reduce((acc, curr) => acc + (Number(curr.budget) || 0), 0) / 100000).toFixed(1) + "L",
+      value: "₹0.0L",
       change: "Based on active pipeline",
       icon: MapPin,
       color: "#06b6d4",
@@ -367,7 +367,7 @@ export function CustomersViewNew({
                       </div>
 
                       <div className="flex justify-between items-center gap-2 pt-2 border-t border-slate-100/50">
-                        <span className="text-xs text-slate-500 font-semibold">₹{(Number(o.budget) || 0).toLocaleString("en-IN")}</span>
+                        <span className="text-xs text-slate-500 font-semibold">₹0</span>
                         <div className="flex gap-1.5 items-center">
                           <span className="text-[10px] font-bold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full border border-slate-200 max-w-[100px] truncate">
                             {o.stage}

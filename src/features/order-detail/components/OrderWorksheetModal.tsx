@@ -369,7 +369,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             try {
               const res = await approveSiteVisitAction(order.id);
               if (res.success && res.order) {
-                setOrder((prev) => ({ ...prev, stage: res.order.stage, siteVisitDetails: res.order.site_visit_details }));
+                setOrder((prev) => ({ ...prev, stage: res.order.stage, siteVisitDetails: res.order.siteVisitDetails }));
                 triggerLocalAlert("Site visit schedule approved successfully.", "success");
                 router.refresh();
               }
