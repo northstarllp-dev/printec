@@ -285,7 +285,9 @@ export async function requestStageAdvancementAction(orderId: string) {
   let nextStatus = "Normal";
   const stage = current.stage;
   
-  if (stage === "Site Visit Pending" || stage === "Site Visit Scheduled" || stage === "Site Visit Completed") {
+  if (stage === "Site Visit Pending" || stage === "Site Visit Scheduled") {
+    nextStatus = "Pending Admin Approval: Site Visit Completed";
+  } else if (stage === "Site Visit Completed") {
     nextStatus = "Pending Admin Approval: Quote Stage";
   } else if (stage === "Quotation In Progress" || stage === "Quotation Sent" || stage === "Quotation Negotiation") {
     nextStatus = "Pending Admin Approval: Quote Approval";
@@ -742,10 +744,10 @@ export async function approveSiteVisitAction(orderId: string) {
 
   const updatedSiteVisit = {
     ...(order.site_visit_details || {}),
-    reviewStatus: "Approved"
+    reviewStatus: "Staff Approved"
   };
 
-  const logMsg = `Site visit time approved by assigned staff.`;
+  const logMsg = `Site visit time approved by assigned staff. Pending Admin Approval.`;
   const systemMsg = {
     id: `sys-${Date.now()}`,
     sender: "System",
@@ -758,7 +760,8 @@ export async function approveSiteVisitAction(orderId: string) {
   const { data: updatedOrder, error: updateError } = await supabase
     .from("orders")
     .update({
-      stage: "Site Visit Scheduled",
+      stage: "Site Visit Pending", // Keep it pending until admin approves
+      stage_status: "Pending Admin Approval: Site Visit Schedule",
       site_visit_details: updatedSiteVisit,
       chat_history: updatedChat
     })
@@ -778,7 +781,7 @@ export async function approveSiteVisitAction(orderId: string) {
 
   await createAuditLogAction(
     "Staff",
-    "Site Visit Approved",
+    "Site Visit Schedule Approved",
     orderId,
     order.customer_id,
     logMsg

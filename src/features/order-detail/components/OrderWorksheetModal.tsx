@@ -215,27 +215,26 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const isEmployee = currentUserRole === "Employee";
   const currentStageIndex = stageToTabIndex(order.stage);
 
-  /* ── Server Action Wrappers ── */
+  /* ── Local State Wrappers ── */
   const updateSiteVisitDetails = async (orderId: string, details: Partial<SiteVisitDetails>) => {
     setOrder((prev) => ({ ...prev, siteVisitDetails: { ...(prev.siteVisitDetails || {}), ...details } as SiteVisitDetails }));
-    try { await updateSiteVisitDetailsAction(orderId, details); } catch (err) { console.error(err); }
   };
   // Quote details are now managed entirely by QuotationModule via quotationActions.
   const updateDesignDetails = async (orderId: string, details: Partial<DesignDetails>) => {
     setOrder((prev) => ({ ...prev, designDetails: { ...(prev.designDetails || {}), ...details } as DesignDetails }));
-    try { await updateDesignDetailsAction(orderId, details); } catch (err) { console.error(err); }
   };
   const updateProductionDetails = async (orderId: string, details: Partial<ProductionDetails>) => {
     setOrder((prev) => ({ ...prev, productionDetails: { ...(prev.productionDetails || {}), ...details } as ProductionDetails }));
-    try { await updateProductionDetailsAction(orderId, details); } catch (err) { console.error(err); }
   };
   const updateInstallationDetails = async (orderId: string, details: Partial<InstallationDetails>) => {
     setOrder((prev) => ({ ...prev, installationDetails: { ...(prev.installationDetails || {}), ...details } as InstallationDetails }));
-    try { await updateInstallationDetailsAction(orderId, details); } catch (err) { console.error(err); }
   };
 
   const handleAdminApprove = async () => {
     try {
+      // Save any pending drafts before advancing
+      await handleSaveDraft();
+      
       await adminApproveStageAction(order.id);
       setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
       router.refresh();
@@ -266,6 +265,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
   const handleRequestAdvancement = async () => {
     try {
+      // Save any pending drafts before pushing
+      await handleSaveDraft();
+      
       await requestStageAdvancementAction(order.id);
       await addChatMessageAction(order.id, "System", `${currentEmployee?.name || "Staff"} requested stage advancement.`);
       router.refresh();
@@ -315,24 +317,24 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       switch (activeStepTab) {
         case 0: // Site Visit
           if (order.siteVisitDetails) {
-            await updateSiteVisitDetails(order.id, order.siteVisitDetails);
+            await updateSiteVisitDetailsAction(order.id, order.siteVisitDetails);
           }
           break;
         case 1: // Quotation — saved directly from QuotationModule
           break;
         case 2: // Design
           if (order.designDetails) {
-            await updateDesignDetails(order.id, order.designDetails);
+            await updateDesignDetailsAction(order.id, order.designDetails);
           }
           break;
         case 3: // Production
           if (order.productionDetails) {
-            await updateProductionDetails(order.id, order.productionDetails);
+            await updateProductionDetailsAction(order.id, order.productionDetails);
           }
           break;
         case 4: // Installation
           if (order.installationDetails) {
-            await updateInstallationDetails(order.id, order.installationDetails);
+            await updateInstallationDetailsAction(order.id, order.installationDetails);
           }
           break;
       }
@@ -348,6 +350,38 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const dd = order.designDetails || { proofUrl: "", status: "Draft" };
   const pd = order.productionDetails || { printing: false, cutting: false, fabrication: false, assembly: false };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
+
+  const actionButtonsNode = (
+    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+      {order.health && order.health !== "Active" ? (
+        <>
+          <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600", display: "none" }}>
+            Order is <strong style={{ color: "#DC2626" }}>{order.health}</strong>
+          </span>
+          <button onClick={handleReopen} style={{ padding: "6px 14px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+            <RefreshCw size={13} /> Reopen
+          </button>
+        </>
+      ) : (
+        <>
+          <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+            <Save size={13} /> Save Draft
+          </button>
+          {isEmployee ? (
+            <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+              <CheckCircle2 size={13} /> Push for Approval
+            </button>
+          ) : (
+            currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
+              <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+                <Check size={13} /> Approve & Advance
+              </button>
+            )
+          )}
+        </>
+      )}
+    </div>
+  );
 
   /* ── Filtered order list for left panel ── */
   const filteredOrders = allOrders.filter((o) => {
@@ -437,7 +471,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const doneCount = allOrders.filter((o) => o.stage === "Completed" || o.stage === "Closed").length;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, height: "100%", maxHeight: "100%", overflow: "hidden", background: "#F8FAFC" }}>
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, height: "100%", maxHeight: "100%", overflow: "hidden", background: "#F8FAFC" }}>
 
       {/* ── TOP BAR ── */}
       <header style={{ height: "52px", background: "white", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", paddingLeft: "16px", paddingRight: "20px", gap: "12px", flexShrink: 0, zIndex: 30 }}>
@@ -451,45 +485,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <span style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Order Management</span>
 
         <div style={{ display: "flex", gap: "8px", marginLeft: "auto", alignItems: "center" }}>
-          {/* Order Hub Toggle */}
-          <button
-            onClick={() => setActiveRightPanel(activeRightPanel ? null : "chat")}
-            style={{
-              display: "flex", alignItems: "center", gap: "6px",
-              background: activeRightPanel ? "var(--color-secondary)" : "white",
-              color: activeRightPanel ? "white" : "#64748B",
-              border: `1px solid ${activeRightPanel ? "var(--color-secondary)" : "#E2E8F0"}`,
-              borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "700",
-              cursor: "pointer", transition: "all 0.15s"
-            }}
-          >
-            💬 Order Hub
-            {(logsCount > 0 || chatCount > 0) && (
-              <span style={{ background: "#EF4444", color: "white", padding: "2px 6px", borderRadius: "10px", fontSize: "10px", marginLeft: "4px" }}>
-                {logsCount + chatCount}
-              </span>
-            )}
-          </button>
-
-          {/* Admin Controls Toggle */}
-          {!isEmployee && (
-            <button
-              onClick={() => setActiveStepTab(99)}
-              style={{
-                display: "flex", alignItems: "center", gap: "6px",
-                background: activeStepTab === 99 ? "var(--color-secondary)" : "white",
-                color: activeStepTab === 99 ? "white" : "#64748B",
-                border: `1px solid ${activeStepTab === 99 ? "var(--color-secondary)" : "#E2E8F0"}`,
-                borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: "700",
-                cursor: "pointer", transition: "all 0.15s"
-              }}
-            >
-              ⚙️ Manage Order
-            </button>
-          )}
-
-          <div style={{ width: "1px", height: "20px", background: "#E2E8F0", margin: "0 4px" }} />
-
           <span style={{ display: "flex", alignItems: "center", gap: "4px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", fontWeight: "700", color: "#2563EB" }}>
             ↑ {activeCount} Active
           </span>
@@ -648,6 +643,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                       >
                         <Share2 size={12} /> {copiedLink ? "Copied!" : "Portal"}
                       </button>
+                      <div style={{ width: "1px", height: "14px", background: "#CBD5E1" }} />
+                      <button
+                        onClick={() => setActiveStepTab(99)}
+                        style={{ background: activeStepTab === 99 ? "var(--color-secondary)" : "none", border: "none", color: activeStepTab === 99 ? "white" : "#0F172A", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", transition: "all 0.15s" }}
+                      >
+                        <Lock size={12} /> Admin Controls
+                      </button>
                     </>
                   )}
                 </div>
@@ -771,6 +773,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   Pending Approval
                 </span>
               )}
+
+              {/* Action Buttons (moved to module for Site Visit, kept here for others) */}
+              {activeStepTab !== 99 && activeStepTab !== 0 && (
+                <div style={{ marginLeft: "12px", paddingLeft: "12px", borderLeft: "1px solid #E2E8F0" }}>
+                  {actionButtonsNode}
+                </div>
+              )}
             </div>
           </div>
 
@@ -784,43 +793,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             </div>
 
           </div>
-
-          {/* Sticky footer actions */}
-          <div style={{ padding: "14px 20px", background: "#F8FAFC", borderTop: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
-            <div />
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              {order.health && order.health !== "Active" ? (
-                <>
-                  <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600" }}>
-                    Order is <strong style={{ color: "#DC2626" }}>{order.health}</strong>
-                  </span>
-                  <button onClick={handleReopen} style={{ padding: "7px 16px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <RefreshCw size={13} /> Reopen Order
-                  </button>
-                </>
-              ) : (
-                <>
-                  {/* Save Draft button */}
-                  <button onClick={handleSaveDraft} style={{ padding: "7px 16px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Save size={13} /> Save Draft
-                  </button>
-
-                  {/* Advance stage / Staff section approval push */}
-                  {isEmployee ? (
-                    <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <CheckCircle2 size={13} /> Push {activeModuleTitle} to Admin for Approval
-                    </button>
-                  ) : (
-                    currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
-                      <button onClick={handleAdminApprove} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <Check size={13} /> Approve & Advance
-                      </button>
-                    )
-                  )}
-                </>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* ══ PANEL 4: SLIDING DRAWER PANEL ══ */}
@@ -833,7 +805,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            height: "100%"
+            height: "100%",
+            zIndex: 40
           }}>
             <OrderCommunicationCenter
               orderId={order.orderId || order.id}
@@ -848,6 +821,58 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </aside>
         )}
       </div>
+
+      {/* ── FLOATING CHAT BUTTON (Order Hub) ── */}
+      {!activeRightPanel && (
+        <button
+          onClick={() => setActiveRightPanel("chat")}
+          style={{
+            position: "absolute",
+            bottom: "24px",
+            right: "24px",
+            width: "56px",
+            height: "56px",
+            borderRadius: "50%",
+            background: "var(--color-secondary)",
+            color: "white",
+            border: "none",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            zIndex: 50,
+            transition: "transform 0.2s, box-shadow 0.2s"
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)"; }}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+          {(logsCount > 0 || chatCount > 0) && (
+            <span style={{
+              position: "absolute",
+              top: "-2px",
+              right: "-2px",
+              background: "#EF4444",
+              color: "white",
+              minWidth: "20px",
+              height: "20px",
+              borderRadius: "10px",
+              fontSize: "11px",
+              fontWeight: "700",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 4px",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+            }}>
+              {logsCount + chatCount}
+            </span>
+          )}
+        </button>
+      )}
     </div>
   );
 };

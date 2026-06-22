@@ -342,6 +342,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>LEAD NAME</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>SOURCE</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CUST / ORDER</th>
                 <th style={{ padding: "14px 20px", textAlign: "right", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIONS</th>
               </tr>
             </thead>
@@ -350,11 +351,21 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                 const statusColor = getStatusColor(enq.status);
                 return (
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>{enq.enquireId || enq.id}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "700" }}>{enq.enquireId || enq.id.substring(0, 8)}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>{new Date(enq.dateReceived).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" })}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{enq.leadName}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{enq.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>{enq.source}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>
+                      {enq.customerId ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <a href={`/admin/customers`} style={{ color: "var(--color-secondary)", fontWeight: 600, textDecoration: "none" }}>{enq.customerId}</a>
+                          {enq.orderId && <a href={`/admin/orders/${enq.orderId}`} style={{ color: "var(--color-primary)", fontWeight: 600, textDecoration: "none" }}>{enq.orderId}</a>}
+                        </div>
+                      ) : (
+                        <span style={{ color: "#cbd5e1" }}>-</span>
+                      )}
+                    </td>
                     <td style={{ padding: "16px 20px", textAlign: "right" }}>
                       <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", alignItems: "center" }}>
                         {enq.status !== "Converted" ? (
@@ -371,22 +382,6 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                           </button>
                         ) : (
                           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                            {enq.customerId && (
-                              <a 
-                                href={`/admin/customers`}
-                                style={{ fontSize: "12px", fontWeight: "600", color: "var(--color-secondary)", textDecoration: "underline" }}
-                              >
-                                Customer ({enq.customerId})
-                              </a>
-                            )}
-                            {enq.orderId && (
-                              <a 
-                                href={`/admin/orders/${enq.orderId}`}
-                                style={{ fontSize: "12px", fontWeight: "600", color: "var(--color-primary)", textDecoration: "underline" }}
-                              >
-                                Order ({enq.orderId})
-                              </a>
-                            )}
                             <span style={{ fontSize: "12px", fontWeight: "700", color: "#16a34a" }}>Converted</span>
                           </div>
                         )}
