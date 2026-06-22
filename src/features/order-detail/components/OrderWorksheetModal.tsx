@@ -11,7 +11,7 @@ import {
   ArrowLeft, MoreVertical, Lock, Save,
 } from "lucide-react";
 import {
-  Order, PipelineStage, SiteVisitDetails, QuoteDetails,
+  Order, PipelineStage, SiteVisitDetails,
   DesignDetails, ProductionDetails, InstallationDetails, Customer, Employee,
 } from "@/types";
 import { SiteVisitModule } from "./site-visit/SiteVisitModule";
@@ -22,7 +22,6 @@ import { AdminControlModule } from "./admin/AdminControlModule";
 import { InstallationModule } from "./installation/InstallationModule";
 import {
   updateSiteVisitDetailsAction,
-  updateQuoteDetailsAction,
   updateDesignDetailsAction,
   updateProductionDetailsAction,
   updateInstallationDetailsAction,
@@ -101,6 +100,17 @@ function stageToTabIndex(stage: PipelineStage): number {
 }
 
 /* ─── Props ─────────────────────────────────────────────────────── */
+interface Product {
+  id: string;
+  product_id: string;
+  name: string;
+  category: string | null;
+  pricing_type: "per_unit" | "per_sqft";
+  unit_price: number;
+  unit: string;
+  is_active: boolean;
+}
+
 interface OrderWorksheetModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -110,6 +120,8 @@ interface OrderWorksheetModalProps {
   allOrders?: any[];
   currentUserRole: "Admin" | "Employee";
   currentEmployee: Employee | null;
+  products?: Product[];
+  initialQuotation?: any;
 }
 
 /* ─── Component ─────────────────────────────────────────────────── */
@@ -122,6 +134,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   allOrders = [],
   currentUserRole,
   currentEmployee,
+  products = [],
+  initialQuotation = null,
 }) => {
   const router = useRouter();
   const [order, setOrder] = useState<Order>(initialOrder);
@@ -206,10 +220,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     setOrder((prev) => ({ ...prev, siteVisitDetails: { ...(prev.siteVisitDetails || {}), ...details } as SiteVisitDetails }));
     try { await updateSiteVisitDetailsAction(orderId, details); } catch (err) { console.error(err); }
   };
-  const updateQuoteDetails = async (orderId: string, details: Partial<QuoteDetails>) => {
-    setOrder((prev) => ({ ...prev, quoteDetails: { ...(prev.quoteDetails || {}), ...details } as QuoteDetails }));
-    try { await updateQuoteDetailsAction(orderId, details); } catch (err) { console.error(err); }
-  };
+  // Quote details are now managed entirely by QuotationModule via quotationActions.
   const updateDesignDetails = async (orderId: string, details: Partial<DesignDetails>) => {
     setOrder((prev) => ({ ...prev, designDetails: { ...(prev.designDetails || {}), ...details } as DesignDetails }));
     try { await updateDesignDetailsAction(orderId, details); } catch (err) { console.error(err); }
@@ -307,10 +318,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             await updateSiteVisitDetails(order.id, order.siteVisitDetails);
           }
           break;
-        case 1: // Quotation
-          if (order.quoteDetails) {
-            await updateQuoteDetails(order.id, order.quoteDetails);
-          }
+        case 1: // Quotation — saved directly from QuotationModule
           break;
         case 2: // Design
           if (order.designDetails) {
@@ -337,7 +345,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   /* ── Module fallbacks ── */
   const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "" };
-  const qd = order.quoteDetails || { signageType: "ACP Panels", width: 0, height: 0, depth: 0, material: "", mounting: "", baseACPPrice: 0, hardwarePrice: 0, polishingPrice: 0, discount: 0, subtotal: 0, tax: 0, grandTotal: 0 };
   const dd = order.designDetails || { proofUrl: "", status: "Draft" };
   const pd = order.productionDetails || { printing: false, cutting: false, fabrication: false, assembly: false };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
@@ -380,7 +387,20 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           }}
         />
       );
-      case 1: return <QuotationModule order={order} isEmployee={isEmployee} updateQuoteDetails={updateQuoteDetails} />;
+      case 1: return (
+        <QuotationModule
+          order={{
+            id: order.id,
+            orderId: order.orderId,
+            projectName: order.projectName,
+            customerName: order.customerName,
+            customerId: order.customerId,
+          }}
+          isEmployee={isEmployee}
+          products={products}
+          initialQuotation={initialQuotation}
+        />
+      );
       case 2: return <DesignModule order={order} isEmployee={isEmployee} updateDesignDetails={updateDesignDetails} />;
       case 3: return <ProductionModule order={order} isEmployee={isEmployee} updateProductionDetails={updateProductionDetails} />;
       case 4: return <InstallationModule order={order} isEmployee={isEmployee} updateInstallationDetails={updateInstallationDetails} />;
@@ -757,7 +777,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           {/* Module body (scrollable) */}
           <div style={{ flex: 1, overflowY: "auto", padding: "0 24px 24px 24px" }}>
 
-            <div style={{ background: "white", border: "1px solid #E2E8F0", borderTop: "none", borderBottomLeftRadius: "12px", borderBottomRightRadius: "12px", borderTopRightRadius: "12px", overflow: "hidden", minHeight: "100%", borderTopLeftRadius: activeStepTab === 99 ? "12px" : "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+            <div style={{ background: "white", border: "1px solid #E2E8F0", borderTop: "none", borderBottomLeftRadius: "12px", borderBottomRightRadius: "12px", borderTopRightRadius: "12px", overflow: "visible", minHeight: "100%", borderTopLeftRadius: activeStepTab === 99 ? "12px" : "0px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
               <div style={{ padding: "24px" }}>
                 {renderModule()}
               </div>

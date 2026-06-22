@@ -185,28 +185,28 @@ export interface SiteVisitDetails {
 }
 
 export interface QuoteItem {
-  id: string; // Unique ID for the item
+  id: string;
+  productId?: string;          // links to products.id
   description: string;
   quantity: number;
-  costPerSqFt: number; // Cost per square foot
-  totalSqFt: number; // Total square feet
-  unitPrice: number;
-  gstRate: number; // GST percentage (0, 5, 12, 18, 28)
+  pricingType?: "per_unit" | "per_sqft";
+  unit?: string;               // "nos" | "sq ft"
+  unitPrice: number;           // base rate from catalogue (editable)
+  totalSqFt?: number;          // only for per_sqft items
+  gstRate: number;             // 0 | 5 | 12 | 18 | 28
 }
 
 export interface QuoteDetails {
-  signageType?: "ACP Panels" | "LED Letters" | "Vinyl Graphics";
-  width?: number;
-  height?: number;
-  depth?: number;
-  material?: string;
-  mounting?: string;
-  items: QuoteItem[]; // Array of line items
-  discount: number; // Total discount in INR
-  subtotal: number; // Sum of (qty * unitPrice) for all items
-  tax: number; // Total tax (sum of (qty * unitPrice * (gstRate / 100)))
+  items: QuoteItem[];
+  discount: number;
+  subtotal: number;
+  tax: number;
   grandTotal: number;
   status?: "Draft" | "Sent" | "Approved" | "Rejected";
+  notes?: string;
+  terms?: string;
+  validUntil?: string;
+  quotationId?: string;        // e.g. "QT-001"
 }
 
 export interface DesignDetails {
@@ -244,7 +244,6 @@ export interface Order {
   versionHistory: VersionItem[];
   chatHistory: ChatMessage[];
   siteVisitDetails?: SiteVisitDetails;
-  quoteDetails?: QuoteDetails;
   designDetails?: DesignDetails;
   productionDetails?: ProductionDetails;
   installationDetails?: InstallationDetails;

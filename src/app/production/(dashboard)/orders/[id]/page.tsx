@@ -3,26 +3,33 @@ import { redirect } from "next/navigation";
 import { getOrderById } from "@/features/orders/actions/orderActions";
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
-import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getProducts } from "@/features/products/actions/productActions";
 import { getQuotationByOrderId } from "@/features/quotations/actions/quotationActions";
-import { OrderDetailPageClient } from "@/app/admin/(dashboard)/orders/[id]/OrderDetailPageClient";
+import { ProductionOrderDetailClient } from "./ProductionOrderDetailClient";
 
-export default async function StaffOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProductionOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const profile = await getCurrentUser();
-  if (!profile) {
-    redirect("/staff/login");
-  }
 
   const order = await getOrderById(id);
   if (!order) {
-    redirect("/staff/orders");
+    redirect("/production/orders");
+  }
+
+  // Ensure order has crossed design stage
+  const productionReadyStages = [
+    "Production",
+    "Ready For Installation",
+    "Installation Scheduled",
+    "Completed",
+    "Closed"
+  ];
+  if (!productionReadyStages.includes(order.stage)) {
+    redirect("/production/orders");
   }
 
   const [customersData, employeesData, productsData, quotationData] = await Promise.all([
-    getCustomers(),
-    getEmployees(),
+    getCustomers().catch(() => []),
+    getEmployees().catch(() => []),
     getProducts().catch(() => []),
     getQuotationByOrderId(order.id).catch(() => null),
   ]);
@@ -32,17 +39,18 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     projectName: order.project_name,
     customerId: order.customer_id,
     stage: order.stage,
-                productType: order.product_type,
-    requirements: order.requirements,
-        urgent: order.urgent,
+    budget: order.budget,
+    depositPaid: order.deposit_paid,
+    dimensions: order.dimensions,
+    notes: order.notes,
+    urgent: !!order.urgent,
     assignedEmployees: order.assigned_employees || [],
-    assignedDesigners: order.assigned_designers || [],
-    assignedMarketers: order.assigned_marketers || [],
     dateCreated: order.date_created,
     deadlineStatus: order.deadline_status,
-        versionHistory: order.version_history || [],
+    imageMockup: order.image_mockup,
+    versionHistory: order.version_history || [],
     chatHistory: order.chat_history || [],
-    siteVisitDetails: order.siteVisitDetails,
+    siteVisitDetails: order.site_visit_details,
     designDetails: order.design_details,
     productionDetails: order.production_details,
     installationDetails: order.installation_details,
@@ -53,7 +61,7 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     orderId: order.order_id || order.id
   };
 
-  const mappedCustomers = customersData?.map(c => ({
+  const mappedCustomers = (customersData || []).map((c: any) => ({
     id: c.id,
     name: c.name,
     phone: c.phone || "",
@@ -64,9 +72,9 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     status: c.status || "Active",
     customerCode: c.customer_id || c.id,
     customerId: c.customer_id || c.id
-  })) || [];
+  }));
 
-  const mappedEmployees = employeesData?.map(e => ({
+  const mappedEmployees = (employeesData || []).map((e: any) => ({
     id: e.id,
     name: e.name,
     role: e.staff_role || "",
@@ -75,40 +83,15 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     status: e.status || "Active",
     rating: Number(e.rating) || 5.0,
     workload: Number(e.workload) || 0
-  })) || [];
-
-  const currentEmployee = mappedEmployees.find(e => e.id === profile.id) || {
-    id: profile.id,
-    name: profile.name,
-    role: profile.staff_role || "Field Agent",
-    phone: profile.phone || "",
-    email: profile.email || "",
-    status: profile.status || "Active",
-    rating: Number(profile.rating) || 5.0,
-    workload: Number(profile.workload) || 0
-  };
-
-  const mappedProducts = (productsData || []).map((p: any) => ({
-    id: p.id,
-    product_id: p.product_id,
-    name: p.name,
-    category: p.category ?? null,
-    pricing_type: p.pricing_type,
-    unit_price: Number(p.unit_price),
-    unit: p.unit,
-    is_active: p.is_active,
   }));
 
   return (
-    <OrderDetailPageClient
+    <ProductionOrderDetailClient
       order={mappedOrder}
       customers={mappedCustomers}
       employees={mappedEmployees}
-      allOrders={[]}
-      role="Employee"
-      currentEmployee={currentEmployee}
-      products={mappedProducts}
-      initialQuotation={quotationData}
+      products={productsData || []}
+      quotation={quotationData}
     />
   );
 }

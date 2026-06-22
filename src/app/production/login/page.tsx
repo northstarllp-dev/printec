@@ -3,13 +3,13 @@
 import React, { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { adminSignIn } from "@/features/auth/actions/authActions";
+import { staffSignIn } from "@/features/auth/actions/authActions";
 
-export default function AdminLogin() {
+export default function ProductionLogin() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("admin@printec.com");
-  const [password, setPassword] = useState("adminpass");
+  const [email, setEmail] = useState("production@printec.co.in");
+  const [password, setPassword] = useState("productionpass");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -20,11 +20,11 @@ export default function AdminLogin() {
     setLoading(true);
     
     try {
-      const res = await adminSignIn(email, password);
+      const res = await staffSignIn(email, password);
       if (res.error) {
         setError(res.error);
       } else {
-        router.push("/admin/dashboard");
+        router.push("/production/orders");
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
@@ -55,26 +55,23 @@ export default function AdminLogin() {
       }}>
         {/* Logo */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
-          <div style={{ width: 36, height: 36, background: "#0F172A", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, color: "var(--color-primary)" }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 20h18" /><path d="M6 20V11" />
-              <circle cx="6" cy="11" r="1.2" fill="var(--color-primary)" />
-              <path d="M6 11l6-4.5" />
-              <circle cx="12" cy="6.5" r="1.2" fill="var(--color-primary)" />
-              <path d="M12 6.5l5 3.5" />
+          <div style={{ width: 36, height: 36, background: "#0284c7", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg viewBox="0 0 24 24" style={{ width: 18, height: 18, color: "white" }} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+              <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
             </svg>
           </div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A", letterSpacing: "0.05em" }}>NORTHSTAR</div>
-            <div style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>Management Portal</div>
+            <div style={{ fontSize: 11, color: "#64748B", fontWeight: 500 }}>Production Portal</div>
           </div>
         </div>
 
         <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: "0 0 6px", letterSpacing: "-0.01em" }}>
-          Admin Sign In
+          Production Sign In
         </h1>
         <p style={{ fontSize: 13, color: "#64748B", margin: "0 0 28px" }}>
-          Authenticate to access the operations dashboard.
+          Authenticate to track and manage active fabrication orders.
         </p>
 
         {error && (
@@ -89,14 +86,14 @@ export default function AdminLogin() {
               Email Address
             </label>
             <input
-              id="admin-email"
+              id="production-email"
               type="email"
               required
               disabled={loading}
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="prt-input"
-              placeholder="admin@printec.com"
+              placeholder="production@printec.co.in"
             />
           </div>
 
@@ -106,7 +103,7 @@ export default function AdminLogin() {
             </label>
             <div style={{ position: "relative" }}>
               <input
-                id="admin-password"
+                id="production-password"
                 type={showPassword ? "text" : "password"}
                 required
                 disabled={loading}
@@ -130,9 +127,9 @@ export default function AdminLogin() {
             type="submit"
             disabled={loading}
             className="prt-btn prt-btn-primary"
-            style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 14, marginTop: 4 }}
+            style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 14, marginTop: 4, background: "#0284c7" }}
           >
-            {loading ? "Signing in..." : "Sign In to Admin Portal"}
+            {loading ? "Signing in..." : "Sign In to Production Portal"}
           </button>
         </form>
 
@@ -141,12 +138,12 @@ export default function AdminLogin() {
             Demo Credentials
           </div>
           <div style={{ fontSize: 12, fontFamily: "monospace", color: "#0F172A", marginBottom: 10, background: "white", border: "1px solid #E2E8F0", borderRadius: 6, padding: "6px 10px" }}>
-            admin@printec.com / adminpass
+            production@printec.co.in / productionpass
           </div>
           <button
             type="button"
-            onClick={() => { setEmail("admin@printec.com"); setPassword("adminpass"); setError(""); }}
-            style={{ fontSize: 12, color: "var(--color-primary)", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
+            onClick={() => { setEmail("production@printec.co.in"); setPassword("productionpass"); setError(""); }}
+            style={{ fontSize: 12, color: "#0284c7", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
           >
             Quick fill credentials →
           </button>

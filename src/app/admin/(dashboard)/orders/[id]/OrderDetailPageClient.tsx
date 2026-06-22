@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import { OrderWorksheetModal } from "@/features/order-detail/components/OrderWorksheetModal";
 import { Order, Customer, Employee } from "@/types";
 
+interface Product {
+  id: string;
+  product_id: string;
+  name: string;
+  category: string | null;
+  pricing_type: "per_unit" | "per_sqft";
+  unit_price: number;
+  unit: string;
+  is_active: boolean;
+}
+
 interface OrderDetailPageClientProps {
   order: Order;
   customers: Customer[];
@@ -12,6 +23,8 @@ interface OrderDetailPageClientProps {
   allOrders: any[];
   role: "Admin" | "Employee";
   currentEmployee: Employee | null;
+  products?: Product[];
+  initialQuotation?: any;
 }
 
 export function OrderDetailPageClient({
@@ -21,6 +34,8 @@ export function OrderDetailPageClient({
   allOrders,
   role,
   currentEmployee,
+  products = [],
+  initialQuotation = null,
 }: OrderDetailPageClientProps) {
   const router = useRouter();
 
@@ -37,6 +52,8 @@ export function OrderDetailPageClient({
         allOrders={allOrders}
         currentUserRole={role}
         currentEmployee={currentEmployee}
+        products={products}
+        initialQuotation={initialQuotation}
       />
     </div>
   );

@@ -1,75 +1,30 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Bell,
-  CheckCircle,
-  AlertCircle,
-  Info,
-  LogOut,
-  History,
-  RotateCcw,
-  LayoutDashboard,
-  ShoppingBag,
-  MessageSquare,
-  Users,
-  UserCheck,
-  Factory,
-  Wrench,
-  BarChart2,
-  Package,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
+import { 
+  Bell, CheckCircle, AlertCircle, Info, LogOut,
+  History, RotateCcw, Lock, Loader2, Key,
+  ShoppingBag, LifeBuoy, Settings,
+  ChevronLeft, ChevronRight, Search
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-import { signOut } from "@/features/auth/actions/authActions";
+import { signOut, updateUserPassword } from "@/features/auth/actions/authActions";
 
-interface AdminLayoutClientProps {
+interface ProductionLayoutClientProps {
   children: React.ReactNode;
   profile: {
     id: string;
     name: string;
     email: string;
     role: string;
-  };
-  counts?: {
-    orders?: number;
-    enquiries?: number;
-    customers?: number;
-    production?: number;
-    installation?: number;
-    payments?: number;
-    support?: number;
+    staff_role: string;
   };
 }
 
-const NAV_ITEMS = [
-  { id: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard, exactMatch: true },
-  { id: "/admin/orders", label: "Orders", icon: ShoppingBag, countKey: "orders" },
-  { id: "/admin/enquire", label: "Enquiries", icon: MessageSquare, countKey: "enquiries" },
-  { id: "/admin/customers", label: "Customers", icon: Users, countKey: "customers" },
-  { id: "/admin/employees", label: "Employees", icon: UserCheck },
-  { id: "/admin/reports", label: "Reports", icon: BarChart2 },
-  { id: "/admin/products", label: "Products", icon: Package },
-  { id: "/admin/settings", label: "Settings", icon: Settings },
-] as const;
-
-const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
-  orders:       { bg: "#1E40AF", text: "#FFFFFF" },
-  enquiries:    { bg: "#8B5CF6", text: "#FFFFFF" },
-  customers:    { bg: "#3B82F6", text: "#FFFFFF" },
-  production:   { bg: "#F97316", text: "#FFFFFF" },
-  installation: { bg: "#14B8A6", text: "#FFFFFF" },
-};
-
-export function AdminLayoutClient({
-  children,
-  profile,
-  counts = {},
-}: AdminLayoutClientProps) {
+export function ProductionLayoutClient({ children, profile }: ProductionLayoutClientProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const isWorksheetPage = pathname.startsWith("/production/orders/") && pathname !== "/production/orders";
 
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
@@ -78,70 +33,104 @@ export function AdminLayoutClient({
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
-  const isWorksheetPage =
-    pathname.startsWith("/admin/orders/") && pathname !== "/admin/orders";
-
+  // Layout-scoped in-memory notifications
   const [notifications, setNotifications] = useState<any[]>([
     {
-      id: "NOT-1",
-      title: "SLA Warning: Action Required",
-      message:
-        "Lead Rohan Varma has been pending without site visit for 50h. Escalate immediately.",
+      id: "NOT-P1",
+      title: "New Fabrication Job",
+      message: "Order ACP Pillar Gate Banner is ready for workshop printing.",
       time: "2 hours ago",
-      type: "error",
-      read: false,
-    },
-    {
-      id: "NOT-2",
-      title: "SLA Warning: WhatsApp Follow-up",
-      message: "Lead Amit Sharma has been pending for 25h. Triggering WhatsApp alert.",
-      time: "4 hours ago",
-      type: "warning",
-      read: false,
-    },
-    {
-      id: "NOT-3",
-      title: "New Webhook Submission",
-      message: "New website enquiry logged automatically for Sneha Reddy.",
-      time: "1 hour ago",
       type: "success",
-      read: true,
+      read: false
     },
+    {
+      id: "NOT-P2",
+      title: "Urgent Order Alert",
+      message: "Order Neon Window Signage is marked as urgent. Check layout specifications.",
+      time: "5 hours ago",
+      type: "warning",
+      read: false
+    }
   ]);
 
-  const [activities, setActivities] = useState<any[]>([]);
-  const unreadNotifCount = notifications.filter((n) => !n.read).length;
+  // Layout-scoped in-memory activities
+  const [activities] = useState<any[]>([]);
 
-  const markAllNotificationsRead = () =>
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  const clearNotifications = () => setNotifications([]);
-  const undoActivity = (id: string) =>
-    setActivities((prev) => prev.filter((a) => a.id !== id));
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  const markAllNotificationsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const clearNotifications = () => {
+    setNotifications([]);
+  };
 
   const handleLogout = async () => {
     await signOut();
-    router.push("/admin/login");
+    router.push("/production/login");
   };
 
-  const isActivePath = (item: (typeof NAV_ITEMS)[number]) => {
-    if ("exactMatch" in item && item.exactMatch) {
-      return pathname === item.id || pathname === "/admin" || pathname === "/admin/dashboard";
-    }
-    if (item.id === "/admin/orders") {
-      return pathname === "/admin/orders" || pathname.startsWith("/admin/orders/");
+  const navItems = [
+    { id: "/production/orders", label: "Production Queue", icon: ShoppingBag },
+  ] as const;
+
+  const isActivePath = (item: typeof navItems[number]) => {
+    if (item.id === "/production/orders") {
+      return pathname === "/production/orders" || pathname === "/production" || (pathname.startsWith("/production/orders/") && pathname !== "/production/orders");
     }
     return pathname.startsWith(item.id);
   };
 
   const initials = profile.name
     .split(" ")
-    .map((n) => n[0])
+    .map(n => n[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
 
-  const totalActiveOrders = counts.orders || 0;
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setIsSubmittingPassword(true);
+    try {
+      const res = await updateUserPassword(newPassword);
+      if (res.error) {
+        setPasswordError(res.error);
+      } else {
+        setPasswordSuccess("Password updated successfully!");
+        setTimeout(() => {
+          setIsChangePasswordModalOpen(false);
+          setNewPassword("");
+          setConfirmPassword("");
+        }, 1500);
+      }
+    } catch (err: any) {
+      setPasswordError(err.message || "An error occurred.");
+    } finally {
+      setIsSubmittingPassword(false);
+    }
+  };
+
   const sidebarW = isExpanded ? "240px" : "64px";
 
   return (
@@ -227,7 +216,7 @@ export function AdminLayoutClient({
                 display: "block",
               }}
             >
-              NORTHSTAR
+              PRINTEC
             </span>
             <span
               style={{
@@ -240,24 +229,21 @@ export function AdminLayoutClient({
                 display: "block",
               }}
             >
-              Admin Portal 2
+              Production Portal
             </span>
           </div>
         </div>
 
         {/* Nav Items */}
         <nav style={{ flex: 1, padding: "8px 0", overflowY: "auto" }}>
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const isActive = isActivePath(item);
             const Icon = item.icon;
-            const countKey = "countKey" in item ? item.countKey : undefined;
-            const count = countKey ? (counts as any)[countKey] : undefined;
 
             return (
               <button
                 key={item.id}
                 onClick={() => {
-                  // For routes that don't exist yet, just navigate (will 404 gracefully)
                   router.push(item.id);
                 }}
                 title={!isExpanded ? item.label : undefined}
@@ -319,22 +305,6 @@ export function AdminLayoutClient({
                   >
                     {item.label}
                   </span>
-                  {count !== undefined && count > 0 && countKey && (
-                    <span
-                      style={{
-                        background: BADGE_COLORS[countKey]?.bg || "#374151",
-                        color: BADGE_COLORS[countKey]?.text || "#FFF",
-                        fontSize: "10px",
-                        fontWeight: "800",
-                        padding: "2px 7px",
-                        borderRadius: "99px",
-                        flexShrink: 0,
-                        marginLeft: "6px",
-                      }}
-                    >
-                      {count}
-                    </span>
-                  )}
                 </div>
               </button>
             );
@@ -412,51 +382,48 @@ export function AdminLayoutClient({
               flexShrink: 0,
             }}
           >
+            {/* Search Placeholder */}
+            <div style={{ flex: 1, maxWidth: "480px", position: "relative" }}>
+              <Search
+                size={14}
+                style={{
+                  position: "absolute",
+                  left: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "#94A3B8",
+                  pointerEvents: "none",
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Search fabrication jobs..."
+                style={{
+                  width: "100%",
+                  height: "36px",
+                  padding: "0 12px 0 36px",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: "8px",
+                  fontSize: "13px",
+                  background: "#F8FAFC",
+                  color: "#0F172A",
+                  outline: "none",
+                  fontFamily: "inherit",
+                  transition: "border-color 0.15s",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "#1e40af";
+                  e.currentTarget.style.background = "white";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "#E2E8F0";
+                  e.currentTarget.style.background = "#F8FAFC";
+                }}
+              />
+            </div>
+
             {/* Actions */}
             <div style={{ display: "flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}>
-              {/* History */}
-              <div style={{ position: "relative" }}>
-                <button
-                  onClick={() => { setIsHistoryOpen((p) => !p); setIsNotifOpen(false); setIsProfileOpen(false); }}
-                  title="Action History"
-                  style={{ width: 34, height: 34, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B", background: "none", border: "none", cursor: "pointer", transition: "all 0.15s" }}
-                >
-                  <History size={16} />
-                </button>
-                {isHistoryOpen && (
-                  <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsHistoryOpen(false)} />
-                    <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 340, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
-                      <div style={{ padding: "10px 16px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.08em" }}>Operation History</span>
-                        <span style={{ fontSize: 10, color: "#94A3B8" }}>Rollback enabled</span>
-                      </div>
-                      <div style={{ maxHeight: 280, overflowY: "auto" }}>
-                        {activities.length === 0 ? (
-                          <div style={{ padding: 24, textAlign: "center", fontSize: 12, color: "#94A3B8" }}>No actions recorded yet.</div>
-                        ) : activities.map((act: any) => (
-                          <div key={act.id} style={{ padding: "10px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, borderBottom: "1px solid #F8FAFC" }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A", background: "#F1F5F9", padding: "1px 6px", borderRadius: 4 }}>{act.user}</span>
-                                <span style={{ fontSize: 10, color: "#94A3B8", fontFamily: "monospace" }}>{act.timestamp}</span>
-                              </div>
-                              <span style={{ fontSize: 12, color: "#64748B" }}>{act.description}</span>
-                            </div>
-                            <button
-                              onClick={() => undoActivity(act.id)}
-                              style={{ fontSize: 11, color: "var(--color-secondary)", background: "var(--secondary-container)", border: "1px solid rgba(79,70,229,0.2)", padding: "3px 8px", borderRadius: "6px", cursor: "pointer", fontWeight: 700, display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap" }}
-                            >
-                              <RotateCcw size={10} /> Undo
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
               {/* Notifications */}
               <div style={{ position: "relative" }}>
                 <button
@@ -465,8 +432,8 @@ export function AdminLayoutClient({
                   style={{ width: 34, height: 34, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748B", background: "none", border: "none", cursor: "pointer", transition: "all 0.15s", position: "relative" }}
                 >
                   <Bell size={16} />
-                  {unreadNotifCount > 0 && (
-                    <span style={{ position: "absolute", top: 6, right: 6, width: 8, height: 8, background: "#EF4444", borderRadius: "50%", border: "2px solid white" }} />
+                  {unreadCount > 0 && (
+                     <span style={{ position: "absolute", top: 6, right: 6, width: 8, height: 8, background: "#EF4444", borderRadius: "50%", border: "2px solid white" }} />
                   )}
                 </button>
                 {isNotifOpen && (
@@ -514,7 +481,7 @@ export function AdminLayoutClient({
                       width: "32px",
                       height: "32px",
                       borderRadius: "50%",
-                      background: "var(--color-secondary)",
+                      background: "#0284c7",
                       color: "white",
                       display: "flex",
                       alignItems: "center",
@@ -531,7 +498,7 @@ export function AdminLayoutClient({
                       {profile.name}
                     </p>
                     <p style={{ margin: 0, fontSize: "10px", color: "#64748B", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                      Admin
+                      {profile.staff_role || "Production"}
                     </p>
                   </div>
                 </button>
@@ -539,6 +506,13 @@ export function AdminLayoutClient({
                   <>
                     <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setIsProfileOpen(false)} />
                     <div className="prt-animate-in" style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 180, background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden", padding: 4 }}>
+                      <button
+                        onClick={() => { setIsChangePasswordModalOpen(true); setIsProfileOpen(false); setPasswordError(""); setPasswordSuccess(""); setNewPassword(""); setConfirmPassword(""); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "8px", fontSize: 13, fontWeight: 600, color: "#64748B", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}
+                      >
+                        <Key size={14} /> Change Password
+                      </button>
+                      <div style={{ height: 1, background: "#E2E8F0", margin: "4px 0" }} />
                       <button
                         onClick={handleLogout}
                         style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: "8px", fontSize: 13, fontWeight: 600, color: "#EF4444", background: "none", border: "none", cursor: "pointer", transition: "background 0.15s", textAlign: "left" }}
@@ -569,11 +543,77 @@ export function AdminLayoutClient({
         </main>
       </div>
 
-      <style>{`
-        @media (max-width: 768px) {
-          .hidden-mobile { display: none !important; }
-        }
-      `}</style>
+      {isChangePasswordModalOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: "white", width: "100%", maxWidth: "400px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)", padding: "24px" }} className="prt-animate-in">
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+              <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", color: "#0284c7" }}>
+                <Lock size={16} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: "16px", fontWeight: "800", color: "#0F172A", margin: 0 }}>Change Password</h3>
+                <p style={{ fontSize: "11px", color: "#64748B", margin: 0 }}>Update your production portal password credentials</p>
+              </div>
+            </div>
+
+            {passwordError && (
+              <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: "6px", fontSize: "12px", color: "#BE123C", fontWeight: "600" }}>
+                {passwordError}
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div style={{ marginBottom: "12px", padding: "8px 12px", background: "#DCFCE7", border: "1px solid #BBF7D0", borderRadius: "6px", fontSize: "12px", color: "#16A34A", fontWeight: "600" }}>
+                {passwordSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handlePasswordSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: "#475569", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", padding: "8px 12px", outline: "none" }}
+                  placeholder="Minimum 6 characters"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: "700", color: "#475569", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Confirm New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", padding: "8px 12px", outline: "none" }}
+                  placeholder="Repeat new password"
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsChangePasswordModalOpen(false)}
+                  disabled={isSubmittingPassword}
+                  style={{ flex: 1, padding: "8px 16px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: "700", color: "#475569", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingPassword}
+                  style={{ flex: 1, padding: "8px 16px", background: "#0284c7", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "700", color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                >
+                  {isSubmittingPassword ? <Loader2 size={14} style={{ animation: "prt-spin 1s linear infinite" }} /> : "Update Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

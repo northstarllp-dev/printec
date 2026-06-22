@@ -117,6 +117,26 @@ export default async function OrderDetailPage({
     );
   }
 
+  // Fetch quotation for this order
+  const { data: quotationData } = await supabase
+    .from("quotations")
+    .select("*")
+    .eq("order_id", orderData.id)
+    .maybeSingle();
+
+  const quoteDetails = quotationData ? {
+    items: quotationData.items || [],
+    discount: Number(quotationData.discount || 0),
+    subtotal: Number(quotationData.subtotal || 0),
+    tax: Number(quotationData.tax || 0),
+    grandTotal: Number(quotationData.grand_total || 0),
+    status: quotationData.status,
+    notes: quotationData.notes,
+    terms: quotationData.terms,
+    validUntil: quotationData.valid_until,
+    quotationId: quotationData.quotation_id,
+  } : null;
+
   // Map to camelCase
   const customer = {
     id: customerData.id,
@@ -149,7 +169,7 @@ export default async function OrderDetailPage({
         versionHistory: orderData.version_history || [],
     chatHistory: orderData.chat_history || [],
     siteVisitDetails: mapSiteVisitFromDb(orderData.site_visits?.[0] || null),
-    quoteDetails: orderData.quote_details,
+    quoteDetails,
     designDetails: orderData.design_details,
     productionDetails: orderData.production_details,
     installationDetails: orderData.installation_details,
