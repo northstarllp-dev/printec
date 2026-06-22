@@ -10,6 +10,8 @@ export default async function RootGateway() {
   if (profile) {
     if (profile.role === "admin") {
       redirect("/admin/dashboard");
+    } else if (profile.staff_role === "Production") {
+      redirect("/production/orders");
     } else {
       redirect("/staff/orders");
     }
@@ -57,7 +59,7 @@ export default async function RootGateway() {
       </div>
 
       {/* Portal Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, width: "100%", maxWidth: 600 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, width: "100%", maxWidth: 840 }}>
 
         {/* Admin Card */}
         <Link
@@ -116,6 +118,36 @@ export default async function RootGateway() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--color-secondary)" }}>
             Go to Staff Login <ArrowRight size={13} />
+          </div>
+        </Link>
+
+        {/* Production Card */}
+        <Link
+          href="/production/login"
+          style={{
+            background: "var(--surface-container-lowest)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-2xl)",
+            padding: "28px 24px",
+            cursor: "pointer",
+            textAlign: "left",
+            transition: "all 0.18s",
+            display: "flex",
+            flexDirection: "column",
+            gap: 0,
+            textDecoration: "none",
+            color: "inherit",
+          }}
+        >
+          <div style={{ width: 40, height: 40, background: "#dbeafe", borderRadius: "var(--radius-xl)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+            <ClipboardList size={18} color="#0284c7" />
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", marginBottom: 6 }}>Production Portal</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 20, flex: 1 }}>
+            Track signage orders that have crossed design stage and manage workshop fabrication milestones.
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#0284c7" }}>
+            Go to Production Login <ArrowRight size={13} />
           </div>
         </Link>
       </div>

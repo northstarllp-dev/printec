@@ -44,22 +44,32 @@ export const updateSession = async (request: NextRequest) => {
     const { data: { user } } = await supabase.auth.getUser();
 
     // Route Protection Logic
-    const isProtectedRoute = request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/staff');
-    const isLoginPage = request.nextUrl.pathname === '/admin/login' || request.nextUrl.pathname === '/staff/login' || request.nextUrl.pathname === '/login';
+    const isProtectedRoute = request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/staff') || request.nextUrl.pathname.startsWith('/production');
+    const isLoginPage = request.nextUrl.pathname === '/admin/login' || request.nextUrl.pathname === '/staff/login' || request.nextUrl.pathname === '/production/login' || request.nextUrl.pathname === '/login';
 
     // If trying to access a protected route without being logged in
     if (isProtectedRoute && !isLoginPage && !user) {
       const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = '/admin/login'; // Default to admin login
+      if (request.nextUrl.pathname.startsWith('/production')) {
+        loginUrl.pathname = '/production/login';
+      } else if (request.nextUrl.pathname.startsWith('/staff')) {
+        loginUrl.pathname = '/staff/login';
+      } else {
+        loginUrl.pathname = '/admin/login';
+      }
       return NextResponse.redirect(loginUrl);
     }
 
     // If trying to access login page while already logged in
     if (isLoginPage && user) {
       const dashboardUrl = request.nextUrl.clone();
-      // Simple logic: if they are staff, go to staff, else go to admin
-      // For MVP, just redirect to /admin/dashboard
-      dashboardUrl.pathname = '/admin/dashboard'; 
+      if (request.nextUrl.pathname.startsWith('/production')) {
+        dashboardUrl.pathname = '/production/orders';
+      } else if (request.nextUrl.pathname.startsWith('/staff')) {
+        dashboardUrl.pathname = '/staff/orders';
+      } else {
+        dashboardUrl.pathname = '/admin/dashboard';
+      }
       return NextResponse.redirect(dashboardUrl);
     }
   } catch (error) {
