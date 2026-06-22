@@ -24,7 +24,7 @@ export default function AdminLogin() {
       if (res.error) {
         setError(res.error);
       } else {
-        router.push("/admin/orders");
+        router.push("/admin/dashboard");
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");

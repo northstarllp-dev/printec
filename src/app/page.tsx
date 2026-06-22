@@ -9,7 +9,7 @@ export default async function RootGateway() {
 
   if (profile) {
     if (profile.role === "admin") {
-      redirect("/admin/orders");
+      redirect("/admin/dashboard");
     } else {
       redirect("/staff/orders");
     }

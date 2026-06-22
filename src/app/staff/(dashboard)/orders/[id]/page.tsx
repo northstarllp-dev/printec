@@ -4,6 +4,8 @@ import { getOrderById } from "@/features/orders/actions/orderActions";
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { getProducts } from "@/features/products/actions/productActions";
+import { getQuotationByOrderId } from "@/features/quotations/actions/quotationActions";
 import { OrderDetailPageClient } from "@/app/admin/(dashboard)/orders/[id]/OrderDetailPageClient";
 
 export default async function StaffOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -15,8 +17,12 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     redirect("/staff/orders");
   }
 
-  const customersData = await getCustomers();
-  const employeesData = await getEmployees();
+  const [customersData, employeesData, productsData, quotationData] = await Promise.all([
+    getCustomers(),
+    getEmployees(),
+    getProducts().catch(() => []),
+    getQuotationByOrderId(order.id).catch(() => null),
+  ]);
 
   const mappedOrder = {
     id: order.id,
@@ -37,7 +43,6 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     versionHistory: order.version_history || [],
     chatHistory: order.chat_history || [],
     siteVisitDetails: order.site_visit_details,
-    quoteDetails: order.quote_details,
     designDetails: order.design_details,
     productionDetails: order.production_details,
     installationDetails: order.installation_details,
@@ -83,14 +88,27 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     workload: Number(profile.workload) || 0
   };
 
+  const mappedProducts = (productsData || []).map((p: any) => ({
+    id: p.id,
+    product_id: p.product_id,
+    name: p.name,
+    category: p.category ?? null,
+    pricing_type: p.pricing_type,
+    unit_price: Number(p.unit_price),
+    unit: p.unit,
+    is_active: p.is_active,
+  }));
+
   return (
-    <OrderDetailPageClient 
+    <OrderDetailPageClient
       order={mappedOrder}
       customers={mappedCustomers}
       employees={mappedEmployees}
       allOrders={[]}
       role="Employee"
       currentEmployee={currentEmployee}
+      products={mappedProducts}
+      initialQuotation={quotationData}
     />
   );
 }

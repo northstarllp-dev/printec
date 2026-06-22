@@ -212,7 +212,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     const updatedQuote = { ...activeOrder.quoteDetails, status: "Approved" };
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Approved", quoteDetails: updatedQuote } : o));
     await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the quotation details." });
-    await supabase.from("orders").update({ stage: "Quotation Approved", quote_details: updatedQuote }).eq("id", activeOrder.id);
+    await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", activeOrder.id);
+    await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", activeOrder.id);
     setUpdatingStatus(null);
   };
 
@@ -223,7 +224,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     const updatedQuote = { ...activeOrder.quoteDetails, status: "Negotiation" };
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Negotiation", quoteDetails: updatedQuote } : o));
     await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}` });
-    await supabase.from("orders").update({ stage: "Quotation Negotiation", quote_details: updatedQuote }).eq("id", activeOrder.id);
+    await supabase.from("quotations").update({ status: "Rejected" }).eq("order_id", activeOrder.id);
+    await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", activeOrder.id);
     setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
   };
 

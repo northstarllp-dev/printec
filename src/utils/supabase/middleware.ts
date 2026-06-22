@@ -58,8 +58,8 @@ export const updateSession = async (request: NextRequest) => {
     if (isLoginPage && user) {
       const dashboardUrl = request.nextUrl.clone();
       // Simple logic: if they are staff, go to staff, else go to admin
-      // For MVP, just redirect to /admin/orders
-      dashboardUrl.pathname = '/admin/orders'; 
+      // For MVP, just redirect to /admin/dashboard
+      dashboardUrl.pathname = '/admin/dashboard'; 
       return NextResponse.redirect(dashboardUrl);
     }
   } catch (error) {

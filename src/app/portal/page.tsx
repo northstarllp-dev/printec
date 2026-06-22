@@ -102,6 +102,19 @@ export default async function PortalPage({
     );
   }
 
+  // Fetch quotations for these orders
+  const orderIds = (ordersData || []).map((o) => o.id);
+  let quotationsData: any[] = [];
+  if (orderIds.length > 0) {
+    const { data: qts, error: qtsError } = await supabase
+      .from("quotations")
+      .select("*")
+      .in("order_id", orderIds);
+    if (!qtsError && qts) {
+      quotationsData = qts;
+    }
+  }
+
   // If orderId is provided, perform an explicit IDOR verification check:
   // ensure the requested order_id belongs to the validated customer_id.
   if (payload.orderId) {
@@ -131,35 +144,52 @@ export default async function PortalPage({
     customerId: customerData.customer_id || customerData.id,
   };
 
-  const orders = ordersData.map((o: any) => ({
-    id: o.id,
-    projectName: o.project_name,
-    customerId: o.customer_id,
-    customerName: o.customer_name,
-    stage: o.stage,
-    budget: Number(o.budget || 0),
-    depositPaid: Number(o.deposit_paid || 0),
-    dimensions: o.dimensions,
-    notes: o.notes,
-    urgent: Boolean(o.urgent),
-    assignedEmployees: o.assigned_employees || [],
-    assignedDesigners: o.assigned_designers || [],
-    assignedMarketers: o.assigned_marketers || [],
-    dateCreated: o.date_created,
-    deadlineStatus: o.deadline_status,
-    imageMockup: o.image_mockup,
-    versionHistory: o.version_history || [],
-    chatHistory: o.chat_history || [],
-    siteVisitDetails: o.site_visit_details,
-    quoteDetails: o.quote_details,
-    designDetails: o.design_details,
-    productionDetails: o.production_details,
-    installationDetails: o.installation_details,
-    stageStatus: o.stage_status,
-    stageAdminNotes: o.stage_admin_notes,
-    orderCode: o.order_id || o.id,
-    orderId: o.order_id || o.id,
-  }));
+  const orders = ordersData.map((o: any) => {
+    const q = quotationsData.find((qt: any) => qt.order_id === o.id);
+    const quoteDetails = q ? {
+      items: q.items || [],
+      discount: Number(q.discount || 0),
+      subtotal: Number(q.subtotal || 0),
+      tax: Number(q.tax || 0),
+      grandTotal: Number(q.grand_total || 0),
+      status: q.status,
+      notes: q.notes,
+      terms: q.terms,
+      validUntil: q.valid_until,
+      quotationId: q.quotation_id,
+    } : null;
+
+    return {
+      id: o.id,
+      projectName: o.project_name,
+      customerId: o.customer_id,
+      customerName: o.customer_name,
+      stage: o.stage,
+      budget: Number(o.budget || 0),
+      depositPaid: Number(o.deposit_paid || 0),
+      dimensions: o.dimensions,
+      notes: o.notes,
+      urgent: Boolean(o.urgent),
+      assignedEmployees: o.assigned_employees || [],
+      assignedDesigners: o.assigned_designers || [],
+      assignedMarketers: o.assigned_marketers || [],
+      dateCreated: o.date_created,
+      deadlineStatus: o.deadline_status,
+      imageMockup: o.image_mockup,
+      versionHistory: o.version_history || [],
+      chatHistory: o.chat_history || [],
+      siteVisitDetails: o.site_visit_details,
+      quoteDetails,
+      designDetails: o.design_details,
+      productionDetails: o.production_details,
+      installationDetails: o.installation_details,
+      stageStatus: o.stage_status,
+      stageAdminNotes: o.stage_admin_notes,
+      orderCode: o.order_id || o.id,
+      orderId: o.order_id || o.id,
+    };
+  });
+
 
   return (
     <PortalClient

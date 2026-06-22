@@ -4,6 +4,8 @@ import { getOrderById, getOrders } from "@/features/orders/actions/orderActions"
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
+import { getProducts } from "@/features/products/actions/productActions";
+import { getQuotationByOrderId } from "@/features/quotations/actions/quotationActions";
 import { OrderDetailPageClient } from "./OrderDetailPageClient";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -14,10 +16,12 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     redirect("/admin/orders");
   }
 
-  const [customersData, employeesData, allOrdersData] = await Promise.all([
+  const [customersData, employeesData, allOrdersData, productsData, quotationData] = await Promise.all([
     getCustomers(),
     getEmployees(),
     getOrders(),
+    getProducts().catch(() => []),
+    getQuotationByOrderId(order.id).catch(() => null),
   ]);
 
   const mappedOrder = {
@@ -39,7 +43,6 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     versionHistory: order.version_history || [],
     chatHistory: order.chat_history || [],
     siteVisitDetails: order.site_visit_details,
-    quoteDetails: order.quote_details,
     designDetails: order.design_details,
     productionDetails: order.production_details,
     installationDetails: order.installation_details,
@@ -93,6 +96,17 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     assignedEmployees: o.assigned_employees || [],
   }));
 
+  const mappedProducts = (productsData || []).map((p: any) => ({
+    id: p.id,
+    product_id: p.product_id,
+    name: p.name,
+    category: p.category ?? null,
+    pricing_type: p.pricing_type,
+    unit_price: Number(p.unit_price),
+    unit: p.unit,
+    is_active: p.is_active,
+  }));
+
   return (
     <OrderDetailPageClient
       order={mappedOrder}
@@ -101,6 +115,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       allOrders={mappedAllOrders}
       role="Admin"
       currentEmployee={null}
+      products={mappedProducts}
+      initialQuotation={quotationData}
     />
   );
 }

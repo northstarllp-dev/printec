@@ -45,7 +45,7 @@ interface AdminLayoutClientProps {
 }
 
 const NAV_ITEMS = [
-  { id: "/admin", label: "Dashboard", icon: LayoutDashboard, exactMatch: true },
+  { id: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard, exactMatch: true },
   { id: "/admin/orders", label: "Orders", icon: ShoppingBag, countKey: "orders" },
   { id: "/admin/enquire", label: "Enquiries", icon: MessageSquare, countKey: "enquiries" },
   { id: "/admin/customers", label: "Customers", icon: Users, countKey: "customers" },
@@ -126,7 +126,7 @@ export function AdminLayoutClient({
 
   const isActivePath = (item: (typeof NAV_ITEMS)[number]) => {
     if ("exactMatch" in item && item.exactMatch) {
-      return pathname === item.id || pathname === "/admin";
+      return pathname === item.id || pathname === "/admin" || pathname === "/admin/dashboard";
     }
     if (item.id === "/admin/orders") {
       return pathname === "/admin/orders" || pathname.startsWith("/admin/orders/");

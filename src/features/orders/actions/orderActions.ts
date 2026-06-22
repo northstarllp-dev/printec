@@ -234,18 +234,7 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
   return { success: true };
 }
 
-export async function updateQuoteDetailsAction(orderId: string, details: any) {
-  const supabase = await getSupabase();
-  const { data: current, error: fetchError } = await supabase.from("orders").select("quote_details").eq("id", orderId).single();
-  if (fetchError) throw new Error(fetchError.message);
-  
-  const updatedDetails = {
-    ...(current?.quote_details || {}),
-    ...details
-  };
-  
-  return await updateOrder(orderId, { quote_details: updatedDetails });
-}
+
 
 export async function updateDesignDetailsAction(orderId: string, details: any) {
   const supabase = await getSupabase();
