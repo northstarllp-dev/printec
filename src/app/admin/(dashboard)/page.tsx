@@ -14,12 +14,10 @@ export default async function AdminDashboardPage() {
     customerId: o.customer_id,
     customerName: o.customer_name || "",
     stage: o.stage,
-        urgent: o.urgent,
     health: o.health || "Active",
     dateCreated: o.date_created,
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
-    deadlineStatus: o.deadline_status,
   }));
 
   const enquiries = (enquiriesData || []).map((e: any) => ({

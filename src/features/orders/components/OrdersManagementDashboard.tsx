@@ -104,8 +104,6 @@ export function OrdersManagementDashboard({
 
   // Calculations for Staff
   const myActiveOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
-  const myUrgentOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && o.urgent && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
-  const myActionRequired = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId)) && (o.deadlineStatus === "Action Required" || o.deadlineStatus === "Delayed")).length;
   const myCompletedOrders = orders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
 
   const stats = currentUserRole === "Employee" ? [
@@ -115,20 +113,6 @@ export function OrdersManagementDashboard({
       change: "Active projects in your queue",
       icon: Briefcase,
       color: "var(--color-secondary)", // Indigo
-    },
-    {
-      label: "URGENT PROJECTS",
-      value: myUrgentOrders.toString(),
-      change: "High priority tasks",
-      icon: AlertTriangle,
-      color: "#F97316", // Orange
-    },
-    {
-      label: "ACTION REQUIRED",
-      value: myActionRequired.toString(),
-      change: "Delayed or blocked orders",
-      icon: AlertCircle,
-      color: "#f59e0b",
     },
     {
       label: "MY COMPLETED",

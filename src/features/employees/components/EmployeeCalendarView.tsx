@@ -29,7 +29,6 @@ export const EmployeeCalendarView: React.FC<EmployeeCalendarViewProps> = ({ orde
         date: isSiteVisit ? "2023-10-24" : "2023-10-28", // Mock dates matching the database
         time: isSiteVisit ? "11:30 AM" : "02:00 PM",
         address: client ? client.shippingAddress : "Mumbai Hub",
-        urgent: o.urgent
       };
     });
 
@@ -104,9 +103,7 @@ export const EmployeeCalendarView: React.FC<EmployeeCalendarViewProps> = ({ orde
             {mySchedule.map(item => (
               <div 
                 key={item.id} 
-                className={`p-4 bg-white border rounded-[var(--radius-xl)] space-y-3 transition-colors ${
-                  item.urgent ? "border-l-4 border-l-[var(--error-text)] border-[var(--border)]" : "border-[var(--border)]"
-                }`}
+                className="p-4 bg-white border border-[var(--border)] rounded-[var(--radius-xl)] space-y-3 transition-colors"
               >
                 <div className="flex justify-between items-start">
                   <span className={`prt-badge border uppercase text-[9px] ${
@@ -116,9 +113,7 @@ export const EmployeeCalendarView: React.FC<EmployeeCalendarViewProps> = ({ orde
                   }`}>
                     {item.type}
                   </span>
-                  {item.urgent && (
-                    <span className="prt-badge border bg-rose-50 text-[var(--error-text)] border-[var(--error-text)] uppercase text-[9px]">Urgent</span>
-                  )}
+
                 </div>
 
                 <div>

@@ -17,11 +17,11 @@ ON CONFLICT DO NOTHING;
 
 -- 3. Create Mock Orders (Linking to Customers and Employees)
 -- Note: '502d6bb1...' is Akshay Kumar (Designer), 'e9730e5e...' is Vikram Malhotra (Marketer)
-INSERT INTO public.orders (id, company_id, project_name, customer_id, stage, dimensions, notes, urgent, budget, deposit_paid, assigned_employees, customer_name, deadline_status, stage_status, date_created)
+INSERT INTO public.orders (id, company_id, project_name, customer_id, stage, dimensions, notes, budget, deposit_paid, assigned_employees, customer_name, stage_status, date_created)
 VALUES
-(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Neon Window Signage', '33333333-3333-3333-3333-333333333333', 'Quotation In Progress', '48 x 24 inches', 'Requires high voltage transformers', true, 45000, 15000, ARRAY['502d6bb1-a51f-4025-83da-2e1ce8caf446']::uuid[], 'Gourmet Delights Cafe', 'On Track', 'Normal', now() - interval '3 days'),
+(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Neon Window Signage', '33333333-3333-3333-3333-333333333333', 'Quotation In Progress', '48 x 24 inches', 'Requires high voltage transformers', 45000, 15000, ARRAY['502d6bb1-a51f-4025-83da-2e1ce8caf446']::uuid[], 'Gourmet Delights Cafe', 'Normal', now() - interval '3 days'),
 
-(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'ACP Pillar Gate Banner', '44444444-4444-4444-4444-444444444444', 'Production', '120 x 48 inches', 'Concrete pillar mounting', false, 120000, 60000, ARRAY['e9730e5e-ff6a-4857-aec3-1ad4d98011fe']::uuid[], 'Apex Tech Parks', 'Delayed', 'Normal', now() - interval '10 days'),
+(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'ACP Pillar Gate Banner', '44444444-4444-4444-4444-444444444444', 'Production', '120 x 48 inches', 'Concrete pillar mounting', 120000, 60000, ARRAY['e9730e5e-ff6a-4857-aec3-1ad4d98011fe']::uuid[], 'Apex Tech Parks', 'Normal', now() - interval '10 days'),
 
-(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Office Reception Logo', '22222222-2222-2222-2222-222222222222', 'Site Visit Pending', 'TBD', 'Initial discussions only', false, 0, 0, '{}'::uuid[], 'Rajesh Kumar', 'Action Required', 'Normal', now() - interval '1 day')
+(gen_random_uuid(), '11111111-1111-1111-1111-111111111111', 'Office Reception Logo', '22222222-2222-2222-2222-222222222222', 'Site Visit Pending', 'TBD', 'Initial discussions only', 0, 0, '{}'::uuid[], 'Rajesh Kumar', 'Normal', now() - interval '1 day')
 ON CONFLICT DO NOTHING;

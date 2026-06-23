@@ -31,19 +31,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
         <span className="text-[10px] font-bold text-slate-400">STAGE 4</span>
       </div>
 
-      <div
-        className={`p-5 rounded-2xl border ${
-          order.urgent
-            ? "border-amber-400 bg-amber-50/20 ring-2 ring-amber-400/50 animate-pulse"
-            : "border-slate-200 bg-white"
-        } space-y-4`}
-      >
-        {order.urgent && (
-          <div className="flex items-center space-x-2 text-amber-800 text-xs font-extrabold uppercase">
-            <AlertOctagon size={16} className="text-amber-500 shrink-0" />
-            <span>⚠️ Priority Dispatch: High Urgency Fabrication Queue</span>
-          </div>
-        )}
+      <div className="p-5 rounded-2xl border border-slate-200 bg-white space-y-4">
 
         <p className="text-xs text-slate-500 leading-normal">
           Check off critical milestones in the signage assembly pipeline. Fabricators must confirm

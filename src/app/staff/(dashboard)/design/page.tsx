@@ -27,12 +27,10 @@ export default async function StaffDesignPage() {
     projectName: o.project_name,
     customerId: o.customer_id,
     stage: o.stage,
-                productType: o.product_type,
+    productType: o.product_type,
     requirements: o.requirements,
-        urgent: o.urgent,
     assignedEmployees: o.assigned_employees || [],
     dateCreated: o.date_created,
-    deadlineStatus: o.deadline_status,
     customerName: o.customer_name || "",
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id

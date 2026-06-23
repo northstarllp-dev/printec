@@ -217,8 +217,6 @@ The central business entity. Tracks a signage project through a multi-stage pipe
 | `health` | `text` | YES | `'Active'` | `Active` / `Lost` / `Completed` |
 | `lost_reason` | `text` | YES | — | Reason if health = Lost |
 | `stage_status` | `text` | YES | `'Normal'` | Stage health indicator |
-| `deadline_status` | `text` | YES | `'On Track'` | |
-| `urgent` | `boolean` | YES | `false` | Urgency flag |
 | `dimensions` | `text` | YES | — | Overall dimensions notes |
 | `notes` | `text` | YES | — | General notes |
 | `stage_admin_notes` | `text` | YES | — | Admin-only notes per stage |

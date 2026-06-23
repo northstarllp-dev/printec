@@ -25,7 +25,6 @@ export default async function ProductionOrdersPage() {
     customerId: o.customer_id,
     customerName: o.customer_name || "",
     stage: o.stage,
-    urgent: !!o.urgent,
     dateCreated: o.date_created,
     orderId: o.order_id || o.id,
     orderCode: o.order_id || o.id

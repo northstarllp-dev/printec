@@ -5,9 +5,9 @@ const glob = require('glob');
 const columns = [
   'id', 'company_id', 'project_name', 'customer_id', 'stage',
   'dimensions', 'notes', 'assigned_employees', 'assigned_designers',
-  'assigned_marketers', 'deadline_status', 'image_mockup', 'stage_status',
+  'assigned_marketers', 'image_mockup', 'stage_status',
   'version_history', 'chat_history', 'quote_details', 'design_details',
-  'production_details', 'installation_details', 'urgent', 'date_created',
+  'production_details', 'installation_details', 'date_created',
   'budget', 'deposit_paid', 'stage_admin_notes', 'customer_name',
   'order_id', 'health', 'lost_reason', 'product_type', 'requirements'
 ];
@@ -19,7 +19,6 @@ const mappedNames = {
   'assigned_employees': 'assignedEmployees',
   'assigned_designers': 'assignedDesigners',
   'assigned_marketers': 'assignedMarketers',
-  'deadline_status': 'deadlineStatus',
   'image_mockup': 'imageMockup',
   'stage_status': 'stageStatus',
   'version_history': 'versionHistory',
