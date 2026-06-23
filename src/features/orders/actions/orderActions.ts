@@ -47,7 +47,9 @@ export async function getOrders() {
   if (error) throw new Error(error.message);
   
   return data.map(order => {
-    const sv = order.site_visits && order.site_visits.length > 0 ? order.site_visits[0] : null;
+    const sv = Array.isArray(order.site_visits)
+      ? (order.site_visits.length > 0 ? order.site_visits[0] : null)
+      : (order.site_visits || null);
     const assignedEmployees = (order.order_assignments || []).map((a: any) => a.employee_id);
     return {
       ...order,
@@ -90,7 +92,9 @@ export async function getOrderById(id: string) {
   
   if (!data) return null;
 
-  const sv = data.site_visits && data.site_visits.length > 0 ? data.site_visits[0] : null;
+  const sv = Array.isArray(data.site_visits)
+    ? (data.site_visits.length > 0 ? data.site_visits[0] : null)
+    : (data.site_visits || null);
   
   // Fetch assignments from new table
   const { data: assignData } = await supabase

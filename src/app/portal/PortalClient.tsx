@@ -112,8 +112,12 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     })();
     return () => { mounted = false; };
   }, [token]);
+  const initialOrder = initialOrders.find(
+    o => o.id === initialActiveOrderId || o.orderId === initialActiveOrderId || o.orderCode === initialActiveOrderId
+  ) || initialOrders[0];
+
   const [activeOrderId, setActiveOrderId] = useState<string>(
-    initialActiveOrderId || (initialOrders.length > 0 ? initialOrders[0].id : "")
+    initialOrder?.id || ""
   );
 
   // Site Visit scheduling states
@@ -137,7 +141,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const activeOrder = orders.find(o => o.id === activeOrderId || o.orderId === activeOrderId || o.orderCode === activeOrderId) || orders[0];
+  const activeOrder = orders.find(o => o.id === activeOrderId) || orders[0];
   const currentStep = activeOrder ? getStepIndex(activeOrder.stage) : 0;
 
   // Sync site visit details
@@ -149,7 +153,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
       setSiteAddress(sv.customerAddress || customer.shippingAddress || "");
       setGpsCoords(sv.gpsLocation || "12.9716° N, 77.5946° E");
     }
-  }, [activeOrderId]);
+  }, [activeOrderId, activeOrder?.siteVisitDetails]);
 
   // Unread count
   useEffect(() => {

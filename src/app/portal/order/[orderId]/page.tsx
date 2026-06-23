@@ -166,7 +166,11 @@ export default async function OrderDetailPage({
     deadlineStatus: orderData.deadline_status,
         versionHistory: orderData.version_history || [],
     chatHistory: orderData.chat_history || [],
-    siteVisitDetails: mapSiteVisitFromDb(orderData.site_visits?.[0] || null),
+    siteVisitDetails: mapSiteVisitFromDb(
+      Array.isArray(orderData.site_visits)
+        ? (orderData.site_visits.length > 0 ? orderData.site_visits[0] : null)
+        : (orderData.site_visits || null)
+    ),
     quoteDetails,
     designDetails: orderData.design_details,
     productionDetails: orderData.production_details,

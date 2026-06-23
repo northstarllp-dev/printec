@@ -202,7 +202,11 @@ export default async function PortalPage({
       imageMockup: o.image_mockup,
       versionHistory: o.version_history || [],
       chatHistory: o.chat_history || [],
-      siteVisitDetails: mapSiteVisitFromDb(o.site_visits?.[0] || null),
+      siteVisitDetails: mapSiteVisitFromDb(
+        Array.isArray(o.site_visits)
+          ? (o.site_visits.length > 0 ? o.site_visits[0] : null)
+          : (o.site_visits || null)
+      ),
       quoteDetails,
       designDetails: o.design_details,
       productionDetails: o.production_details,
