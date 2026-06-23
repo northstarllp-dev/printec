@@ -39,14 +39,19 @@ export async function getOrders() {
     site_visits(
       *,
       site_visit_measurements(*)
+    ),
+    order_assignments(
+      employee_id
     )
   `).order("date_created", { ascending: false });
   if (error) throw new Error(error.message);
   
   return data.map(order => {
     const sv = order.site_visits && order.site_visits.length > 0 ? order.site_visits[0] : null;
+    const assignedEmployees = (order.order_assignments || []).map((a: any) => a.employee_id);
     return {
       ...order,
+      assigned_employees: assignedEmployees,
       siteVisitDetails: mapSiteVisitFromDb(sv)
     };
   });
@@ -86,8 +91,17 @@ export async function getOrderById(id: string) {
   if (!data) return null;
 
   const sv = data.site_visits && data.site_visits.length > 0 ? data.site_visits[0] : null;
+  
+  // Fetch assignments from new table
+  const { data: assignData } = await supabase
+    .from("order_assignments")
+    .select("employee_id")
+    .eq("order_id", data.id);
+  const assignedEmployees = (assignData || []).map((a: any) => a.employee_id);
+  
   return {
     ...data,
+    assigned_employees: assignedEmployees,
     siteVisitDetails: mapSiteVisitFromDb(sv)
   };
 }
@@ -492,55 +506,60 @@ export async function addChatMessageAction(orderId: string, sender: string, mess
   return await updateOrder(orderId, { chat_history: updatedChat });
 }
 
-export async function assignEmployeesToOrderAction(orderId: string, employees: string[]) {
-  return await updateOrder(orderId, { assigned_employees: employees });
+export async function assignEmployeesToOrderAction(orderId: string, employeeIds: string[]) {
+  return await assignTeamToOrder(orderId, employeeIds);
 }
 
 export async function fetchEmployeeStats() {
   const supabase = await getSupabase();
   
-  const { data: staff, error: staffError } = await supabase.from("users").select("id, name, email, staff_role").eq("role", "staff");
+  const { data: staff, error: staffError } = await supabase
+    .from("users")
+    .select("id, name, email, staff_role")
+    .eq("role", "staff")
+    .neq("staff_role", "Production");
   if (staffError) throw new Error(staffError.message);
 
-  const { data: orders, error: ordersError } = await supabase
-    .from("orders")
-    .select("id, project_name, assigned_employees, assigned_designers, assigned_marketers, stage")
-    .neq("stage", "Completed")
-    .neq("stage", "Closed");
-  if (ordersError) throw new Error(ordersError.message);
+  // Load active assignments from order_assignments joined to active orders
+  const { data: assignments, error: assignError } = await supabase
+    .from("order_assignments")
+    .select("employee_id, orders!inner(id, project_name, stage)")
+    .neq("orders.stage", "Completed")
+    .neq("orders.stage", "Closed");
+  if (assignError) throw new Error(assignError.message);
 
   const stats = (staff || []).map(emp => {
-    const myOrders = (orders || []).filter(o => 
-      o.assigned_employees?.includes(emp.id) ||
-      o.assigned_designers?.includes(emp.id) ||
-      o.assigned_marketers?.includes(emp.id)
-    );
+    const myAssignments = (assignments || []).filter(a => a.employee_id === emp.id);
     return {
       id: emp.id,
       name: emp.name,
       staff_role: emp.staff_role,
-      activeJobs: myOrders.length,
-      jobTitles: myOrders.map(o => o.project_name)
+      activeJobs: myAssignments.length,
+      jobTitles: myAssignments.map(a => (a.orders as any)?.project_name).filter(Boolean)
     };
   });
   
   return stats;
 }
 
-export async function assignTeamToOrder(orderId: string, assignments: { siteVisitor: string, designer: string, marketer: string }) {
+export async function assignTeamToOrder(orderId: string, employeeIds: string[]) {
   const supabase = await getSupabase();
 
   // Resolve UUID in case a friendly order_id was passed
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
-  const updates: any = {};
-  if (assignments.siteVisitor) updates.assigned_employees = [assignments.siteVisitor];
-  if (assignments.designer) updates.assigned_designers = [assignments.designer];
-  if (assignments.marketer) updates.assigned_marketers = [assignments.marketer];
-
   const { data: o } = await supabase.from("orders").select("order_id").eq("id", orderUuid).single();
 
-  const msg = `Assigned team. Site Visitor: ${assignments.siteVisitor || 'None'}, Designer: ${assignments.designer || 'None'}, Marketer: ${assignments.marketer || 'None'}`;
+  // Delete existing assignments for this order, then insert new ones
+  await supabase.from("order_assignments").delete().eq("order_id", orderUuid);
+  
+  if (employeeIds.length > 0) {
+    const rows = employeeIds.map(eid => ({ order_id: orderUuid, employee_id: eid }));
+    const { error: insertError } = await supabase.from("order_assignments").insert(rows);
+    if (insertError) throw new Error(insertError.message);
+  }
+
+  const msg = `Team assigned: ${employeeIds.length} employee(s) allocated to this order.`;
 
   await supabase.from("order_messages").insert({
     order_id: o?.order_id || orderId,
@@ -558,7 +577,9 @@ export async function assignTeamToOrder(orderId: string, assignments: { siteVisi
     msg
   );
 
-  return await updateOrder(orderUuid, updates);
+  revalidatePath("/admin/orders");
+  revalidatePath("/staff/orders");
+  return { success: true };
 }
 
 export async function updateOrderHealthAction(orderId: string, health: string, lostReason?: string) {
@@ -652,10 +673,10 @@ export async function reopenOrderAction(orderId: string) {
 export async function scheduleSiteVisitAction(orderId: string, scheduleData: any) {
   const supabase = await getSupabase();
   
-  // 1. Get current order (including chat history and site visit details)
+  // 1. Get current order (excluding site_visit_details)
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("site_visit_details, chat_history, order_id, customer_id, customer_name")
+    .select("company_id, chat_history, order_id, customer_id, customer_name")
     .eq("id", orderId)
     .single();
     
@@ -663,17 +684,39 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
     throw new Error(fetchError?.message || "Order not found");
   }
 
+  // Fetch existing site visit if any
+  const { data: existingSv } = await supabase
+    .from("site_visits")
+    .select("*")
+    .eq("order_id", orderId)
+    .maybeSingle();
+
+  const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
+
   // 2. Build the updated site_visit_details
   const updatedSiteVisit = {
-    ...(order.site_visit_details || {}),
+    ...mappedExisting,
     ...scheduleData,
     completed: false, // Scheduling state
-    reviewStatus: "Pending" // Reset/set review status to pending
+    reviewStatus: "Pending" as const // Reset/set review status to pending
   };
+
+  const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
+  const dbPayload = mapSiteVisitToDb(orderId, companyId, updatedSiteVisit);
+
+  const { data: siteVisit, error: svError } = await supabase
+    .from("site_visits")
+    .upsert(dbPayload, { onConflict: "order_id" })
+    .select()
+    .single();
+
+  if (svError) {
+    throw new Error(svError.message);
+  }
 
   // 3. Construct system notification message in chat history
   const date = scheduleData.auditDate || scheduleData.preferredDate;
-  const time = scheduleData.auditTime || scheduleData.preferredTime;
+  const time = scheduleData.preferredTime || scheduleData.auditTime;
   const systemMsg = {
     id: `sys-${Date.now()}`,
     sender: "System",
@@ -683,12 +726,11 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   
   const updatedChat = [...(order.chat_history || []), systemMsg];
 
-  // 4. Update order stage, site_visit_details, and chat_history
-  const { data: updatedOrder, error: updateError } = await supabase
+  // 4. Update order stage and chat_history
+  const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
     .update({
       stage: "Site Visit Pending", // Keep it pending until staff approves
-      site_visit_details: updatedSiteVisit,
       chat_history: updatedChat
     })
     .eq("id", orderId)
@@ -723,9 +765,14 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
   
+  const fullOrder = {
+    ...updatedOrderRow,
+    siteVisitDetails: mapSiteVisitFromDb(siteVisit)
+  };
+
   return {
     success: true,
-    order: updatedOrder
+    order: fullOrder
   };
 }
 
@@ -734,7 +781,7 @@ export async function approveSiteVisitAction(orderId: string) {
   
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("site_visit_details, chat_history, order_id, customer_id")
+    .select("company_id, chat_history, order_id, customer_id")
     .eq("id", orderId)
     .single();
     
@@ -742,10 +789,32 @@ export async function approveSiteVisitAction(orderId: string) {
     throw new Error(fetchError?.message || "Order not found");
   }
 
+  // Fetch existing site visit if any
+  const { data: existingSv } = await supabase
+    .from("site_visits")
+    .select("*")
+    .eq("order_id", orderId)
+    .maybeSingle();
+
+  const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
+
   const updatedSiteVisit = {
-    ...(order.site_visit_details || {}),
-    reviewStatus: "Staff Approved"
+    ...mappedExisting,
+    reviewStatus: "Staff Approved" as const
   };
+
+  const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
+  const dbPayload = mapSiteVisitToDb(orderId, companyId, updatedSiteVisit);
+
+  const { data: siteVisit, error: svError } = await supabase
+    .from("site_visits")
+    .upsert(dbPayload, { onConflict: "order_id" })
+    .select()
+    .single();
+
+  if (svError) {
+    throw new Error(svError.message);
+  }
 
   const logMsg = `Site visit time approved by assigned staff. Pending Admin Approval.`;
   const systemMsg = {
@@ -757,12 +826,11 @@ export async function approveSiteVisitAction(orderId: string) {
   
   const updatedChat = [...(order.chat_history || []), systemMsg];
 
-  const { data: updatedOrder, error: updateError } = await supabase
+  const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
     .update({
       stage: "Site Visit Pending", // Keep it pending until admin approves
       stage_status: "Pending Admin Approval: Site Visit Schedule",
-      site_visit_details: updatedSiteVisit,
       chat_history: updatedChat
     })
     .eq("id", orderId)
@@ -793,6 +861,12 @@ export async function approveSiteVisitAction(orderId: string) {
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
   
-  return { success: true, order: updatedOrder };
+  const fullOrder = {
+    ...updatedOrderRow,
+    siteVisitDetails: mapSiteVisitFromDb(siteVisit)
+  };
+
+  return { success: true, order: fullOrder };
 }
+
 

@@ -34,6 +34,7 @@ import {
   reopenOrderAction,
   approveSiteVisitAction,
 } from "@/features/orders/actions/orderActions";
+import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
 
 /* ─── helpers ──────────────────────────────────────────────────── */
 const STAGE_LABEL: Record<string, { label: string; color: string }> = {
@@ -203,6 +204,55 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           setMessages(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
         } else if (payload.eventType === "DELETE") {
           setMessages(prev => prev.filter(m => m.id !== payload.old.id));
+        }
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "orders",
+        filter: `id=eq.${order.id}`
+      }, (payload) => {
+        const updated = payload.new as any;
+        if (updated) {
+          setOrder(prev => ({
+            ...prev,
+            stage: updated.stage,
+            stageStatus: updated.stage_status,
+            stageAdminNotes: updated.stage_admin_notes,
+            chatHistory: updated.chat_history || prev.chatHistory,
+            paymentHistory: updated.payment_history || prev.paymentHistory,
+            advanceInvoiceDetails: updated.advance_invoice_details || prev.advanceInvoiceDetails,
+            designDetails: updated.design_details || prev.designDetails,
+            productionDetails: updated.production_details || prev.productionDetails,
+            installationDetails: updated.installation_details || prev.installationDetails,
+          }));
+        }
+      })
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "site_visits",
+        filter: `order_id=eq.${order.id}`
+      }, (payload) => {
+        if (payload.eventType === "DELETE") {
+          setOrder(prev => ({
+            ...prev,
+            siteVisitDetails: undefined
+          }));
+        } else {
+          const mapped = mapSiteVisitFromDb(payload.new);
+          if (mapped) {
+            setOrder(prev => {
+              const existingLocations = prev.siteVisitDetails?.locations || [];
+              return {
+                ...prev,
+                siteVisitDetails: {
+                  ...mapped,
+                  locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : existingLocations
+                }
+              };
+            });
+          }
         }
       })
       .subscribe();
@@ -884,7 +934,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClick={() => setActiveRightPanel("chat")}
           style={{
             position: "absolute",
-            bottom: "24px",
+            bottom: "96px",
             right: "24px",
             width: "56px",
             height: "56px",

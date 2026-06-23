@@ -18,9 +18,7 @@ export default async function StaffSiteVisitPage() {
   // Filter orders allotted to this staff member & in Site Visit stages
   const siteVisitStages = ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"];
   const allottedOrders = orders?.filter(o => 
-    (o.assigned_employees?.includes(user?.id) ||
-     o.assigned_designers?.includes(user?.id) ||
-     o.assigned_marketers?.includes(user?.id)) &&
+    o.assigned_employees?.includes(user?.id) &&
     siteVisitStages.includes(o.stage)
   ) || [];
   

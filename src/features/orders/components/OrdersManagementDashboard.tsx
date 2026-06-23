@@ -16,7 +16,7 @@ import {
   AlertTriangle,
   CheckCircle
 } from "lucide-react";
-import { updateOrder } from "@/features/orders/actions/orderActions";
+import { updateOrder, assignTeamToOrder } from "@/features/orders/actions/orderActions";
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -87,9 +87,9 @@ export function OrdersManagementDashboard({
   const assignEmployeesToOrderLocal = async (orderId: string, assigned: string[]) => {
     // Optimistic UI update
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, assignedEmployees: assigned } : o));
-    // Server mutation
+    // Server mutation — write to order_assignments table
     try {
-      await updateOrder(orderId, { assigned_employees: assigned });
+      await assignTeamToOrder(orderId, assigned);
     } catch (err) {
       console.error(err);
       alert("Failed to assign employees.");

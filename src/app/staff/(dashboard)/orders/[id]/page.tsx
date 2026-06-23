@@ -49,8 +49,6 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     requirements: order.requirements,
         urgent: order.urgent,
     assignedEmployees: order.assigned_employees || [],
-    assignedDesigners: order.assigned_designers || [],
-    assignedMarketers: order.assigned_marketers || [],
     dateCreated: order.date_created,
     deadlineStatus: order.deadline_status,
         versionHistory: order.version_history || [],

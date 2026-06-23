@@ -256,6 +256,7 @@ export function AdminLayoutClient({
             return (
               <button
                 key={item.id}
+                suppressHydrationWarning
                 onClick={() => {
                   // For routes that don't exist yet, just navigate (will 404 gracefully)
                   router.push(item.id);

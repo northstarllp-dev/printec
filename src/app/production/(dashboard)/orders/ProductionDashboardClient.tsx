@@ -23,6 +23,7 @@ interface ProductionDashboardClientProps {
 
 const getStageBadgeStyle = (stage: string) => {
   const styles: Record<string, { bg: string; text: string; border: string }> = {
+    "Design Approved": { bg: "bg-purple-50/70", text: "text-purple-700", border: "border-purple-200" },
     "Production": { bg: "bg-blue-50/70", text: "text-blue-700", border: "border-blue-200" },
     "Ready For Installation": { bg: "bg-indigo-50/70", text: "text-indigo-700", border: "border-indigo-200" },
     "Installation Scheduled": { bg: "bg-cyan-50/70", text: "text-cyan-700", border: "border-cyan-200" },
@@ -38,7 +39,7 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
   const [stageFilter, setStageFilter] = useState("ALL");
 
   // Calculations
-  const activeJobs = initialOrders.filter(o => o.stage === "Production" || o.stage === "Ready For Installation").length;
+  const activeJobs = initialOrders.filter(o => o.stage === "Design Approved" || o.stage === "Production" || o.stage === "Ready For Installation").length;
   const urgentJobs = initialOrders.filter(o => o.urgent && o.stage !== "Completed" && o.stage !== "Closed").length;
   const completedJobs = initialOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
 
@@ -136,6 +137,7 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
               className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/10"
             >
               <option value="ALL">All Stages</option>
+              <option value="Design Approved">Design Approved</option>
               <option value="Production">Production</option>
               <option value="Ready For Installation">Ready For Installation</option>
               <option value="Installation Scheduled">Installation Scheduled</option>

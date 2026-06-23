@@ -35,13 +35,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     requirements: order.requirements,
         urgent: order.urgent,
     assignedEmployees: order.assigned_employees || [],
-    assignedDesigners: order.assigned_designers || [],
-    assignedMarketers: order.assigned_marketers || [],
     dateCreated: order.date_created,
     deadlineStatus: order.deadline_status,
         versionHistory: order.version_history || [],
     chatHistory: order.chat_history || [],
-    siteVisitDetails: order.site_visit_details,
+    siteVisitDetails: order.siteVisitDetails,
     designDetails: order.design_details,
     productionDetails: order.production_details,
     installationDetails: order.installation_details,
@@ -69,16 +67,18 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     customerId: c.customer_id || c.id,
   })) || [];
 
-  const mappedEmployees = employeesData?.map((e) => ({
-    id: e.id,
-    name: e.name,
-    role: e.staff_role || "",
-    phone: e.phone || "",
-    email: e.email || "",
-    status: e.status || "Active",
-    rating: Number(e.rating) || 5.0,
-    workload: Number(e.workload) || 0,
-  })) || [];
+  const mappedEmployees = employeesData
+    ?.filter((e) => e.staff_role !== "Production")
+    ?.map((e) => ({
+      id: e.id,
+      name: e.name,
+      role: e.staff_role || "",
+      phone: e.phone || "",
+      email: e.email || "",
+      status: e.status || "Active",
+      rating: Number(e.rating) || 5.0,
+      workload: Number(e.workload) || 0,
+    })) || [];
 
   // All orders for the left panel sidebar
   const mappedAllOrders = (allOrdersData || []).map((o) => ({

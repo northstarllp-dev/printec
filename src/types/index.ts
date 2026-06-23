@@ -174,7 +174,7 @@ export interface SiteVisitDetails {
   };
 
   // Stage 5: Review & Statuses
-  reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending" | "Pending Admin Approval" | "Draft" | "Needs Revision" | "Rejected";
+  reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending" | "Pending Admin Approval" | "Draft" | "Needs Revision" | "Rejected" | "Staff Approved";
   reviewNotes?: string;
   auditTrail?: Array<{
     event: string;
@@ -237,8 +237,6 @@ export interface Order {
   requirements?: string;
   urgent: boolean;
   assignedEmployees: string[];
-  assignedDesigners?: string[];
-  assignedMarketers?: string[];
   dateCreated: string;
   deadlineStatus: "Missed Measurement" | "On Track" | "Delayed" | "Action Required" | "None";
   versionHistory: VersionItem[];

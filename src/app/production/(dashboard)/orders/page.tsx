@@ -7,6 +7,7 @@ export default async function ProductionOrdersPage() {
 
   // Filter orders to only display those that have crossed the design stage
   const productionReadyStages = [
+    "Design Approved",
     "Production",
     "Ready For Installation",
     "Installation Scheduled",

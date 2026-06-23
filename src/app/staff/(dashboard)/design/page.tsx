@@ -18,9 +18,7 @@ export default async function StaffDesignPage() {
   // Filter orders allotted to this staff member & in Design stages
   const designStages = ["Design In Progress", "Design Approved"];
   const allottedOrders = orders?.filter(o => 
-    (o.assigned_employees?.includes(user?.id) ||
-     o.assigned_designers?.includes(user?.id) ||
-     o.assigned_marketers?.includes(user?.id)) &&
+    o.assigned_employees?.includes(user?.id) &&
     designStages.includes(o.stage)
   ) || [];
   

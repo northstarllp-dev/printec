@@ -39,12 +39,14 @@ export default async function OrdersPage() {
     customerId: c.customer_id || c.id
   })) || [];
 
-  const mappedEmployees = employeesData?.map(e => ({
-    id: e.id,
-    name: e.name,
-    role: e.staff_role,
-    email: e.email
-  })) || [];
+  const mappedEmployees = employeesData
+    ?.filter(e => e.staff_role !== "Production")
+    ?.map(e => ({
+      id: e.id,
+      name: e.name,
+      role: e.staff_role,
+      email: e.email
+    })) || [];
 
   const mappedEnquiries = enquiries?.map(e => ({
     id: e.id,

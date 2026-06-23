@@ -17,6 +17,7 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
 
   // Ensure order has crossed design stage
   const productionReadyStages = [
+    "Design Approved",
     "Production",
     "Ready For Installation",
     "Installation Scheduled",
@@ -50,7 +51,7 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     imageMockup: order.image_mockup,
     versionHistory: order.version_history || [],
     chatHistory: order.chat_history || [],
-    siteVisitDetails: order.site_visit_details,
+    siteVisitDetails: order.siteVisitDetails,
     designDetails: order.design_details,
     productionDetails: order.production_details,
     installationDetails: order.installation_details,

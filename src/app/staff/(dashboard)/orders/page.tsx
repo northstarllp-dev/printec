@@ -17,9 +17,7 @@ export default async function StaffOrdersPage() {
   
   // Filter orders allotted to this staff member
   const allottedOrders = orders?.filter(o => 
-    o.assigned_employees?.includes(user?.id) ||
-    o.assigned_designers?.includes(user?.id) ||
-    o.assigned_marketers?.includes(user?.id)
+    o.assigned_employees?.includes(user?.id)
   ) || [];
   
   const mappedOrders = allottedOrders.map(o => ({

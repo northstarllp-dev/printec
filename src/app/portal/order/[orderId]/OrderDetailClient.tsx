@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
 
 interface Customer {
   id: string;
@@ -44,8 +45,6 @@ interface Order {
   stage: string;
   urgent: boolean;
   assignedEmployees: string[];
-  assignedDesigners?: string[];
-  assignedMarketers?: string[];
   dateCreated: string;
   deadlineStatus: string;
   versionHistory: any[];
@@ -133,6 +132,94 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
       setSiteAddress(sv.customerAddress || customer.shippingAddress || "");
       setGpsCoords(sv.gpsLocation || "12.9716° N, 77.5946° E");
     }
+  }, [order.id, order.siteVisitDetails]);
+
+  // Realtime subscription to sync order, site visit, and quotation changes dynamically
+  useEffect(() => {
+    if (!order) return;
+    const supabase = createClient();
+    const orderChannelName = `portal-order-detail-sync-${order.id}-${Date.now()}`;
+
+    const channel = supabase
+      .channel(orderChannelName)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders", filter: `id=eq.${order.id}` },
+        (payload) => {
+          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
+            const updatedOrder = payload.new as any;
+            if (updatedOrder) {
+              setOrder(prev => ({
+                ...prev,
+                stage: updatedOrder.stage,
+                depositPaid: Number(updatedOrder.deposit_paid) || 0,
+                paymentHistory: updatedOrder.payment_history || [],
+                advanceInvoiceDetails: updatedOrder.advance_invoice_details || null,
+                designDetails: updatedOrder.design_details,
+                productionDetails: updatedOrder.production_details,
+                installationDetails: updatedOrder.installation_details,
+                stageStatus: updatedOrder.stage_status,
+                stageAdminNotes: updatedOrder.stage_admin_notes,
+              }));
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "site_visits", filter: `order_id=eq.${order.id}` },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            setOrder(prev => ({
+              ...prev,
+              siteVisitDetails: undefined
+            }));
+          } else {
+            const mapped = mapSiteVisitFromDb(payload.new);
+            if (mapped) {
+              setOrder(prev => ({
+                ...prev,
+                siteVisitDetails: {
+                  ...mapped,
+                  locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : (prev.siteVisitDetails?.locations || [])
+                }
+              }));
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "quotations", filter: `order_id=eq.${order.id}` },
+        (payload) => {
+          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
+            const updatedQuote = payload.new as any;
+            if (updatedQuote) {
+              setOrder(prev => ({
+                ...prev,
+                quoteDetails: {
+                  ...(prev.quoteDetails || {}),
+                  quotationId: updatedQuote.quotation_id,
+                  status: updatedQuote.status,
+                  grandTotal: Number(updatedQuote.grand_total) || 0,
+                  subtotal: Number(updatedQuote.subtotal) || 0,
+                  discount: Number(updatedQuote.discount) || 0,
+                  tax: Number(updatedQuote.tax) || 0,
+                  advancePercent: Number(updatedQuote.advance_percent) || 25,
+                  advanceAmount: Number(updatedQuote.advance_amount) || 0,
+                  advancePaid: updatedQuote.advance_paid || false,
+                  advancePaidAt: updatedQuote.advance_paid_at,
+                }
+              }));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [order.id]);
 
   // Debug active tab

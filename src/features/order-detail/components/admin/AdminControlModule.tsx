@@ -49,9 +49,9 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   const [loadingStats, setLoadingStats] = useState(true);
   
   // Local state for assignments
-  const [siteVisitor, setSiteVisitor] = useState(order.assignedEmployees?.[0] || "");
-  const [designer, setDesigner] = useState(order.assignedDesigners?.[0] || "");
-  const [marketer, setMarketer] = useState(order.assignedMarketers?.[0] || "");
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
+    new Set(order.assignedEmployees || [])
+  );
   const [savingTeam, setSavingTeam] = useState(false);
 
   // Local state for revoke portal access
@@ -67,10 +67,8 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   const [suggestedProductType, setSuggestedProductType] = useState(inotes.suggestedProductType || "");
 
   useEffect(() => {
-    setSiteVisitor(order.assignedEmployees?.[0] || "");
-    setDesigner(order.assignedDesigners?.[0] || "");
-    setMarketer(order.assignedMarketers?.[0] || "");
-  }, [order.assignedEmployees, order.assignedDesigners, order.assignedMarketers]);
+    setSelectedEmployeeIds(new Set(order.assignedEmployees || []));
+  }, [order.assignedEmployees]);
 
   useEffect(() => {
     fetchEmployeeStats().then(data => {
@@ -82,13 +80,21 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   const handleSaveTeam = async () => {
     try {
       setSavingTeam(true);
-      await assignTeamToOrder(order.id, { siteVisitor, designer, marketer });
+      await assignTeamToOrder(order.id, Array.from(selectedEmployeeIds));
       alert("Team assignments updated!");
     } catch (e) {
       alert("Failed to assign team");
     } finally {
       setSavingTeam(false);
     }
+  };
+
+  const toggleEmployee = (id: string) => {
+    setSelectedEmployeeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   };
 
   const handleRevokePortalAccess = async () => {
@@ -123,17 +129,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
       setSavingNotes(false);
     }
   };
-
-  const EmployeeOptions = () => (
-    <>
-      <option value="">-- Select an employee --</option>
-      {employeeStats.map(emp => (
-        <option key={emp.id} value={emp.id}>
-          {emp.name} ({emp.activeJobs} active jobs)
-        </option>
-      ))}
-    </>
-  );
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -262,52 +257,62 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users size={18} className="text-slate-500" />
-            <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Team Assignment</h3>
+            <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Assign Employees</h3>
           </div>
           <button
             onClick={handleSaveTeam}
             disabled={savingTeam}
-            className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 bg-[#1E40AF] text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors disabled:opacity-50"
           >
             {savingTeam ? "Saving..." : "Save Assignments"}
           </button>
         </div>
-        <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="p-4 max-h-72 overflow-y-auto">
           {loadingStats ? (
-            <div className="col-span-3 text-xs text-slate-500 text-center py-4">Loading staff availability...</div>
+            <div className="text-xs text-slate-500 text-center py-6">Loading staff availability...</div>
+          ) : employeeStats.length === 0 ? (
+            <div className="text-xs text-slate-400 text-center py-6">No employees found.</div>
           ) : (
-            <>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Site Visitor (Auditor)</label>
-                <select 
-                  value={siteVisitor} 
-                  onChange={e => setSiteVisitor(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                >
-                  <EmployeeOptions />
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Designer</label>
-                <select 
-                  value={designer} 
-                  onChange={e => setDesigner(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                >
-                  <EmployeeOptions />
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Marketer / Sales</label>
-                <select 
-                  value={marketer} 
-                  onChange={e => setMarketer(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                >
-                  <EmployeeOptions />
-                </select>
-              </div>
-            </>
+            <div className="flex flex-col gap-2">
+              {employeeStats.map(emp => {
+                const isSelected = selectedEmployeeIds.has(emp.id);
+                return (
+                  <div
+                    key={emp.id}
+                    onClick={() => toggleEmployee(emp.id)}
+                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      isSelected
+                        ? "bg-blue-50/50 border-blue-200"
+                        : "bg-white border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black ${
+                      isSelected ? "bg-[#1E40AF] text-white" : "bg-slate-100 text-slate-500"
+                    }`}>
+                      {emp.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-slate-800">{emp.name}</div>
+                      <div className="flex gap-1.5 mt-0.5 flex-wrap">
+                        {emp.staff_role && (
+                          <span className="text-[10px] font-semibold bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md">{emp.staff_role}</span>
+                        )}
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          emp.activeJobs > 0 ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-400"
+                        }`}>
+                          {emp.activeJobs} active job{emp.activeJobs !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-all ${
+                      isSelected ? "bg-[#1E40AF] border-[#1E40AF]" : "border-slate-300"
+                    }`}>
+                      {isSelected && <Briefcase size={10} color="white" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -322,7 +327,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
           <button
             onClick={handleSaveInternalNotes}
             disabled={savingNotes}
-            className="px-4 py-1.5 bg-indigo-500 text-white rounded-lg text-xs font-bold hover:bg-indigo-400 transition-colors disabled:opacity-50"
+            className="px-4 py-1.5 bg-[#1E40AF] text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors disabled:opacity-50"
           >
             {savingNotes ? "Saving..." : "Save Notes"}
           </button>

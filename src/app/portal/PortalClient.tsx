@@ -4,14 +4,14 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import {
   Printer, MapPin, FileText, CheckSquare, CheckCircle2,
   MessageSquare, Send, ZoomIn, ZoomOut, Check, X,
-  AlertCircle, CreditCard, Calendar,
-  Ruler, Activity, ChevronRight, Phone, Mail, Clock, ClipboardList,
-  Building2, User2, Star, ArrowRight,
-  Package, Wrench, Palette, FileCheck, BarChart3, ChevronDown,
+  AlertCircle, Calendar,
+  ChevronRight, Phone,
+  Package, Wrench, Palette, BarChart3,
   RefreshCw, AlertTriangle, Loader2, Maximize2, Minimize2, CheckCheck
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
 
 interface Customer {
   id: string;
@@ -33,12 +33,17 @@ interface Order {
   customerId: string;
   customerName?: string;
   stage: string;
+  budget: number;
+  depositPaid: number;
+  dimensions: string;
+  notes: string;
+  productType?: string;
+  requirements?: string;
   urgent: boolean;
   assignedEmployees: string[];
-  assignedDesigners?: string[];
-  assignedMarketers?: string[];
   dateCreated: string;
   deadlineStatus: string;
+  imageMockup: string;
   versionHistory: any[];
   chatHistory: any[];
   siteVisitDetails?: any;
@@ -129,6 +134,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   const [zoomLevel, setZoomLevel] = useState(100);
 
 
+
   const [unreadCount, setUnreadCount] = useState(0);
 
   const activeOrder = orders.find(o => o.id === activeOrderId || o.orderId === activeOrderId || o.orderCode === activeOrderId) || orders[0];
@@ -193,12 +199,35 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 depositPaid: Number(updatedOrder.deposit_paid) || 0,
                 paymentHistory: updatedOrder.payment_history || [],
                 advanceInvoiceDetails: updatedOrder.advance_invoice_details || null,
-                siteVisitDetails: updatedOrder.site_visit_details,
+                siteVisitDetails: o.siteVisitDetails,
                 designDetails: updatedOrder.design_details,
                 productionDetails: updatedOrder.production_details,
                 installationDetails: updatedOrder.installation_details,
                 stageStatus: updatedOrder.stage_status,
                 stageAdminNotes: updatedOrder.stage_admin_notes,
+              } : o));
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "site_visits", filter: `order_id=eq.${activeOrder.id}` },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
+              ...o,
+              siteVisitDetails: undefined
+            } : o));
+          } else {
+            const mapped = mapSiteVisitFromDb(payload.new);
+            if (mapped) {
+              setOrders(prev => prev.map(o => o.id === activeOrder.id ? {
+                ...o,
+                siteVisitDetails: {
+                  ...mapped,
+                  locations: mapped.locations && mapped.locations.length > 0 ? mapped.locations : (o.siteVisitDetails?.locations || [])
+                }
               } : o));
             }
           }
@@ -312,19 +341,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
   };
 
-  const handleConfirmMockPayment = async () => {
-    if (!activeOrder) return;
-    setPaymentLoading(true);
-    const qd = activeOrder.quoteDetails || {};
-    const total = qd.grandTotal || activeOrder.budget || 0;
-    const amount = activeOrder.depositPaid === 0 ? Math.round(total * 0.3) : total - activeOrder.depositPaid;
-    const newDeposit = activeOrder.depositPaid + amount;
-    const supabase = createClient();
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, depositPaid: newDeposit } : o));
-    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: `💳 Client confirmed mock UPI payment of ₹${amount.toLocaleString("en-IN")}. Pending admin verification.` });
-    await supabase.from("orders").update({ deposit_paid: newDeposit }).eq("id", activeOrder.id);
-    setTimeout(() => { setPaymentLoading(false); setShowPaymentModal(false); }, 800);
-  };
+
 
   const sv = activeOrder?.siteVisitDetails || {};
   const qd = activeOrder?.quoteDetails || {};
@@ -428,10 +445,10 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               return (
                 <div key={step.key} className="flex flex-col items-center text-center relative z-10 flex-1">
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isActive
-                      ? "bg-[#1E40AF] border-[#1E40AF] text-white shadow-[0_0_0_4px_rgba(30,64,175,0.12)]"
-                      : isCompleted
-                        ? "bg-emerald-500 border-emerald-500 text-white"
-                        : "bg-white border-slate-200 text-slate-400"
+                    ? "bg-[#1E40AF] border-[#1E40AF] text-white shadow-[0_0_0_4px_rgba(30,64,175,0.12)]"
+                    : isCompleted
+                      ? "bg-emerald-500 border-emerald-500 text-white"
+                      : "bg-white border-slate-200 text-slate-400"
                     }`}>
                     {isCompleted ? <Check size={14} className="stroke-[3]" /> : <Icon size={14} />}
                   </div>
@@ -493,8 +510,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                     type="button"
                                     onClick={() => { setSelectedDate(ds); setSelectedTime(""); }}
                                     className={`flex flex-col items-center p-3 rounded-xl border text-center min-w-[64px] transition-all cursor-pointer ${selected
-                                        ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
-                                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                                      ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
+                                      : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
                                       }`}
                                   >
                                     <span className="text-[9px] uppercase tracking-wider text-slate-400">{dayName}</span>
@@ -517,8 +534,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                       disabled={booked}
                                       onClick={() => setSelectedTime(slot)}
                                       className={`py-2.5 rounded-xl border text-xs font-bold transition-all ${booked ? "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed"
-                                          : sel ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
-                                            : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
+                                        : sel ? "bg-[#eff4ff] border-[#1E40AF] text-[#1E40AF] ring-2 ring-blue-100"
+                                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 cursor-pointer"
                                         }`}
                                     >
                                       {slot}
@@ -790,38 +807,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
 
 
-            {/* ── PAYMENT (if applicable) ── */}
-            {(currentStep >= 2) && (qd.grandTotal || activeOrder?.budget) && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-                <h3 className="text-sm font-black text-[#0b1c30] flex items-center gap-2">
-                  <CreditCard size={15} className="text-slate-400" />
-                  Invoicing & Payments
-                </h3>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: "Total Value", val: `₹${(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}`, color: "slate" },
-                    { label: "Paid", val: `₹${(activeOrder?.depositPaid || 0).toLocaleString("en-IN")}`, color: "emerald" },
-                    { label: "Balance", val: `₹${Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}`, color: "amber" },
-                  ].map((card, i) => (
-                    <div key={i} className={`rounded-xl p-3.5 text-center border ${card.color === "emerald" ? "bg-emerald-50 border-emerald-100" :
-                        card.color === "amber" ? "bg-amber-50 border-amber-100" : "bg-slate-50 border-slate-200"
-                      }`}>
-                      <span className={`text-[9px] font-black uppercase tracking-wide ${card.color === "emerald" ? "text-emerald-600" : card.color === "amber" ? "text-amber-600" : "text-slate-400"
-                        }`}>{card.label}</span>
-                      <p className={`text-sm font-black mt-1 font-mono ${card.color === "emerald" ? "text-emerald-800" : card.color === "amber" ? "text-amber-800" : "text-slate-800"
-                        }`}>{card.val}</p>
-                    </div>
-                  ))}
-                </div>
-                {Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0) > 0 && (
-                  <div className="flex justify-end">
-                    <button onClick={() => setShowPaymentModal(true)} className="px-4 py-2 bg-[#F97316] text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-all flex items-center gap-2">
-                      <CreditCard size={13} /> Make Payment
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+
           </div>
 
           {/* ── RIGHT SIDEBAR ── */}
@@ -839,33 +825,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
         </div>
       </div>
 
-      {/* ─── PAYMENT MODAL ─── */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <h2 className="text-sm font-bold text-[#0b1c30]">UPI Payment Confirmation</h2>
-              <button onClick={() => setShowPaymentModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded"><X size={16} /></button>
-            </div>
-            <div className="p-6 space-y-4 text-center">
-              <QrCode size={100} className="text-[#0b1c30] mx-auto" />
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Amount Due</span>
-                <p className="text-xl font-black text-slate-800 font-mono mt-1">
-                  ₹{Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}
-                </p>
-              </div>
-              <p className="text-xs text-slate-500">Scan or transfer via netbanking, then confirm below.</p>
-            </div>
-            <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
-              <button onClick={() => setShowPaymentModal(false)} className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-xs font-bold">Cancel</button>
-              <button onClick={handleConfirmMockPayment} disabled={paymentLoading} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                {paymentLoading ? "Processing..." : "Confirm Payment"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* ─── MOBILE FLOATING CHAT BUTTON (hidden on lg+) ─── */}
       {activeOrder && (
@@ -1117,8 +1077,8 @@ function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
               <div className={`flex flex-col max-w-[78%] ${isMe ? "items-end" : "items-start"}`}>
                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.sender_name}</span>
                 <div className={`px-3 py-2 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${isMe
-                    ? "bg-[#1E40AF] text-white rounded-br-sm"
-                    : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm"
+                  ? "bg-[#1E40AF] text-white rounded-br-sm"
+                  : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm"
                   }`}>{msg.content}</div>
                 <span className="text-[9px] text-slate-400 mt-1 px-1 font-mono">{time}{isMe && <CheckCheck size={9} className="inline ml-1 text-slate-300" />}</span>
               </div>
@@ -1269,8 +1229,8 @@ function MobileChatButton({ orderId, customerId, token, customerName }: ChatProp
                     <div className={`flex flex-col max-w-[75%] ${isMe ? "items-end" : "items-start"}`}>
                       <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.sender_name}</span>
                       <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed break-words ${isMe
-                          ? "bg-[#1E40AF] text-white rounded-br-sm"
-                          : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm shadow-sm"
+                        ? "bg-[#1E40AF] text-white rounded-br-sm"
+                        : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm shadow-sm"
                         }`}>{msg.content}</div>
                       <span className="text-[9px] text-slate-400 mt-1 px-1 font-mono">{time}</span>
                     </div>

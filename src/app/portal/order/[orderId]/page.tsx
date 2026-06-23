@@ -162,8 +162,6 @@ export default async function OrderDetailPage({
     requirements: orderData.requirements,
         urgent: Boolean(orderData.urgent),
     assignedEmployees: orderData.assigned_employees || [],
-    assignedDesigners: orderData.assigned_designers || [],
-    assignedMarketers: orderData.assigned_marketers || [],
     dateCreated: orderData.date_created,
     deadlineStatus: orderData.deadline_status,
         versionHistory: orderData.version_history || [],

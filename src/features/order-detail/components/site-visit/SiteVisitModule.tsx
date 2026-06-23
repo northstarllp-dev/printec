@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   X, 
   Plus, 
@@ -137,6 +137,28 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const baseDetails = (order.siteVisitDetails || {}) as Partial<SiteVisitDetails>;
+    setSiteVisit({
+      completed: false,
+      width: 0,
+      height: 0,
+      depth: 0,
+      photos: [],
+      ...baseDetails,
+      locations: (baseDetails.locations || []).map(loc => ({
+        ...loc,
+        photos: loc.photos || []
+      })),
+      photoCategories: baseDetails.photoCategories || defaultPhotoCategories
+    });
+
+    const locs = baseDetails.locations || [];
+    if (locs.length > 0) {
+      setSelectedLocationId(prev => prev || locs[0].id);
+    }
+  }, [order.siteVisitDetails]);
   
   // State for selected sign location tab
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(() => {
@@ -251,11 +273,15 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     onUpdate(updatedDetails);
   };
 
+  const scheduledDate = siteVisit.auditDate || siteVisit.preferredDate || siteVisit.visitDate;
+  const scheduledTime = siteVisit.auditTime || siteVisit.preferredTime || siteVisit.visitTime;
+  const scheduledAddress = siteVisit.customerAddress || siteVisit.siteAddress;
+
   return (
     <div className="space-y-6 text-slate-800">
       
       {/* ── SCHEDULED VISIT DETAILS (from customer portal) ── */}
-      {(siteVisit.auditDate || siteVisit.customerAddress) && (
+      {scheduledDate || scheduledAddress ? (
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">
           <div className="flex items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-2">
@@ -283,7 +309,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Date & Time */}
-            {(siteVisit.auditDate || siteVisit.auditTime) && (
+            {(scheduledDate || scheduledTime) && (
               <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
                   <Clock size={14} className="text-indigo-500" />
@@ -292,23 +318,23 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   </span>
                 </div>
                 <p className="text-sm font-extrabold text-indigo-900">
-                  {siteVisit.auditDate && new Date(siteVisit.auditDate).toLocaleDateString('en-IN', { 
+                  {scheduledDate && !isNaN(Date.parse(scheduledDate)) ? new Date(scheduledDate).toLocaleDateString('en-IN', { 
                     weekday: 'short', 
                     year: 'numeric', 
                     month: 'short', 
                     day: 'numeric' 
-                  })}
+                  }) : scheduledDate}
                 </p>
-                {siteVisit.auditTime && (
+                {scheduledTime && (
                   <p className="text-xs font-semibold text-indigo-700 mt-1">
-                    At {siteVisit.auditTime}
+                    At {scheduledTime}
                   </p>
                 )}
               </div>
             )}
 
             {/* Address */}
-            {siteVisit.customerAddress && (
+            {scheduledAddress && (
               <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm md:col-span-2">
                 <div className="flex items-center gap-2 mb-2">
                   <MapPin size={14} className="text-indigo-500" />
@@ -317,7 +343,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   </span>
                 </div>
                 <p className="text-sm font-semibold text-slate-800">
-                  {siteVisit.customerAddress}
+                  {scheduledAddress}
                 </p>
                 {siteVisit.landmark && (
                   <p className="text-xs text-slate-500 mt-1">
@@ -329,6 +355,15 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                     GPS: {siteVisit.gpsLocation}
                   </p>
                 )}
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteVisit.gpsLocation || scheduledAddress)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition-colors border border-indigo-100"
+                >
+                  <MapPin size={12} />
+                  View Map Location
+                </a>
               </div>
             )}
 
@@ -382,6 +417,16 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+            <Calendar size={18} />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-slate-800">No Site Visit Scheduled Yet</h4>
+            <p className="text-xs text-slate-500 mt-0.5">The client has not yet scheduled their site visit date, time, and location from the customer portal.</p>
           </div>
         </div>
       )}
