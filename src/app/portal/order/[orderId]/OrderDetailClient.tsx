@@ -42,17 +42,12 @@ interface Order {
   customerId: string;
   customerName?: string;
   stage: string;
-  budget: number;
-  depositPaid: number;
-  dimensions: string;
-  notes: string;
   urgent: boolean;
   assignedEmployees: string[];
   assignedDesigners?: string[];
   assignedMarketers?: string[];
   dateCreated: string;
   deadlineStatus: string;
-  imageMockup: string;
   versionHistory: any[];
   chatHistory: any[];
   siteVisitDetails?: any;
@@ -165,7 +160,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
       const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, sitePersonnel: "Hari", completed: false, reviewStatus: "Pending" };
       const res = await scheduleSiteVisitAction(order.id, payload);
       if (res.success && res.order) {
-        setOrder(prev => ({ ...prev, stage: res.order.stage, siteVisitDetails: res.order.site_visit_details }));
+        setOrder(prev => ({ ...prev, stage: res.order.stage, siteVisitDetails: res.order.siteVisitDetails }));
         setIsRescheduling(false);
       }
     } catch (err) { console.error(err); }
@@ -615,19 +610,19 @@ function BillingTab({ order }: { order: Order }) {
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Total Amount</span>
               <span className="text-xl font-bold text-gray-900 font-mono">
-                ₹{(order.budget || 47200).toLocaleString("en-IN")}
+                ₹0
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-600">Paid Amount</span>
               <span className="text-xl font-bold text-green-600 font-mono">
-                ₹{(order.depositPaid || 0).toLocaleString("en-IN")}
+                ₹0
               </span>
             </div>
             <div className="flex items-center justify-between pt-4 border-t border-gray-200">
               <span className="text-gray-900 font-bold">Balance</span>
               <span className="text-2xl font-extrabold text-orange-600 font-mono">
-                ₹{(order.budget - order.depositPaid || 47200).toLocaleString("en-IN")}
+                ₹0
               </span>
             </div>
           </div>

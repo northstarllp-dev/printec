@@ -68,6 +68,7 @@ interface SiteVisitModuleProps {
   onAdminApprove?: () => Promise<void>;
   onAdminRequestChanges?: (notes: string) => Promise<void>;
   onStaffApproveVisit?: () => Promise<void>;
+  actionsNode?: React.ReactNode;
 }
 
 // Default initial data
@@ -95,7 +96,8 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   onSubmitForApproval,
   onAdminApprove,
   onAdminRequestChanges,
-  onStaffApproveVisit
+  onStaffApproveVisit,
+  actionsNode
 }) => {
   // Current client
   const client = customers.find(c => c.id === order.customerId);
@@ -422,23 +424,11 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           </button>
         </div>
 
-        {/* Ready checkbox */}
-        <div className="flex items-center gap-2.5 bg-white border border-slate-200 rounded-xl px-4 py-2 shadow-xs flex-shrink-0">
-          <input
-            type="checkbox"
-            id="auditCompletedToggle"
-            checked={siteVisit.completed}
-            onChange={() => {
-              const updated = { ...siteVisit, completed: !siteVisit.completed };
-              setSiteVisit(updated);
-              onUpdate(updated);
-            }}
-            className="w-4 h-4 rounded border-slate-350 text-[var(--color-secondary)] focus:ring-[var(--color-secondary)]/20 cursor-pointer accent-[var(--color-secondary)]"
-          />
-          <label htmlFor="auditCompletedToggle" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
-            Mark Audit as Ready
-          </label>
-        </div>
+        {actionsNode && (
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {actionsNode}
+          </div>
+        )}
       </div>
 
       {!activeLoc ? (

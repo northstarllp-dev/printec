@@ -4,14 +4,14 @@ import { X } from "lucide-react";
 interface ConvertEnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (projectName: string, budget: number, typeOfSign: string, additionalNotes: string) => void;
+  onSubmit: (projectName: string, productType: string, requirements: string) => void;
   defaultProjectName: string;
 }
 
 export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectName }: ConvertEnquiryModalProps) {
   const [projectName, setProjectName] = useState(defaultProjectName);
-  const [typeOfSign, setTypeOfSign] = useState("");
-  const [additionalNotes, setAdditionalNotes] = useState("");
+  const [productType, setProductType] = useState("");
+  const [requirements, setRequirements] = useState("");
 
   if (!isOpen) return null;
 
@@ -101,15 +101,15 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             />
           </div>
 
-          {/* Type of Sign */}
+          {/* Product Type */}
           <div>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
-              Type of Board/Sign
+              Product Type / Sign Type
             </label>
             <input 
               type="text" 
-              value={typeOfSign}
-              onChange={(e) => setTypeOfSign(e.target.value)}
+              value={productType}
+              onChange={(e) => setProductType(e.target.value)}
               placeholder="e.g. ACP LED Glow Sign"
               style={{
                 width: "100%",
@@ -126,14 +126,14 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             />
           </div>
 
-          {/* Additional Notes */}
+          {/* Requirements */}
           <div>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
-              Additional Notes & Requirements
+              Initial Requirements & Notes
             </label>
             <textarea 
-              value={additionalNotes}
-              onChange={(e) => setAdditionalNotes(e.target.value)}
+              value={requirements}
+              onChange={(e) => setRequirements(e.target.value)}
               placeholder="Mention any specific requirements, materials, or details for the team..."
               rows={3}
               style={{
@@ -182,7 +182,7 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
             Cancel
           </button>
           <button 
-            onClick={() => onSubmit(projectName, 0, typeOfSign, additionalNotes)}
+            onClick={() => onSubmit(projectName, productType, requirements)}
             disabled={!projectName.trim()}
             style={{
               padding: "10px 16px",

@@ -58,7 +58,7 @@ export async function updateEnquiry(id: string, updates: any) {
   return data;
 }
 
-export async function convertEnquiryToOrderAction(enquiryId: string, projectName: string, budget: number, typeOfSign?: string, additionalNotes?: string) {
+export async function convertEnquiryToOrderAction(enquiryId: string, projectName: string, productType?: string, requirements?: string) {
   const supabase = await getSupabase();
   
   // 1. Fetch enquiry
@@ -134,10 +134,8 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
       customer_name: customerName,
       stage: "Site Visit Pending",
       health: "Active",
-      budget: budget,
-      deposit_paid: 0,
-      dimensions: typeOfSign || "",
-      notes: additionalNotes || "",
+      product_type: productType || "",
+      requirements: requirements || "",
       version_history: [
         { version: "v1.0", date: new Date().toLocaleDateString(), notes: "Order initialized via Enquiry conversion." }
       ],

@@ -19,18 +19,16 @@ export default async function OrdersPage() {
     projectName: o.project_name,
     customerId: o.customer_id,
     stage: o.stage,
-    budget: o.budget,
-    depositPaid: o.deposit_paid,
-    dimensions: o.dimensions,
-    notes: o.notes,
-    urgent: o.urgent,
+                productType: o.product_type,
+    requirements: o.requirements,
+        urgent: o.urgent,
     assignedEmployees: o.assigned_employees || [],
     dateCreated: o.date_created,
     deadlineStatus: o.deadline_status,
     customerName: o.customer_name || "",
     orderCode: o.order_id || o.id,
     orderId: o.order_id || o.id,
-    siteVisitDetails: o.site_visit_details || null
+    siteVisitDetails: o.siteVisitDetails || null
   })) || [];
 
   const mappedCustomers = customers?.map(c => ({
