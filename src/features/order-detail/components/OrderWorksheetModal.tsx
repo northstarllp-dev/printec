@@ -844,7 +844,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               )}
 
               {/* Action Buttons (moved to module for Site Visit, kept here for others) */}
-              {activeStepTab !== 99 && activeStepTab !== 0 && (
+              {activeStepTab !== 99 && activeStepTab !== 0 && activeStepTab !== 1 && (
                 <div style={{ marginLeft: "12px", paddingLeft: "12px", borderLeft: "1px solid #E2E8F0" }}>
                   {actionButtonsNode}
                 </div>
@@ -866,38 +866,53 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           {/* Sticky footer actions */}
           <div style={{ padding: "14px 20px", background: "#F8FAFC", borderTop: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
             <div />
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              {order.health && order.health !== "Active" ? (
-                <>
+            {activeStepTab === 1 ? (
+              order.health && order.health !== "Active" ? (
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                   <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600" }}>
                     Order is <strong style={{ color: "#DC2626" }}>{order.health}</strong>
                   </span>
                   <button onClick={handleReopen} style={{ padding: "7px 16px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                     <RefreshCw size={13} /> Reopen Order
                   </button>
-                </>
+                </div>
               ) : (
-                <>
-                  {/* Save Draft button */}
-                  <button onClick={handleSaveDraft} style={{ padding: "7px 16px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Save size={13} /> Save Draft
-                  </button>
-
-                  {/* Advance stage / Staff section approval push */}
-                  {isEmployee ? (
-                    <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <CheckCircle2 size={13} /> Push {activeModuleTitle} to Admin for Approval
+                <div id="modal-footer-portal" style={{ display: "flex", gap: "10px", alignItems: "center" }} />
+              )
+            ) : (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                {order.health && order.health !== "Active" ? (
+                  <>
+                    <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600" }}>
+                      Order is <strong style={{ color: "#DC2626" }}>{order.health}</strong>
+                    </span>
+                    <button onClick={handleReopen} style={{ padding: "7px 16px", background: "var(--color-secondary)", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <RefreshCw size={13} /> Reopen Order
                     </button>
-                  ) : (
-                    currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
-                      <button onClick={handleAdminApprove} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <Check size={13} /> Approve & Advance
+                  </>
+                ) : (
+                  <>
+                    {/* Save Draft button */}
+                    <button onClick={handleSaveDraft} style={{ padding: "7px 16px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Save size={13} /> Save Draft
+                    </button>
+
+                    {/* Advance stage / Staff section approval push */}
+                    {isEmployee ? (
+                      <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <CheckCircle2 size={13} /> Push {activeModuleTitle} to Admin for Approval
                       </button>
-                    )
-                  )}
-                </>
-              )}
-            </div>
+                    ) : (
+                      currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
+                        <button onClick={handleAdminApprove} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Check size={13} /> Approve & Advance
+                        </button>
+                      )
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Printer, MapPin, FileText, CheckSquare, CheckCircle2,
-  MessageSquare, Send, ZoomIn, ZoomOut, Check, X,
+  MessageSquare, Send, ZoomIn, ZoomOut, Check, X, Info,
   AlertCircle, Calendar,
   ChevronRight, Phone,
   Package, Wrench, Palette, BarChart3,
@@ -137,7 +137,17 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(100);
 
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProductInfo, setSelectedProductInfo] = useState<any | null>(null);
 
+  useEffect(() => {
+    const supabase = createClient();
+    async function loadProducts() {
+      const { data } = await supabase.from("products").select("*").eq("is_active", true);
+      if (data) setProducts(data);
+    }
+    loadProducts();
+  }, []);
 
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -258,6 +268,14 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   advanceAmount: Number(updatedQuote.advance_amount) || 0,
                   advancePaid: updatedQuote.advance_paid || false,
                   advancePaidAt: updatedQuote.advance_paid_at,
+                  items: updatedQuote.items || [],
+                  signageOptions: updatedQuote.signage_options || [],
+                  shipping: Number(updatedQuote.shipping) || 0,
+                  amountPaid: Number(updatedQuote.amount_paid) || 0,
+                  notes: updatedQuote.notes || "",
+                  terms: updatedQuote.terms || "",
+                  validUntil: updatedQuote.valid_until,
+                  paymentStatus: updatedQuote.payment_status || "Pending",
                 }
               } : o));
             }
@@ -289,7 +307,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     if (!activeOrder || !selectedDate || !selectedTime || !siteAddress) return;
     setSchedulingLoading(true);
     try {
-      const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, sitePersonnel: "Hari", completed: false, reviewStatus: "Pending" };
+      const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, completed: false, reviewStatus: "Pending" };
       const res = await scheduleSiteVisitAction(activeOrder.id, payload);
       if (res.success && res.order) {
         setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: res.order.stage, siteVisitDetails: res.order.siteVisitDetails } : o));
@@ -649,36 +667,221 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Quotation</h2>
                       <p className="text-sm text-slate-500">Review pricing options, set material preferences, and approve to proceed.</p>
                     </div>
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Item</th>
-                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {[
-                            { label: "Signage Type", val: qd.signageType || "ACP Panels" },
-                            { label: "Materials", val: qd.material || "Brushed Aluminium" },
-                            { label: "Mounting", val: qd.mounting || "Standoffs" },
-                            { label: "Base Fabrication", val: `₹${(qd.baseACPPrice || 0).toLocaleString("en-IN")}` },
-                            { label: "Hardware & Fittings", val: `₹${(qd.hardwarePrice || 0).toLocaleString("en-IN")}` },
-                            { label: "Subtotal", val: `₹${(qd.subtotal || 0).toLocaleString("en-IN")}` },
-                            { label: "GST (18%)", val: `₹${(qd.tax || 0).toLocaleString("en-IN")}` },
-                          ].map((row, i) => (
-                            <tr key={i}>
-                              <td className="px-4 py-3 text-slate-500 text-xs">{row.label}</td>
-                              <td className="px-4 py-3 text-right text-slate-800 font-bold text-xs">{row.val}</td>
+                    {qd.signageOptions && qd.signageOptions.length > 0 ? (
+                      <div className="space-y-6">
+                        {/* Invoice Header Details */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Quote ID</span>
+                            <span className="font-mono font-bold text-slate-800">{qd.quotationId || "—"}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Valid Until</span>
+                            <span className="font-bold text-slate-800">{qd.validUntil ? new Date(qd.validUntil).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Project Name</span>
+                            <span className="font-bold text-slate-800">{activeOrder.projectName}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
+                            <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                              qd.status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+                              qd.status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
+                              "bg-slate-100 border-slate-200 text-slate-600"
+                            }`}>
+                              {qd.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Signage Sections */}
+                        <div className="space-y-5">
+                          {qd.signageOptions.map((section: any, sIdx: number) => {
+                            const itemTotal = (section.lines || []).reduce((sum: number, line: any) => {
+                              const calcLineAmount = (item: any): number => {
+                                if (item.pricingType === "per_sqft" || item.pricingType === "per_running_ft") {
+                                  return item.quantity * item.totalSqFt * item.unitPrice;
+                                }
+                                return item.quantity * item.unitPrice;
+                              };
+                              return sum + calcLineAmount(line);
+                            }, 0);
+
+                            return (
+                              <div key={sIdx} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
+                                {/* Section Header */}
+                                <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                                  <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{section.itemLabel}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] text-slate-400 font-black uppercase">Subtotal:</span>
+                                    <span className="text-xs font-black text-blue-700 font-mono">
+                                      ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Table */}
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-xs text-left">
+                                    <thead>
+                                      <tr className="bg-slate-50/50 border-b border-slate-200 text-[10px] text-slate-400 font-black uppercase tracking-wider">
+                                        <th className="px-4 py-2.5">Item Description</th>
+                                        <th className="text-center px-4 py-2.5">Qty</th>
+                                        <th className="text-center px-4 py-2.5">Unit</th>
+                                        <th className="text-center px-4 py-2.5">Measure</th>
+                                        <th className="text-right px-4 py-2.5">Rate</th>
+                                        <th className="text-center px-4 py-2.5">GST</th>
+                                        <th className="text-right px-4 py-2.5">Amount</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
+                                      {(section.lines || []).map((line: any, lIdx: number) => {
+                                        const lineAmt = (() => {
+                                          if (line.pricingType === "per_sqft" || line.pricingType === "per_running_ft") {
+                                            return line.quantity * line.totalSqFt * line.unitPrice;
+                                          }
+                                          return line.quantity * line.unitPrice;
+                                        })();
+                                        const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
+
+                                        return (
+                                          <tr key={lIdx} className="hover:bg-slate-50/30">
+                                            <td className="px-4 py-3 text-slate-800 font-bold">
+                                              <div className="flex items-center gap-1.5">
+                                                <span>{line.description}</span>
+                                                {line.productId && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      const prod = products.find((p: any) => p.id === line.productId);
+                                                      if (prod) setSelectedProductInfo(prod);
+                                                    }}
+                                                    className="p-0.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors shrink-0"
+                                                    title="Product Details"
+                                                  >
+                                                    <Info size={12} className="stroke-[2.5]" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </td>
+                                            <td className="text-center px-4 py-3 font-mono">{line.quantity}</td>
+                                            <td className="text-center px-4 py-3 capitalize">{line.pricingType?.replace("per_", "")}</td>
+                                            <td className="text-center px-4 py-3 font-mono">{isSqft ? `${line.totalSqFt} ${line.unit || "ft"}` : "—"}</td>
+                                            <td className="text-right px-4 py-3 font-mono">₹{line.unitPrice.toLocaleString("en-IN")}</td>
+                                            <td className="text-center px-4 py-3 font-mono">{line.gstRate}%</td>
+                                            <td className="text-right px-4 py-3 font-mono text-slate-800 font-bold">₹{lineAmt.toLocaleString("en-IN")}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Summary Block */}
+                        <div className="bg-[#f8fafc] border border-slate-200 rounded-3xl p-6 space-y-4 max-w-md ml-auto">
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                            <span>Subtotal</span>
+                            <span className="font-mono text-slate-800">
+                              ₹{(qd.subtotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          {qd.discount > 0 && (
+                            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                              <span>Discount</span>
+                              <span className="font-mono text-rose-600">
+                                - ₹{qd.discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          )}
+                          {qd.shipping > 0 && (
+                            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                              <span>Shipping</span>
+                              <span className="font-mono text-slate-800">
+                                ₹{qd.shipping.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                            <span>Tax Amount</span>
+                            <span className="font-mono text-slate-800">
+                              ₹{(qd.tax || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center py-2 border-b border-slate-200">
+                            <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Total</span>
+                            <span className="font-black text-[#0f172a] text-lg font-mono">
+                              ₹{(qd.grandTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                          {qd.amountPaid > 0 && (
+                            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                              <span>Amount Paid</span>
+                              <span className="font-mono text-emerald-600">
+                                ₹{qd.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between items-center pt-1">
+                            <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Balance Due</span>
+                            <span className="font-black text-[#1e40af] text-lg font-mono">
+                              ₹{Math.max(0, (qd.grandTotal || 0) - (qd.amountPaid || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Notes & Terms */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200 text-xs text-slate-500 text-left">
+                          {qd.notes && (
+                            <div>
+                              <span className="font-bold text-slate-700 block mb-1">Notes</span>
+                              <p className="bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">{qd.notes}</p>
+                            </div>
+                          )}
+                          {qd.terms && (
+                            <div>
+                              <span className="font-bold text-slate-700 block mb-1">Terms & Conditions</span>
+                              <p className="bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">{qd.terms}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-200">
+                              <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Item</th>
+                              <th className="text-right px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Amount</th>
                             </tr>
-                          ))}
-                          <tr className="bg-slate-50">
-                            <td className="px-4 py-3.5 font-black text-[#1E40AF] text-sm">Grand Total</td>
-                            <td className="px-4 py-3.5 text-right font-black text-emerald-700 text-sm font-mono">₹{(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {[
+                              { label: "Signage Type", val: qd.signageType || "ACP Panels" },
+                              { label: "Materials", val: qd.material || "Brushed Aluminium" },
+                              { label: "Mounting", val: qd.mounting || "Standoffs" },
+                              { label: "Base Fabrication", val: `₹${(qd.baseACPPrice || 0).toLocaleString("en-IN")}` },
+                              { label: "Hardware & Fittings", val: `₹${(qd.hardwarePrice || 0).toLocaleString("en-IN")}` },
+                              { label: "Subtotal", val: `₹${(qd.subtotal || 0).toLocaleString("en-IN")}` },
+                              { label: "GST (18%)", val: `₹${(qd.tax || 0).toLocaleString("en-IN")}` },
+                            ].map((row, i) => (
+                              <tr key={i}>
+                                <td className="px-4 py-3 text-slate-500 text-xs">{row.label}</td>
+                                <td className="px-4 py-3 text-right text-slate-800 font-bold text-xs">{row.val}</td>
+                              </tr>
+                            ))}
+                            <tr className="bg-slate-50">
+                              <td className="px-4 py-3.5 font-black text-[#1E40AF] text-sm">Grand Total</td>
+                              <td className="px-4 py-3.5 text-right font-black text-emerald-700 text-sm font-mono">₹{(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
 
                     {qd.status !== "Approved" && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation") && (
                       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
@@ -838,6 +1041,12 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
           customerId={customer.customerId || customer.id}
           token={token}
           customerName={customer.name}
+        />
+      )}
+      {selectedProductInfo && (
+        <ProductInfoModal
+          product={selectedProductInfo}
+          onClose={() => setSelectedProductInfo(null)}
         />
       )}
     </div>
@@ -1265,6 +1474,223 @@ function MobileChatButton({ orderId, customerId, token, customerName }: ChatProp
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Info Popup Modal Component
+// ─────────────────────────────────────────────────────────────────────────────
+function ProductInfoModal({ product, onClose }: { product: any; onClose: () => void }) {
+  const [activeImgIdx, setActiveImgIdx] = useState(0);
+  const images = product.images && product.images.length > 0 ? product.images : [];
+
+  return (
+    <div 
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.6)",
+        backdropFilter: "blur(4px)",
+        zIndex: 99999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+      }}
+    >
+      <div 
+        style={{
+          backgroundColor: "white",
+          borderRadius: "24px",
+          maxWidth: "500px",
+          width: "100%",
+          overflow: "hidden",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          border: "1px solid #f1f5f9",
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "90vh",
+        }}
+      >
+        {/* Header */}
+        <div 
+          style={{
+            padding: "16px 24px",
+            borderBottom: "1px solid #f1f5f9",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: "#f8fafc",
+          }}
+        >
+          <div>
+            <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 900, color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {product.name}
+            </h4>
+            <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginTop: "2px", display: "block" }}>
+              {product.product_id} • {product.category || "General"}
+            </span>
+          </div>
+          <button 
+            onClick={onClose} 
+            style={{
+              padding: "6px",
+              backgroundColor: "transparent",
+              border: "none",
+              cursor: "pointer",
+              borderRadius: "9999px",
+              color: "#94a3b8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#e2e8f0"; e.currentTarget.style.color = "#475569"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Scrollable Content */}
+        <div style={{ padding: "24px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Images Section */}
+          {images.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div 
+                style={{
+                  aspectRatio: "16/9",
+                  backgroundColor: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                }}
+              >
+                <img
+                  src={images[activeImgIdx]}
+                  alt={product.name}
+                  style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
+                  onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop"; }}
+                />
+              </div>
+              {images.length > 1 && (
+                <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
+                  {images.map((img: string, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveImgIdx(idx)}
+                      style={{
+                        width: "56px",
+                        height: "56px",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        border: activeImgIdx === idx ? "2px solid #2563eb" : "2px solid #cbd5e1",
+                        padding: 0,
+                        backgroundColor: "transparent",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div 
+              style={{
+                aspectRatio: "16/9",
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "16px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#cbd5e1",
+                gap: "4px",
+              }}
+            >
+              <Package size={32} style={{ strokeWidth: 1.5 }} />
+              <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>No images uploaded</span>
+            </div>
+          )}
+
+          {/* Pricing Info */}
+          <div 
+            style={{
+              backgroundColor: "rgba(219, 234, 254, 0.3)",
+              border: "1px solid #dbeafe",
+              borderRadius: "16px",
+              padding: "16px",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "16px",
+            }}
+          >
+            <div>
+              <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Pricing Type</span>
+              <span style={{ fontSize: "12px", fontWeight: 800, color: "#334155", textTransform: "capitalize", display: "block", marginTop: "2px" }}>
+                {product.pricing_type?.replace("_", " ")}
+              </span>
+            </div>
+            <div>
+              <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Standard Rate</span>
+              <span style={{ fontSize: "12px", fontWeight: 900, color: "#1d4ed8", fontFamily: "monospace", display: "block", marginTop: "2px" }}>
+                ₹{(product.price_per_unit || product.price_per_sqft || product.price_per_running_ft || 0).toLocaleString("en-IN")}
+                <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500, fontFamily: "sans-serif" }}>
+                  /{product.pricing_type === "per_sqft" ? "sqft" : product.pricing_type === "per_running_ft" ? "rft" : "unit"}
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {/* Additional details */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em" }}>Product Description</span>
+            <p style={{ margin: 0, fontSize: "12px", color: "#475569", lineHeight: 1.6, fontWeight: 500 }}>
+              High-quality {product.name} suitable for premium indoor and outdoor signage applications. Manufactured with durable materials to ensure long-lasting visibility and brand representation.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div 
+          style={{
+            padding: "12px 24px",
+            borderTop: "1px solid #f1f5f9",
+            backgroundColor: "#f8fafc",
+            display: "flex",
+            justifyContent: "end",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#1e293b",
+              color: "white",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "background-color 0.2s",
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#0f172a"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#1e293b"}
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

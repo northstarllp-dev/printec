@@ -388,35 +388,27 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             )}
 
             {/* Site Type & Instructions */}
-            <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm md:col-span-2">
-              {siteVisit.siteType && (
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
-                    Site Type: {siteVisit.siteType}
-                  </span>
-                </div>
-              )}
-              {siteVisit.notes && (
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Special Instructions
-                  </span>
-                  <p className="text-xs text-slate-600">
-                    {siteVisit.notes}
-                  </p>
-                </div>
-              )}
-              {siteVisit.sitePersonnel && (
-                <div className="mt-3 pt-3 border-t border-indigo-50">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Assigned Auditor: 
-                  </span>
-                  <span className="text-xs font-extrabold text-indigo-700 ml-2">
-                    {siteVisit.sitePersonnel}
-                  </span>
-                </div>
-              )}
-            </div>
+            {(siteVisit.siteType || siteVisit.notes) && (
+              <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm md:col-span-2">
+                {siteVisit.siteType && (
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
+                      Site Type: {siteVisit.siteType}
+                    </span>
+                  </div>
+                )}
+                {siteVisit.notes && (
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Special Instructions
+                    </span>
+                    <p className="text-xs text-slate-600">
+                      {siteVisit.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ) : (

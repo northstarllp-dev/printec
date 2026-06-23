@@ -125,16 +125,24 @@ export default async function OrderDetailPage({
     .maybeSingle();
 
   const quoteDetails = quotationData ? {
+    id: quotationData.id,
+    quotationId: quotationData.quotation_id,
     items: quotationData.items || [],
+    signageOptions: quotationData.signage_options || [],
     discount: Number(quotationData.discount || 0),
+    shipping: Number(quotationData.shipping || 0),
     subtotal: Number(quotationData.subtotal || 0),
     tax: Number(quotationData.tax || 0),
     grandTotal: Number(quotationData.grand_total || 0),
+    amountPaid: Number(quotationData.amount_paid || 0),
     status: quotationData.status,
     notes: quotationData.notes,
     terms: quotationData.terms,
     validUntil: quotationData.valid_until,
-    quotationId: quotationData.quotation_id,
+    advancePercent: Number(quotationData.advance_percent || 25),
+    advanceAmount: Number(quotationData.advance_amount || 0),
+    advancePaid: Boolean(quotationData.advance_paid),
+    paymentStatus: quotationData.payment_status || 'Pending',
   } : null;
 
   // Map to camelCase

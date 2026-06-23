@@ -17,7 +17,12 @@ import {
   AlertCircle,
   Loader2,
   ArrowRight,
-  Wrench
+  Wrench,
+  Info,
+  X,
+  Package,
+  ZoomIn,
+  ZoomOut
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
@@ -90,6 +95,71 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
   
   const [activeTab, setActiveTab] = useState(getInitialTab());
   const [order, setOrder] = useState(initialOrder);
+
+  const [products, setProducts] = useState<any[]>([]);
+  const [selectedProductInfo, setSelectedProductInfo] = useState<any | null>(null);
+
+  const [quoteFeedback, setQuoteFeedback] = useState("");
+  const [designFeedback, setDesignFeedback] = useState("");
+  const [showQuoteDeclineInput, setShowQuoteDeclineInput] = useState(false);
+  const [showDesignDeclineInput, setShowDesignDeclineInput] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [zoomLevel, setZoomLevel] = useState(100);
+
+  const handleApproveQuote = async () => {
+    if (!order) return;
+    setUpdatingStatus("quote-approve");
+    const supabase = createClient();
+    const updatedQuote = { ...order.quoteDetails, status: "Approved" };
+    setOrder(prev => ({ ...prev, stage: "Quotation Approved", quoteDetails: updatedQuote }));
+    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the quotation details." });
+    await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", order.id);
+    await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", order.id);
+    setUpdatingStatus(null);
+  };
+
+  const handleDeclineQuote = async () => {
+    if (!order || !quoteFeedback.trim()) return;
+    setUpdatingStatus("quote-decline");
+    const supabase = createClient();
+    const updatedQuote = { ...order.quoteDetails, status: "Negotiation" };
+    setOrder(prev => ({ ...prev, stage: "Quotation Negotiation", quoteDetails: updatedQuote }));
+    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}` });
+    await supabase.from("quotations").update({ status: "Rejected" }).eq("order_id", order.id);
+    await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", order.id);
+    setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
+  };
+
+  const handleApproveDesign = async () => {
+    if (!order) return;
+    setUpdatingStatus("design-approve");
+    const supabase = createClient();
+    const updatedDesign = { ...order.designDetails, status: "Approved" };
+    setOrder(prev => ({ ...prev, stage: "Design Approved", designDetails: updatedDesign }));
+    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the design proof layout." });
+    await supabase.from("orders").update({ stage: "Design Approved", design_details: updatedDesign }).eq("id", order.id);
+    setUpdatingStatus(null);
+  };
+
+  const handleDeclineDesign = async () => {
+    if (!order || !designFeedback.trim()) return;
+    setUpdatingStatus("design-decline");
+    const supabase = createClient();
+    const updatedDesign = { ...order.designDetails, status: "Draft" };
+    setOrder(prev => ({ ...prev, stage: "Design In Progress", designDetails: updatedDesign }));
+    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}` });
+    await supabase.from("orders").update({ stage: "Design In Progress", design_details: updatedDesign }).eq("id", order.id);
+    setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
+  };
+
+  useEffect(() => {
+    const supabase = createClient();
+    async function loadProducts() {
+      const { data } = await supabase.from("products").select("*").eq("is_active", true);
+      if (data) setProducts(data);
+    }
+    loadProducts();
+  }, []);
   
   // Site Visit scheduling states
   const [selectedDate, setSelectedDate] = useState("");
@@ -209,6 +279,14 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
                   advanceAmount: Number(updatedQuote.advance_amount) || 0,
                   advancePaid: updatedQuote.advance_paid || false,
                   advancePaidAt: updatedQuote.advance_paid_at,
+                  items: updatedQuote.items || [],
+                  signageOptions: updatedQuote.signage_options || [],
+                  shipping: Number(updatedQuote.shipping) || 0,
+                  amountPaid: Number(updatedQuote.amount_paid) || 0,
+                  notes: updatedQuote.notes || "",
+                  terms: updatedQuote.terms || "",
+                  validUntil: updatedQuote.valid_until,
+                  paymentStatus: updatedQuote.payment_status || "Pending",
                 }
               }));
             }
@@ -244,7 +322,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
     if (!order || !selectedDate || !selectedTime || !siteAddress) return;
     setSchedulingLoading(true);
     try {
-      const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, sitePersonnel: "Hari", completed: false, reviewStatus: "Pending" };
+      const payload = { auditDate: selectedDate, auditTime: selectedTime, customerAddress: siteAddress, gpsLocation: gpsCoords, completed: false, reviewStatus: "Pending" };
       const res = await scheduleSiteVisitAction(order.id, payload);
       if (res.success && res.order) {
         setOrder(prev => ({ ...prev, stage: res.order.stage, siteVisitDetails: res.order.siteVisitDetails }));
@@ -543,89 +621,355 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
             )}
           </div>
         )}
-        {activeTab === "quotation" && <QuotationTab order={order} />}
-        {activeTab === "design" && <DesignTab order={order} />}
+        {activeTab === "quotation" && (
+          <QuotationTab
+            order={order}
+            products={products}
+            setSelectedProductInfo={setSelectedProductInfo}
+            showQuoteDeclineInput={showQuoteDeclineInput}
+            setShowQuoteDeclineInput={setShowQuoteDeclineInput}
+            quoteFeedback={quoteFeedback}
+            setQuoteFeedback={setQuoteFeedback}
+            updatingStatus={updatingStatus}
+            handleApproveQuote={handleApproveQuote}
+            handleDeclineQuote={handleDeclineQuote}
+          />
+        )}
+        {activeTab === "design" && (
+          <DesignTab
+            order={order}
+            zoomLevel={zoomLevel}
+            setZoomLevel={setZoomLevel}
+            showDesignDeclineInput={showDesignDeclineInput}
+            setShowDesignDeclineInput={setShowDesignDeclineInput}
+            designFeedback={designFeedback}
+            setDesignFeedback={setDesignFeedback}
+            updatingStatus={updatingStatus}
+            handleApproveDesign={handleApproveDesign}
+            handleDeclineDesign={handleDeclineDesign}
+          />
+        )}
         {activeTab === "billing" && <BillingTab order={order} />}
         {activeTab === "chat" && <ChatTab order={order} />}
       </main>
+
+      {selectedProductInfo && (
+        <ProductInfoModal
+          product={selectedProductInfo}
+          onClose={() => setSelectedProductInfo(null)}
+        />
+      )}
     </div>
   );
 }
 
-function QuotationTab({ order }: { order: Order }) {
+interface QuotationTabProps {
+  order: Order;
+  products: any[];
+  setSelectedProductInfo: (prod: any) => void;
+  showQuoteDeclineInput: boolean;
+  setShowQuoteDeclineInput: (show: boolean) => void;
+  quoteFeedback: string;
+  setQuoteFeedback: (val: string) => void;
+  updatingStatus: string | null;
+  handleApproveQuote: () => Promise<void>;
+  handleDeclineQuote: () => Promise<void>;
+}
+
+function QuotationTab({
+  order,
+  products,
+  setSelectedProductInfo,
+  showQuoteDeclineInput,
+  setShowQuoteDeclineInput,
+  quoteFeedback,
+  setQuoteFeedback,
+  updatingStatus,
+  handleApproveQuote,
+  handleDeclineQuote,
+}: QuotationTabProps) {
   const qd = order.quoteDetails || {};
   const items = qd.items || [];
   
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-200 p-8">
+      <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
         <div className="flex items-start justify-between mb-8">
           <div>
             <h2 className="text-2xl font-extrabold text-gray-900">Quotation</h2>
             <p className="text-sm text-gray-500 mt-2">Valid for 7 days</p>
           </div>
-          <span className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-full text-sm font-bold">
-            {order.stage === "Quotation Approved" ? "Approved" : order.stage === "Quotation Sent" ? "Sent" : "Pending Approval"}
+          <span className={`px-4 py-2 border rounded-full text-sm font-bold ${
+            qd.status === "Approved" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+            qd.status === "Sent" ? "bg-blue-50 text-blue-700 border-blue-200" :
+            "bg-gray-50 text-gray-600 border-gray-200"
+          }`}>
+            {qd.status || "Pending"}
           </span>
         </div>
 
-        {items.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-lg">Quotation is being prepared.</p>
-            <p className="text-sm mt-2">Check back later for updates!</p>
+        {qd.signageOptions && qd.signageOptions.length > 0 ? (
+          <div className="space-y-6">
+            {/* Invoice Header Details */}
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-6">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Quote ID</span>
+                <span className="font-mono font-bold text-slate-800">{qd.quotationId || "—"}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Valid Until</span>
+                <span className="font-bold text-slate-800">{qd.validUntil ? new Date(qd.validUntil).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Project Name</span>
+                <span className="font-bold text-slate-800">{order.projectName}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Status</span>
+                <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border ${
+                  qd.status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+                  qd.status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
+                  "bg-slate-100 border-slate-200 text-slate-600"
+                }`}>
+                  {qd.status}
+                </span>
+              </div>
+            </div>
+
+            {/* Signage Sections */}
+            <div className="space-y-5">
+              {qd.signageOptions.map((section: any, sIdx: number) => {
+                const itemTotal = (section.lines || []).reduce((sum: number, line: any) => {
+                  const calcLineAmount = (item: any): number => {
+                    if (item.pricingType === "per_sqft" || item.pricingType === "per_running_ft") {
+                      return item.quantity * item.totalSqFt * item.unitPrice;
+                    }
+                    return item.quantity * item.unitPrice;
+                  };
+                  return sum + calcLineAmount(line);
+                }, 0);
+
+                return (
+                  <div key={sIdx} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm">
+                    {/* Section Header */}
+                    <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{section.itemLabel}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400 font-black uppercase">Subtotal:</span>
+                        <span className="text-xs font-black text-blue-700 font-mono">
+                          ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="bg-slate-50/50 border-b border-slate-200 text-[10px] text-slate-400 font-black uppercase tracking-wider">
+                            <th className="px-4 py-2.5">Item Description</th>
+                            <th className="text-center px-4 py-2.5">Qty</th>
+                            <th className="text-center px-4 py-2.5">Unit</th>
+                            <th className="text-center px-4 py-2.5">Measure</th>
+                            <th className="text-right px-4 py-2.5">Rate</th>
+                            <th className="text-center px-4 py-2.5">GST</th>
+                            <th className="text-right px-4 py-2.5">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
+                          {(section.lines || []).map((line: any, lIdx: number) => {
+                            const lineAmt = (() => {
+                              if (line.pricingType === "per_sqft" || line.pricingType === "per_running_ft") {
+                                return line.quantity * line.totalSqFt * line.unitPrice;
+                              }
+                              return line.quantity * line.unitPrice;
+                            })();
+                            const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
+
+                            return (
+                              <tr key={lIdx} className="hover:bg-slate-50/30">
+                                <td className="px-4 py-3 text-slate-800 font-bold">
+                                  <div className="flex items-center gap-1.5">
+                                    <span>{line.description}</span>
+                                    {line.productId && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const prod = products.find((p: any) => p.id === line.productId);
+                                          if (prod) setSelectedProductInfo(prod);
+                                        }}
+                                        className="p-0.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors shrink-0"
+                                        title="Product Details"
+                                      >
+                                        <Info size={12} className="stroke-[2.5]" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="text-center px-4 py-3 font-mono">{line.quantity}</td>
+                                <td className="text-center px-4 py-3 capitalize">{line.pricingType?.replace("per_", "")}</td>
+                                <td className="text-center px-4 py-3 font-mono">{isSqft ? `${line.totalSqFt} ${line.unit || "ft"}` : "—"}</td>
+                                <td className="text-right px-4 py-3 font-mono">₹{line.unitPrice.toLocaleString("en-IN")}</td>
+                                <td className="text-center px-4 py-3 font-mono">{line.gstRate}%</td>
+                                <td className="text-right px-4 py-3 font-mono text-slate-800 font-bold">₹{lineAmt.toLocaleString("en-IN")}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Summary Block */}
+            <div className="bg-[#f8fafc] border border-slate-200 rounded-3xl p-6 space-y-4 max-w-md ml-auto">
+              <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                <span>Subtotal</span>
+                <span className="font-mono text-slate-800">
+                  ₹{(qd.subtotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              {qd.discount > 0 && (
+                <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                  <span>Discount</span>
+                  <span className="font-mono text-rose-600">
+                    - ₹{qd.discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              {qd.shipping > 0 && (
+                <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                  <span>Shipping</span>
+                  <span className="font-mono text-slate-800">
+                    ₹{qd.shipping.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                <span>Tax Amount</span>
+                <span className="font-mono text-slate-800">
+                  ₹{(qd.tax || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-slate-200">
+                <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Total</span>
+                <span className="font-black text-[#0f172a] text-lg font-mono">
+                  ₹{(qd.grandTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              {qd.amountPaid > 0 && (
+                <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+                  <span>Amount Paid</span>
+                  <span className="font-mono text-emerald-600">
+                    ₹{qd.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-1">
+                <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Balance Due</span>
+                <span className="font-black text-[#1e40af] text-lg font-mono">
+                  ₹{Math.max(0, (qd.grandTotal || 0) - (qd.amountPaid || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            {/* Notes & Terms */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200 text-xs text-slate-500 text-left">
+              {qd.notes && (
+                <div>
+                  <span className="font-bold text-slate-700 block mb-1">Notes</span>
+                  <p className="bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">{qd.notes}</p>
+                </div>
+              )}
+              {qd.terms && (
+                <div>
+                  <span className="font-bold text-slate-700 block mb-1">Terms & Conditions</span>
+                  <p className="bg-slate-50 border border-slate-100 rounded-xl p-3 leading-relaxed">{qd.terms}</p>
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
+        ) : items.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 text-xs font-bold text-gray-500 uppercase">Description</th>
-                  <th className="text-center py-3 text-xs font-bold text-gray-500 uppercase">Qty</th>
-                  <th className="text-right py-3 text-xs font-bold text-gray-500 uppercase">Cost/Sq Ft</th>
-                  <th className="text-right py-3 text-xs font-bold text-gray-500 uppercase">Total Sq Ft</th>
-                  <th className="text-right py-3 text-xs font-bold text-gray-500 uppercase">Unit Price</th>
-                  <th className="text-right py-3 text-xs font-bold text-gray-500 uppercase">GST %</th>
-                  <th className="text-right py-3 text-xs font-bold text-gray-500 uppercase">Amount</th>
+                <tr className="border-b border-gray-200 text-slate-500 font-bold uppercase tracking-wider">
+                  <th className="py-3 pr-4">Description</th>
+                  <th className="text-center py-3 px-2">Qty</th>
+                  <th className="text-right py-3 px-2">Cost/Sq Ft</th>
+                  <th className="text-right py-3 px-2">Total Sq Ft</th>
+                  <th className="text-right py-3 px-2">Unit Price</th>
+                  <th className="text-right py-3 px-2">GST %</th>
+                  <th className="text-right py-3 pl-4">Amount</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {items.map((item: any) => {
                   const lineTotal = item.quantity * item.unitPrice;
                   return (
-                    <tr key={item.id}>
-                      <td className="py-3 text-sm text-gray-900">{item.description}</td>
-                      <td className="py-3 text-sm text-center font-mono text-gray-800">{item.quantity}</td>
-                      <td className="py-3 text-sm text-right font-mono text-gray-800">₹{(item.costPerSqFt || 0).toLocaleString("en-IN")}</td>
-                      <td className="py-3 text-sm text-right font-mono text-gray-800">{(item.totalSqFt || 0).toLocaleString("en-IN")} sq ft</td>
-                      <td className="py-3 text-sm text-right font-mono text-gray-800">₹{(item.unitPrice || 0).toLocaleString("en-IN")}</td>
-                      <td className="py-3 text-sm text-right font-mono text-gray-800">{item.gstRate}%</td>
-                      <td className="py-3 text-sm font-mono text-gray-800 text-right">₹{lineTotal.toLocaleString("en-IN")}</td>
+                    <tr key={item.id} className="hover:bg-slate-50/30">
+                      <td className="py-3 pr-4 font-bold text-slate-800">
+                        <div className="flex items-center gap-1.5">
+                          <span>{item.description}</span>
+                          {item.productId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const prod = products.find((p: any) => p.id === item.productId);
+                                if (prod) setSelectedProductInfo(prod);
+                              }}
+                              className="p-0.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors shrink-0"
+                              title="Product Details"
+                            >
+                              <Info size={12} className="stroke-[2.5]" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-2 text-center font-mono text-gray-800">{item.quantity}</td>
+                      <td className="py-3 px-2 text-right font-mono text-gray-800">₹{(item.costPerSqFt || 0).toLocaleString("en-IN")}</td>
+                      <td className="py-3 px-2 text-right font-mono text-gray-800">{(item.totalSqFt || 0).toLocaleString("en-IN")} sq ft</td>
+                      <td className="py-3 px-2 text-right font-mono text-gray-800">₹{(item.unitPrice || 0).toLocaleString("en-IN")}</td>
+                      <td className="py-3 px-2 text-right font-mono text-gray-800">{item.gstRate}%</td>
+                      <td className="py-3 pl-4 font-mono text-gray-800 text-right font-bold">₹{lineTotal.toLocaleString("en-IN")}</td>
                     </tr>
                   );
                 })}
                 {qd.discount > 0 && (
-                  <tr className="bg-rose-50">
+                  <tr className="bg-rose-50/50">
                     <td colSpan={6} className="py-3 text-sm font-semibold text-rose-700 text-right pr-3">
                       Less Discount:
                     </td>
-                    <td className="py-3 text-sm font-mono text-rose-700 text-right">
+                    <td className="py-3 text-sm font-mono text-rose-700 text-right font-bold">
                       - ₹{(qd.discount || 0).toLocaleString("en-IN")}
                     </td>
                   </tr>
                 )}
-                <tr className="bg-blue-50">
+                {qd.shipping > 0 && (
+                  <tr className="bg-slate-50/50">
+                    <td colSpan={6} className="py-3 text-sm font-semibold text-slate-700 text-right pr-3">
+                      Shipping:
+                    </td>
+                    <td className="py-3 text-sm font-mono text-slate-700 text-right font-bold">
+                      ₹{(qd.shipping || 0).toLocaleString("en-IN")}
+                    </td>
+                  </tr>
+                )}
+                <tr className="bg-blue-50/50">
                   <td colSpan={6} className="py-3 text-sm font-semibold text-blue-900 text-right pr-3">
                     Subtotal:
                   </td>
-                  <td className="py-3 text-sm font-mono text-blue-900 text-right">
+                  <td className="py-3 text-sm font-mono text-blue-900 text-right font-bold">
                     ₹{(qd.subtotal || 0).toLocaleString("en-IN")}
                   </td>
                 </tr>
-                <tr className="bg-blue-50">
+                <tr className="bg-blue-50/50">
                   <td colSpan={6} className="py-3 text-sm font-semibold text-blue-900 text-right pr-3">
                     Total GST:
                   </td>
-                  <td className="py-3 text-sm font-mono text-blue-900 text-right">
+                  <td className="py-3 text-sm font-mono text-blue-900 text-right font-bold">
                     ₹{(qd.tax || 0).toLocaleString("en-IN")}
                   </td>
                 </tr>
@@ -640,31 +984,96 @@ function QuotationTab({ order }: { order: Order }) {
               </tbody>
             </table>
           </div>
+        ) : (
+          <div className="text-center py-12 text-gray-500">
+            <p className="text-lg">Quotation is being prepared.</p>
+            <p className="text-sm mt-2">Check back later for updates!</p>
+          </div>
+        )}
+
+        {qd.status !== "Approved" && (order.stage === "Quotation Sent" || order.stage === "Quotation Negotiation") && (
+          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+            <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed to Design</p>
+            {showQuoteDeclineInput ? (
+              <div className="space-y-2">
+                <textarea rows={3} value={quoteFeedback} onChange={e => setQuoteFeedback(e.target.value)} placeholder="Your revision feedback..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500 bg-white" />
+                <div className="flex gap-2">
+                  <button onClick={() => setShowQuoteDeclineInput(false)} className="px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg text-xs font-bold bg-white">Cancel</button>
+                  <button onClick={handleDeclineQuote} disabled={!quoteFeedback.trim() || !!updatingStatus} className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">Submit</button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => setShowQuoteDeclineInput(true)} className="px-4 py-2 border border-slate-300 bg-white text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50">Decline / Revise</button>
+                <button onClick={handleApproveQuote} disabled={!!updatingStatus} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50">
+                  {updatingStatus === "quote-approve" ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Approve Quotation
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        {qd.status === "Approved" && (
+          <div className="mt-8 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+            <Check size={16} className="text-emerald-600 stroke-[2.5]" />
+            <span className="text-sm font-bold text-emerald-700">Quotation Approved</span>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
-function DesignTab({ order }: { order: Order }) {
+interface DesignTabProps {
+  order: Order;
+  zoomLevel: number;
+  setZoomLevel: React.Dispatch<React.SetStateAction<number>>;
+  showDesignDeclineInput: boolean;
+  setShowDesignDeclineInput: (show: boolean) => void;
+  designFeedback: string;
+  setDesignFeedback: (val: string) => void;
+  updatingStatus: string | null;
+  handleApproveDesign: () => Promise<void>;
+  handleDeclineDesign: () => Promise<void>;
+}
+
+function DesignTab({
+  order,
+  zoomLevel,
+  setZoomLevel,
+  showDesignDeclineInput,
+  setShowDesignDeclineInput,
+  designFeedback,
+  setDesignFeedback,
+  updatingStatus,
+  handleApproveDesign,
+  handleDeclineDesign,
+}: DesignTabProps) {
   const dd = order.designDetails || {};
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-200 p-8">
+      <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
         <h2 className="text-2xl font-extrabold text-gray-900 mb-6">Design Preview</h2>
 
-        <div className="aspect-video bg-gray-100 rounded-xl flex items-center justify-center mb-6">
+        <div className="aspect-video bg-gray-100 rounded-xl flex items-center justify-center mb-6 relative overflow-hidden bg-[#0b1c30]">
           {dd.proofUrl ? (
-            <img
-              src={dd.proofUrl}
-              alt="Design Proof"
-              className="max-h-64 object-contain"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop";
-              }}
-            />
+            <>
+              <img
+                src={dd.proofUrl}
+                alt="Design Proof"
+                className="max-h-64 object-contain transition-all"
+                style={{ transform: `scale(${zoomLevel / 100})` }}
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop";
+                }}
+              />
+              <div className="absolute bottom-3 right-3 bg-white/90 border border-slate-200 rounded-lg p-1.5 flex items-center gap-2">
+                <button onClick={() => setZoomLevel(v => Math.max(v - 20, 50))} className="p-0.5 text-slate-500 hover:text-slate-800"><ZoomOut size={12} /></button>
+                <span className="text-[10px] font-mono font-black">{zoomLevel}%</span>
+                <button onClick={() => setZoomLevel(v => Math.min(v + 20, 200))} className="p-0.5 text-slate-500 hover:text-slate-800"><ZoomIn size={12} /></button>
+              </div>
+            </>
           ) : (
-            <div className="text-center">
+            <div className="text-center bg-white p-10 flex flex-col items-center">
               <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Layout size={48} className="text-gray-400" />
               </div>
@@ -673,14 +1082,59 @@ function DesignTab({ order }: { order: Order }) {
           )}
         </div>
 
-        <div className="flex gap-3">
-          <button className="flex-1 px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors">
-            Approve Design
-          </button>
-          <button className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-colors">
-            Request Changes
-          </button>
-        </div>
+        {dd.proofUrl && dd.status !== "Approved" && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+            {showDesignDeclineInput ? (
+              <div className="space-y-2">
+                <textarea
+                  rows={3}
+                  value={designFeedback}
+                  onChange={(e) => setDesignFeedback(e.target.value)}
+                  placeholder="Design revision notes..."
+                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowDesignDeclineInput(false)}
+                    className="px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg text-xs font-bold bg-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeclineDesign}
+                    disabled={!designFeedback.trim() || !!updatingStatus}
+                    className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                  >
+                    Send Notes
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowDesignDeclineInput(true)}
+                  className="px-4 py-2 border border-slate-300 bg-white text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50"
+                >
+                  Request Edit
+                </button>
+                <button
+                  onClick={handleApproveDesign}
+                  disabled={!!updatingStatus}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {updatingStatus === "design-approve" ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Approve Design
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {dd.status === "Approved" && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+            <Check size={16} className="text-emerald-600 stroke-[2.5]" />
+            <span className="text-sm font-bold text-emerald-700">Design Approved — Moving to Fabrication</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -774,6 +1228,223 @@ function ChatTab({ order }: { order: Order }) {
         <button className="px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors">
           Send
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Info Popup Modal Component (identical to PortalClient.tsx)
+// ─────────────────────────────────────────────────────────────────────────────
+function ProductInfoModal({ product, onClose }: { product: any; onClose: () => void }) {
+  const [activeImgIdx, setActiveImgIdx] = useState(0);
+  const images = product.images && product.images.length > 0 ? product.images : [];
+
+  return (
+    <div 
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.6)",
+        backdropFilter: "blur(4px)",
+        zIndex: 99999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+      }}
+    >
+      <div 
+        style={{
+          backgroundColor: "white",
+          borderRadius: "24px",
+          maxWidth: "500px",
+          width: "100%",
+          overflow: "hidden",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          border: "1px solid #f1f5f9",
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "90vh",
+        }}
+      >
+        {/* Header */}
+        <div 
+          style={{
+            padding: "16px 24px",
+            borderBottom: "1px solid #f1f5f9",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            backgroundColor: "#f8fafc",
+          }}
+        >
+          <div>
+            <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 900, color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {product.name}
+            </h4>
+            <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", marginTop: "2px", display: "block" }}>
+              {product.product_id} • {product.category || "General"}
+            </span>
+          </div>
+          <button 
+            onClick={onClose} 
+            style={{
+              padding: "6px",
+              backgroundColor: "transparent",
+              border: "none",
+              cursor: "pointer",
+              borderRadius: "9999px",
+              color: "#94a3b8",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#e2e8f0"; e.currentTarget.style.color = "#475569"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Scrollable Content */}
+        <div style={{ padding: "24px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
+          {/* Images Section */}
+          {images.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div 
+                style={{
+                  aspectRatio: "16/9",
+                  backgroundColor: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "16px",
+                  overflow: "hidden",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  position: "relative",
+                }}
+              >
+                <img
+                  src={images[activeImgIdx]}
+                  alt={product.name}
+                  style={{ maxHeight: "100%", maxWidth: "100%", objectFit: "contain" }}
+                  onError={(e) => { e.currentTarget.src = "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop"; }}
+                />
+              </div>
+              {images.length > 1 && (
+                <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
+                  {images.map((img: string, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveImgIdx(idx)}
+                      style={{
+                        width: "56px",
+                        height: "56px",
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        border: activeImgIdx === idx ? "2px solid #2563eb" : "2px solid #cbd5e1",
+                        padding: 0,
+                        backgroundColor: "transparent",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        transition: "all 0.2s",
+                      }}
+                    >
+                      <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div 
+              style={{
+                aspectRatio: "16/9",
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: "16px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#cbd5e1",
+                gap: "4px",
+              }}
+            >
+              <Package size={32} style={{ strokeWidth: 1.5 }} />
+              <span style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase" }}>No images uploaded</span>
+            </div>
+          )}
+
+          {/* Pricing Info */}
+          <div 
+            style={{
+              backgroundColor: "rgba(219, 234, 254, 0.3)",
+              border: "1px solid #dbeafe",
+              borderRadius: "16px",
+              padding: "16px",
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "16px",
+            }}
+          >
+            <div>
+              <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Pricing Type</span>
+              <span style={{ fontSize: "12px", fontWeight: 800, color: "#334155", textTransform: "capitalize", display: "block", marginTop: "2px" }}>
+                {product.pricing_type?.replace("_", " ")}
+              </span>
+            </div>
+            <div>
+              <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", display: "block" }}>Standard Rate</span>
+              <span style={{ fontSize: "12px", fontWeight: 900, color: "#1d4ed8", fontFamily: "monospace", display: "block", marginTop: "2px" }}>
+                ₹{(product.price_per_unit || product.price_per_sqft || product.price_per_running_ft || 0).toLocaleString("en-IN")}
+                <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 500, fontFamily: "sans-serif" }}>
+                  /{product.pricing_type === "per_sqft" ? "sqft" : product.pricing_type === "per_running_ft" ? "rft" : "unit"}
+                </span>
+              </span>
+            </div>
+          </div>
+
+          {/* Additional details */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <span style={{ fontSize: "9px", color: "#94a3b8", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em" }}>Product Description</span>
+            <p style={{ margin: 0, fontSize: "12px", color: "#475569", lineHeight: 1.6, fontWeight: 500 }}>
+              High-quality {product.name} suitable for premium indoor and outdoor signage applications. Manufactured with durable materials to ensure long-lasting visibility and brand representation.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div 
+          style={{
+            padding: "12px 24px",
+            borderTop: "1px solid #f1f5f9",
+            backgroundColor: "#f8fafc",
+            display: "flex",
+            justifyContent: "end",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#1e293b",
+              color: "white",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "background-color 0.2s",
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#0f172a"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#1e293b"}
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
