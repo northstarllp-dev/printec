@@ -10,10 +10,21 @@ interface Product {
   product_id: string;
   name: string;
   category: string | null;
-  pricing_type: "per_unit" | "per_sqft";
-  unit_price: number;
-  unit: string;
+  pricing_type?: string | null;
   is_active: boolean;
+  price_per_sqft?: number | null;
+  price_per_unit?: number | null;
+  price_per_running_ft?: number | null;
+  images?: string[];
+}
+
+interface SiteVisitItem {
+  id: string;
+  name: string;
+  width?: number | null;
+  height?: number | null;
+  depth?: number | null;
+  notes?: string | null;
 }
 
 interface OrderDetailPageClientProps {
@@ -25,6 +36,8 @@ interface OrderDetailPageClientProps {
   currentEmployee: Employee | null;
   products?: Product[];
   initialQuotation?: any;
+  siteVisitItems?: SiteVisitItem[];
+  materialPreferences?: any[];
 }
 
 export function OrderDetailPageClient({
@@ -36,6 +49,8 @@ export function OrderDetailPageClient({
   currentEmployee,
   products = [],
   initialQuotation = null,
+  siteVisitItems = [],
+  materialPreferences = [],
 }: OrderDetailPageClientProps) {
   const router = useRouter();
 
@@ -54,6 +69,8 @@ export function OrderDetailPageClient({
         currentEmployee={currentEmployee}
         products={products}
         initialQuotation={initialQuotation}
+        siteVisitItems={siteVisitItems}
+        materialPreferences={materialPreferences}
       />
     </div>
   );

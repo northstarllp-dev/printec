@@ -105,13 +105,24 @@ export default async function PortalPage({
   // Fetch quotations for these orders
   const orderIds = (ordersData || []).map((o) => o.id);
   let quotationsData: any[] = [];
+  let materialPrefsData: any[] = [];
+  let siteVisitsData: any[] = [];
+  let siteVisitMeasurementsData: any[] = [];
+
   if (orderIds.length > 0) {
-    const { data: qts, error: qtsError } = await supabase
-      .from("quotations")
-      .select("*")
-      .in("order_id", orderIds);
-    if (!qtsError && qts) {
-      quotationsData = qts;
+    const [qtsRes, prefsRes, svsRes] = await Promise.all([
+      supabase.from("quotations").select("*").in("order_id", orderIds),
+      supabase.from("quotation_material_preferences").select("*").in("order_id", orderIds),
+      supabase.from("site_visits").select("id, order_id").in("order_id", orderIds),
+    ]);
+    if (!qtsRes.error && qtsRes.data) quotationsData = qtsRes.data;
+    if (!prefsRes.error && prefsRes.data) materialPrefsData = prefsRes.data;
+    if (!svsRes.error && svsRes.data) siteVisitsData = svsRes.data;
+
+    if (siteVisitsData.length > 0) {
+      const svIds = siteVisitsData.map((sv: any) => sv.id);
+      const { data: measData } = await supabase.from("site_visit_measurements").select("*").in("site_visit_id", svIds);
+      if (measData) siteVisitMeasurementsData = measData;
     }
   }
 
@@ -146,17 +157,29 @@ export default async function PortalPage({
 
   const orders = ordersData.map((o: any) => {
     const q = quotationsData.find((qt: any) => qt.order_id === o.id);
+    const sv = siteVisitsData.find((sv: any) => sv.order_id === o.id);
+    const siteVisitItems = sv ? siteVisitMeasurementsData.filter((m: any) => m.site_visit_id === sv.id).map((m: any) => ({ id: m.id, name: m.name, width: m.width ?? null, height: m.height ?? null, depth: m.depth ?? null, notes: m.notes ?? null })) : [];
+    const materialPreferences = materialPrefsData.filter((mp: any) => mp.order_id === o.id);
+
     const quoteDetails = q ? {
+      id: q.id,
+      quotationId: q.quotation_id,
       items: q.items || [],
+      signageOptions: q.signage_options || [],
       discount: Number(q.discount || 0),
+      shipping: Number(q.shipping || 0),
       subtotal: Number(q.subtotal || 0),
       tax: Number(q.tax || 0),
       grandTotal: Number(q.grand_total || 0),
+      amountPaid: Number(q.amount_paid || 0),
       status: q.status,
       notes: q.notes,
       terms: q.terms,
       validUntil: q.valid_until,
-      quotationId: q.quotation_id,
+      advancePercent: Number(q.advance_percent || 25),
+      advanceAmount: Number(q.advance_amount || 0),
+      advancePaid: Boolean(q.advance_paid),
+      paymentStatus: q.payment_status || 'Pending',
     } : null;
 
     return {
@@ -187,6 +210,10 @@ export default async function PortalPage({
       stageAdminNotes: o.stage_admin_notes,
       orderCode: o.order_id || o.id,
       orderId: o.order_id || o.id,
+      advanceInvoiceDetails: o.advance_invoice_details ?? null,
+      paymentHistory: o.payment_history ?? [],
+      siteVisitItems,
+      materialPreferences,
     };
   });
 

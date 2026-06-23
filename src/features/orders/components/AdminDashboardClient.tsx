@@ -68,6 +68,15 @@ const PIPELINE_COLORS = [
   "#22C55E",
 ];
 
+const PIPELINE_STAGE_GROUPS: Record<string, string[]> = {
+  "Site Visit Pending": ["Site Visit Pending", "Site Visit Scheduled", "Site Visit Completed"],
+  "Quotation Sent": ["Quotation In Progress", "Quotation Sent", "Quotation Negotiation", "Quotation Approved"],
+  "Design Approved": ["Design In Progress", "Design Approved"],
+  "Production": ["Production", "Ready For Installation"],
+  "Installation Scheduled": ["Installation Scheduled"],
+  "Completed": ["Completed", "Closed"],
+};
+
 /* ─── Component ─────────────────────────────────────────────────── */
 interface AdminDashboardClientProps {
   orders: any[];
@@ -78,6 +87,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [selectedPipelineStage, setSelectedPipelineStage] = useState<string | null>(null);
 
   /* Stats */
   const totalOrders = orders.length;
@@ -176,15 +186,23 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
     },
   ];
 
-  /* Recent Orders (last 5) */
-  const recentOrders = orders.slice(0, 5);
-
   /* Pipeline counts */
-  const pipelineCounts = PIPELINE_STAGES.map((stage) => ({
-    stage,
-    count: orders.filter((o) => o.stage === stage).length,
-    label: STAGE_LABEL[stage]?.label || stage,
-  }));
+  const pipelineCounts = PIPELINE_STAGES.map((stage) => {
+    const group = PIPELINE_STAGE_GROUPS[stage] || [stage];
+    return {
+      stage,
+      count: orders.filter((o) => group.includes(o.stage)).length,
+      label: STAGE_LABEL[stage]?.label || stage,
+    };
+  });
+
+  /* Recent Orders (filtered or last 5) */
+  const recentOrders = selectedPipelineStage
+    ? orders.filter((o) => {
+        const group = PIPELINE_STAGE_GROUPS[selectedPipelineStage] || [selectedPipelineStage];
+        return group.includes(o.stage);
+      })
+    : orders.slice(0, 5);
 
   /* Pending Tickets — mock data */
   const pendingTickets = [
@@ -281,7 +299,46 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
         {/* Recent Orders */}
         <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", overflow: "hidden" }}>
           <div style={{ padding: "18px 24px", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <h2 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Recent Orders</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <h2 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>
+                {selectedPipelineStage ? "Filtered Orders" : "Recent Orders"}
+              </h2>
+              {selectedPipelineStage && (
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    background: "var(--color-primary-container)",
+                    color: "var(--color-primary)",
+                    padding: "3px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid rgba(30, 64, 175, 0.15)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  Stage: {STAGE_LABEL[selectedPipelineStage]?.label || selectedPipelineStage}
+                  <button
+                    onClick={() => setSelectedPipelineStage(null)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "inherit",
+                      cursor: "pointer",
+                      padding: "0 2px",
+                      fontWeight: "900",
+                      fontSize: "12px",
+                      lineHeight: 1,
+                      display: "flex",
+                      alignItems: "center",
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
+            </div>
             <button
               onClick={() => router.push("/admin/orders")}
               style={{ fontSize: "12px", fontWeight: "700", color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}
@@ -289,7 +346,14 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
               View All
             </button>
           </div>
-          <div>
+          <div
+            className="custom-scrollbar"
+            style={{
+              maxHeight: "360px",
+              height: "360px",
+              overflowY: "auto",
+            }}
+          >
             {recentOrders.map((order, i) => {
               const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, dot: "#94A3B8" };
               const priority = getPriority(order);
@@ -447,44 +511,65 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
       {/* ── Order Pipeline ── */}
       <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "20px 24px" }}>
         <h2 style={{ margin: "0 0 20px", fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Order Pipeline</h2>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${PIPELINE_STAGES.length}, 1fr)`, gap: "0" }}>
-          {pipelineCounts.map((item, i) => (
-            <div
-              key={item.stage}
-              style={{
-                textAlign: "center",
-                padding: "0 8px",
-                borderRight: i < pipelineCounts.length - 1 ? "1px solid #F1F5F9" : "none",
-              }}
-            >
-              <div style={{ fontSize: "28px", fontWeight: "800", color: "#0F172A", marginBottom: "4px" }}>
-                {item.count}
-              </div>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${PIPELINE_STAGES.length}, 1fr)`, gap: "8px" }}>
+          {pipelineCounts.map((item, i) => {
+            const isSelected = selectedPipelineStage === item.stage;
+            return (
               <div
+                key={item.stage}
+                onClick={() => setSelectedPipelineStage(isSelected ? null : item.stage)}
                 style={{
-                  width: "100%",
-                  height: "4px",
-                  borderRadius: "99px",
-                  background: PIPELINE_COLORS[i] + "30",
-                  marginBottom: "8px",
-                  overflow: "hidden",
+                  textAlign: "center",
+                  padding: "12px 8px",
+                  cursor: "pointer",
+                  borderRadius: "10px",
+                  background: isSelected ? "rgba(30, 64, 175, 0.05)" : "transparent",
+                  border: isSelected ? "1.5px solid var(--color-primary)" : "1.5px solid transparent",
+                  transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                  transform: isSelected ? "scale(1.02)" : "scale(1)",
+                  boxShadow: isSelected ? "0 4px 10px rgba(30, 64, 175, 0.05)" : "none",
+                }}
+                onMouseEnter={e => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = "#F8FAFC";
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isSelected) {
+                    e.currentTarget.style.background = "transparent";
+                  }
                 }}
               >
+                <div style={{ fontSize: "28px", fontWeight: "800", color: isSelected ? "var(--color-primary)" : "#0F172A", marginBottom: "4px", transition: "color 0.15s" }}>
+                  {item.count}
+                </div>
                 <div
                   style={{
-                    height: "100%",
-                    width: item.count > 0 ? "100%" : "0%",
-                    background: PIPELINE_COLORS[i],
+                    width: "100%",
+                    height: isSelected ? "6px" : "4px",
                     borderRadius: "99px",
-                    transition: "width 0.5s ease",
+                    background: PIPELINE_COLORS[i] + "30",
+                    marginBottom: "8px",
+                    overflow: "hidden",
+                    transition: "height 0.15s",
                   }}
-                />
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: item.count > 0 ? "100%" : "0%",
+                      background: PIPELINE_COLORS[i],
+                      borderRadius: "99px",
+                      transition: "width 0.5s ease",
+                    }}
+                  />
+                </div>
+                <div style={{ fontSize: "11px", fontWeight: isSelected ? "800" : "600", color: isSelected ? "var(--color-primary)" : "#64748B", transition: "color 0.15s" }}>
+                  {item.label}
+                </div>
               </div>
-              <div style={{ fontSize: "11px", fontWeight: "600", color: "#64748B" }}>
-                {item.label}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

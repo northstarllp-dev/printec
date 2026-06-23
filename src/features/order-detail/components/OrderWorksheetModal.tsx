@@ -105,10 +105,21 @@ interface Product {
   product_id: string;
   name: string;
   category: string | null;
-  pricing_type: "per_unit" | "per_sqft";
-  unit_price: number;
-  unit: string;
+  pricing_type?: string | null;
   is_active: boolean;
+  price_per_sqft?: number | null;
+  price_per_unit?: number | null;
+  price_per_running_ft?: number | null;
+  images?: string[];
+}
+
+interface SiteVisitItem {
+  id: string;
+  name: string;
+  width?: number | null;
+  height?: number | null;
+  depth?: number | null;
+  notes?: string | null;
 }
 
 interface OrderWorksheetModalProps {
@@ -122,6 +133,8 @@ interface OrderWorksheetModalProps {
   currentEmployee: Employee | null;
   products?: Product[];
   initialQuotation?: any;
+  siteVisitItems?: SiteVisitItem[];
+  materialPreferences?: any[];
 }
 
 /* ─── Component ─────────────────────────────────────────────────── */
@@ -136,6 +149,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   currentEmployee,
   products = [],
   initialQuotation = null,
+  siteVisitItems = [],
+  materialPreferences = [],
 }) => {
   const router = useRouter();
   const [order, setOrder] = useState<Order>(initialOrder);
@@ -395,10 +410,14 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             projectName: order.projectName,
             customerName: order.customerName,
             customerId: order.customerId,
+            paymentHistory: order.paymentHistory,
+            stage: order.stage,
           }}
           isEmployee={isEmployee}
-          products={products}
+          products={products as any}
           initialQuotation={initialQuotation}
+          siteVisitItems={siteVisitItems}
+          materialPreferences={materialPreferences}
         />
       );
       case 2: return <DesignModule order={order} isEmployee={isEmployee} updateDesignDetails={updateDesignDetails} />;
@@ -788,8 +807,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           {/* Sticky footer actions */}
           <div style={{ padding: "14px 20px", background: "#F8FAFC", borderTop: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: "0 -2px 10px rgba(0,0,0,0.05)" }}>
             <div />
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-              {order.health && order.health !== "Active" ? (
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", width: "100%", justifyContent: "flex-end" }}>
+              {activeStepTab === 1 ? (
+                <div id="modal-footer-portal" style={{ display: "flex", gap: "10px", alignItems: "center", width: "100%", justifyContent: "flex-end" }} />
+              ) : order.health && order.health !== "Active" ? (
                 <>
                   <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600" }}>
                     Order is <strong style={{ color: "#DC2626" }}>{order.health}</strong>

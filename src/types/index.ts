@@ -256,6 +256,8 @@ export interface Order {
   health?: string;
   lost_reason?: string;
   orderId?: string;
+  paymentHistory?: any[];
+  advanceInvoiceDetails?: any;
 }
 
 export type EnquirySource = "Website" | "Phone Call" | "WhatsApp";

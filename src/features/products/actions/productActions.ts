@@ -26,31 +26,71 @@ async function getSupabase() {
   );
 }
 
-export async function getProducts() {
+export type Product = {
+  id: string;
+  product_id: string;
+  company_id?: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  pricing_type?: string | null;
+  // New pricing fields
+  price_per_sqft?: number | null;
+  price_per_unit?: number | null;
+  price_per_running_ft?: number | null;
+  images?: string[];
+  is_active: boolean;
+  created_at?: string;
+};
+
+export type CreateProductPayload = {
+  product_id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  pricing_type?: string | null;
+  // New
+  price_per_sqft?: number | null;
+  price_per_unit?: number | null;
+  price_per_running_ft?: number | null;
+  images?: string[];
+  is_active?: boolean;
+};
+
+export async function getProducts(): Promise<Product[]> {
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from("products")
     .select("*")
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
-  return data;
+  return (data || []).map((p: any) => ({
+    ...p,
+    images: Array.isArray(p.images) ? p.images : [],
+  }));
 }
 
-export async function createProduct(formData: {
-  product_id: string;
-  name: string;
-  description?: string;
-  category?: string;
-  pricing_type: "per_unit" | "per_sqft";
-  unit_price: number;
-  unit: string;
-  is_active?: boolean;
-}) {
+export async function getActiveProducts(): Promise<Product[]> {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data || []).map((p: any) => ({
+    ...p,
+    images: Array.isArray(p.images) ? p.images : [],
+  }));
+}
+
+export async function createProduct(formData: CreateProductPayload) {
   const supabase = await getSupabase();
   const payload = {
     company_id: "11111111-1111-1111-1111-111111111111",
     is_active: true,
     ...formData,
+    images: formData.images ?? [],
   };
   const { data, error } = await supabase
     .from("products")
@@ -63,15 +103,7 @@ export async function createProduct(formData: {
 
 export async function updateProduct(
   id: string,
-  updates: Partial<{
-    name: string;
-    description: string;
-    category: string;
-    pricing_type: "per_unit" | "per_sqft";
-    unit_price: number;
-    unit: string;
-    is_active: boolean;
-  }>
+  updates: Partial<CreateProductPayload>
 ) {
   const supabase = await getSupabase();
   const { data, error } = await supabase

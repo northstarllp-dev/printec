@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import {
   Printer, MapPin, FileText, CheckSquare, CheckCircle2,
   MessageSquare, Send, ZoomIn, ZoomOut, Check, X,
-  AlertCircle, CreditCard, QrCode, Calendar,
+  AlertCircle, CreditCard, Calendar,
   Ruler, Activity, ChevronRight, Phone, Mail, Clock, ClipboardList,
   Building2, User2, Star, ArrowRight,
   Package, Wrench, Palette, FileCheck, BarChart3, ChevronDown,
@@ -55,6 +55,11 @@ interface Order {
   stageAdminNotes?: string;
   orderCode?: string;
   orderId?: string;
+  // New quotation workflow fields
+  advanceInvoiceDetails?: any;
+  paymentHistory?: any[];
+  siteVisitItems?: Array<{ id: string; name: string; width?: number | null; height?: number | null; depth?: number | null; notes?: string | null }>;
+  materialPreferences?: any[];
 }
 
 interface PortalClientProps {
@@ -127,8 +132,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   const [showDesignDeclineInput, setShowDesignDeclineInput] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(100);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentLoading, setPaymentLoading] = useState(false);
+
 
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -171,9 +175,71 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
         }
       })
       .subscribe();
+  }, [activeOrder?.id]);
+
+  // Realtime subscription to sync active order and quotation changes dynamically
+  useEffect(() => {
+    if (!activeOrder) return;
+    const supabase = createClient();
+    const orderChannelName = `portal-order-sync-${activeOrder.id}-${Date.now()}`;
+    
+    const channel = supabase
+      .channel(orderChannelName)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders", filter: `id=eq.${activeOrder.id}` },
+        (payload) => {
+          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
+            const updatedOrder = payload.new as any;
+            if (updatedOrder) {
+              setOrders(prev => prev.map(o => o.id === updatedOrder.id ? {
+                ...o,
+                stage: updatedOrder.stage,
+                depositPaid: Number(updatedOrder.deposit_paid) || 0,
+                paymentHistory: updatedOrder.payment_history || [],
+                advanceInvoiceDetails: updatedOrder.advance_invoice_details || null,
+                siteVisitDetails: updatedOrder.site_visit_details,
+                designDetails: updatedOrder.design_details,
+                productionDetails: updatedOrder.production_details,
+                installationDetails: updatedOrder.installation_details,
+                stageStatus: updatedOrder.stage_status,
+                stageAdminNotes: updatedOrder.stage_admin_notes,
+              } : o));
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "quotations", filter: `order_id=eq.${activeOrder.id}` },
+        (payload) => {
+          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
+            const updatedQuote = payload.new as any;
+            if (updatedQuote) {
+              setOrders(prev => prev.map(o => o.id === updatedQuote.order_id ? {
+                ...o,
+                quoteDetails: {
+                  ...(o.quoteDetails || {}),
+                  quotationId: updatedQuote.quotation_id,
+                  status: updatedQuote.status,
+                  grandTotal: Number(updatedQuote.grand_total) || 0,
+                  subtotal: Number(updatedQuote.subtotal) || 0,
+                  discount: Number(updatedQuote.discount) || 0,
+                  tax: Number(updatedQuote.tax) || 0,
+                  advancePercent: Number(updatedQuote.advance_percent) || 25,
+                  advanceAmount: Number(updatedQuote.advance_amount) || 0,
+                  advancePaid: updatedQuote.advance_paid || false,
+                  advancePaidAt: updatedQuote.advance_paid_at,
+                }
+              } : o));
+            }
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      ch.unsubscribe();
-      supabase.removeChannel(ch);
+      supabase.removeChannel(channel);
     };
   }, [activeOrder?.id]);
 
@@ -251,20 +317,6 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
   };
 
-  const handleConfirmMockPayment = async () => {
-    if (!activeOrder) return;
-    setPaymentLoading(true);
-    const qd = activeOrder.quoteDetails || {};
-    const total = qd.grandTotal || activeOrder.budget || 0;
-    const amount = activeOrder.depositPaid === 0 ? Math.round(total * 0.3) : total - activeOrder.depositPaid;
-    const newDeposit = activeOrder.depositPaid + amount;
-    const supabase = createClient();
-    setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, depositPaid: newDeposit } : o));
-    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: `💳 Client confirmed mock UPI payment of ₹${amount.toLocaleString("en-IN")}. Pending admin verification.` });
-    await supabase.from("orders").update({ deposit_paid: newDeposit }).eq("id", activeOrder.id);
-    setTimeout(() => { setPaymentLoading(false); setShowPaymentModal(false); }, 800);
-  };
-
   const sv = activeOrder?.siteVisitDetails || {};
   const qd = activeOrder?.quoteDetails || {};
   const dd = activeOrder?.designDetails || {};
@@ -310,10 +362,20 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
             </div>
             <div className="w-px h-6 bg-slate-200" />
             <div>
-              <h1 className="text-base font-black text-[#0b1c30] leading-none">
-                Order #{activeOrder?.orderCode || activeOrder?.id}
-              </h1>
-              <p className="text-[11px] text-slate-500 mt-0.5">
+              <div className="flex items-center gap-2">
+                <h1 className="text-base font-black text-[#0b1c30] leading-none">
+                  Order #{activeOrder?.orderCode || activeOrder?.id}
+                </h1>
+                <a
+                  href="tel:+919876543210"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-100 hover:border-blue-200 text-[#1E40AF] rounded-lg text-[10px] font-bold transition-all shadow-sm"
+                  title="Call Manager (Sarah Jenkins)"
+                >
+                  <Phone size={11} className="stroke-[2.5]" />
+                  <span>Call Manager</span>
+                </a>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
                 Client: {customer.name} | {activeOrder?.projectName || "Signage Project"}
               </p>
             </div>
@@ -555,67 +617,347 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
                 {/* ── QUOTATION STAGE ── */}
                 {currentStep === 2 && (
-                  <div className="space-y-5">
+                  <div className="space-y-6">
+                    {/* Header */}
                     <div>
-                      <h2 className="text-xl font-black text-[#0b1c30] mb-1">Review Your Quotation</h2>
-                      <p className="text-sm text-slate-500">Please review the cost breakdown below and approve or request revisions.</p>
-                    </div>
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200">
-                            <th className="text-left px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Item</th>
-                            <th className="text-right px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wide">Amount</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {[
-                            { label: "Signage Type", val: qd.signageType || "ACP Panels" },
-                            { label: "Materials", val: qd.material || "Brushed Aluminium" },
-                            { label: "Mounting", val: qd.mounting || "Standoffs" },
-                            { label: "Base Fabrication", val: `₹${(qd.baseACPPrice || 0).toLocaleString("en-IN")}` },
-                            { label: "Hardware & Fittings", val: `₹${(qd.hardwarePrice || 0).toLocaleString("en-IN")}` },
-                            { label: "Subtotal", val: `₹${(qd.subtotal || 0).toLocaleString("en-IN")}` },
-                            { label: "GST (18%)", val: `₹${(qd.tax || 0).toLocaleString("en-IN")}` },
-                          ].map((row, i) => (
-                            <tr key={i}>
-                              <td className="px-4 py-3 text-slate-500 text-xs">{row.label}</td>
-                              <td className="px-4 py-3 text-right text-slate-800 font-bold text-xs">{row.val}</td>
-                            </tr>
-                          ))}
-                          <tr className="bg-slate-50">
-                            <td className="px-4 py-3.5 font-black text-[#1E40AF] text-sm">Grand Total</td>
-                            <td className="px-4 py-3.5 text-right font-black text-emerald-700 text-sm font-mono">₹{(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                      <h2 className="text-xl font-black text-[#0b1c30] mb-1">Quotation</h2>
+                      <p className="text-sm text-slate-500">Review pricing options, set material preferences, and approve to proceed.</p>
                     </div>
 
-                    {qd.status !== "Approved" && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation") && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed to Design</p>
-                        {showQuoteDeclineInput ? (
-                          <div className="space-y-2">
-                            <textarea rows={3} value={quoteFeedback} onChange={e => setQuoteFeedback(e.target.value)} placeholder="Your revision feedback..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500" />
-                            <div className="flex gap-2">
-                              <button onClick={() => setShowQuoteDeclineInput(false)} className="px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg text-xs font-bold">Cancel</button>
-                              <button onClick={handleDeclineQuote} disabled={!quoteFeedback.trim() || !!updatingStatus} className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">Submit</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button onClick={() => setShowQuoteDeclineInput(true)} className="px-4 py-2 border border-slate-300 bg-white text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50">Decline / Revise</button>
-                            <button onClick={handleApproveQuote} disabled={!!updatingStatus} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50">
-                              <Check size={13} /> Approve Quotation
+                    {/* ── Sub-section A: Material Preferences (stage = Quotation In Progress) ── */}
+                    {(activeOrder?.stage === "Quotation In Progress" || (activeOrder?.materialPreferences && activeOrder.materialPreferences.length > 0)) && (
+                      <div className="border border-amber-200 rounded-xl overflow-hidden">
+                        <div className="bg-amber-50 px-4 py-3 border-b border-amber-100 flex items-center gap-2">
+                          <span className="text-sm font-black text-amber-800">🎨 Material Preferences</span>
+                          <span className="text-xs text-amber-600 ml-auto">Help us tailor the perfect solution</span>
+                        </div>
+                        <div className="p-4 space-y-4">
+                          {(activeOrder?.siteVisitItems || []).length === 0 ? (
+                            <p className="text-sm text-slate-400 italic text-center py-4">Awaiting site visit measurements to load signage items.</p>
+                          ) : (
+                            (activeOrder?.siteVisitItems || []).map((item: any) => {
+                              const savedPref = (activeOrder?.materialPreferences || []).find((mp: any) => mp.signage_item_id === item.id) || {};
+                              return (
+                                <div key={item.id} className="border border-slate-200 rounded-xl p-4">
+                                  <div className="font-bold text-[#0b1c30] text-sm mb-3 flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-[#1E40AF]" />
+                                    {item.name}
+                                    {(item.width || item.height) && (
+                                      <span className="text-xs text-slate-400 font-normal">({item.width}×{item.height}ft)</span>
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    {["acp_type", "acrylic_type", "letter_type", "led_type", "finish", "color"].map(field => {
+                                      const fieldLabel = { acp_type: "ACP Type", acrylic_type: "Acrylic Type", letter_type: "Letter Type", led_type: "LED Type", finish: "Finish", color: "Color" }[field] || field;
+                                      const fieldOptions: Record<string, string[]> = {
+                                        acp_type: ["Standard White", "Glossy White", "Brushed Silver", "Gold", "Black", "Custom Color"],
+                                        acrylic_type: ["Standard Clear", "Frosted", "Coloured", "Mirror", "Opal White"],
+                                        letter_type: ["SS 3D Letters", "Acrylic Letters", "Foam Letters", "Backlit Letters", "MS Letters"],
+                                        led_type: ["RGB", "Warm White", "Cool White", "No LED"],
+                                        finish: ["Matte", "Glossy", "Satin", "Powder Coated"],
+                                        color: ["White", "Black", "Silver", "Gold", "Brand Color", "Custom"],
+                                      };
+                                      return (
+                                        <div key={field}>
+                                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">{fieldLabel}</label>
+                                          <select
+                                            defaultValue={(savedPref.preferences as any)?.[field] || ""}
+                                            data-item-id={item.id}
+                                            data-field={field}
+                                            className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:ring-1 focus:ring-blue-500 focus:outline-none bg-slate-50"
+                                          >
+                                            <option value="">— Select —</option>
+                                            {(fieldOptions[field] || []).map(opt => (
+                                              <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                          {(activeOrder?.siteVisitItems || []).length > 0 && (
+                            <button
+                              onClick={async () => {
+                                if (!activeOrder) return;
+                                const supabase = createClient();
+                                const prefs = (activeOrder.siteVisitItems || []).map((item: any) => {
+                                  const selects = document.querySelectorAll<HTMLSelectElement>(`[data-item-id="${item.id}"]`);
+                                  const prefData: Record<string, string> = {};
+                                  selects.forEach(sel => {
+                                    if (sel.dataset.field) {
+                                      prefData[sel.dataset.field] = sel.value;
+                                    }
+                                  });
+                                  return {
+                                    order_id: activeOrder.id,
+                                    signage_item_id: item.id,
+                                    signage_item_label: item.name,
+                                    preferences: prefData,
+                                  };
+                                });
+                                for (const p of prefs) {
+                                  await supabase.from("quotation_material_preferences").upsert(p, { onConflict: "order_id,signage_item_id" });
+                                }
+                                await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Customer updated material preferences." });
+                                alert("Preferences saved! Our team will use these when building your quotation.");
+                              }}
+                              className="w-full py-2.5 bg-amber-600 text-white rounded-xl text-sm font-bold hover:bg-amber-700 transition-all"
+                            >
+                              💾 Save Material Preferences
                             </button>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                     )}
-                    {qd.status === "Approved" && (
-                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
-                        <Check size={16} className="text-emerald-600 stroke-[2.5]" />
-                        <span className="text-sm font-bold text-emerald-700">Quotation Approved</span>
+
+                    {/* ── Sub-section B: Quotation Review (stage = Sent / Negotiation) ── */}
+                    {(activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation") && activeOrder?.quoteDetails && (
+                      <div className="border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="bg-[#eff6ff] px-4 py-3 border-b border-blue-100 flex items-center justify-between">
+                          <span className="text-sm font-black text-[#1E40AF]">📋 Your Quotation — {activeOrder.quoteDetails.quotationId}</span>
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-bold">
+                            {activeOrder.quoteDetails.status === "Sent" ? "Awaiting Approval" : activeOrder.quoteDetails.status}
+                          </span>
+                        </div>
+                        <div className="p-4 space-y-4">
+                          {/* Multi-option sections */}
+                          {(activeOrder.quoteDetails.signageOptions || []).length > 0 ? (
+                            (activeOrder.quoteDetails.signageOptions as any[]).map((section: any, si: number) => {
+                              // If it has options (old structure), resolve flat lines from the first option
+                              const lines = section.lines || section.options?.[0]?.lines || [];
+                              const secNotes = section.notes || section.options?.[0]?.notes || "";
+                              const secTotal = lines.reduce((s: number, l: any) => {
+                                const pricingType = l.pricingType || l.unitType;
+                                const totalSqFt = l.totalSqFt !== undefined ? l.totalSqFt : l.sqft;
+                                if (pricingType === "per_sqft" || pricingType === "per_running_ft") return s + l.quantity * (totalSqFt || 0) * l.unitPrice;
+                                return s + l.quantity * l.unitPrice;
+                              }, 0);
+                              return (
+                                <div key={si} className="border border-slate-200 rounded-xl overflow-hidden mb-3">
+                                  <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                                    <span className="text-sm font-bold text-[#0b1c30]">{section.itemLabel}</span>
+                                    <span className="font-black text-sm text-[#1E40AF]">₹{secTotal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                                  </div>
+                                  <div className="p-3 divide-y divide-slate-50">
+                                    {lines.map((l: any, li: number) => {
+                                      const pricingType = l.pricingType || l.unitType;
+                                      const totalSqFt = l.totalSqFt !== undefined ? l.totalSqFt : l.sqft;
+                                      const lineAmt = pricingType === "per_sqft" || pricingType === "per_running_ft" 
+                                        ? l.quantity * (totalSqFt || 0) * l.unitPrice 
+                                        : l.quantity * l.unitPrice;
+
+                                      let detailStr = "";
+                                      if (pricingType === "per_sqft") {
+                                        detailStr = `(${l.quantity} × ${totalSqFt || 0} sqft @ ₹${l.unitPrice}/sqft)`;
+                                      } else if (pricingType === "per_running_ft") {
+                                        detailStr = `(${l.quantity} × ${totalSqFt || 0} rft @ ₹${l.unitPrice}/rft)`;
+                                      } else {
+                                        detailStr = `(${l.quantity} ${l.quantity > 1 ? "units" : "unit"} @ ₹${l.unitPrice}/unit)`;
+                                      }
+
+                                      return (
+                                        <div key={li} className="py-2 flex justify-between text-xs">
+                                          <div>
+                                            <span className="font-semibold text-slate-700">{l.description}</span>
+                                            <span className="text-slate-400 ml-2">
+                                              {detailStr}
+                                            </span>
+                                          </div>
+                                          <span className="font-bold text-slate-800">₹{lineAmt.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                                        </div>
+                                      );
+                                    })}
+                                    {secNotes && <p className="text-xs text-slate-400 mt-2 pt-1 italic">Note: {secNotes}</p>}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            // Fallback: flat quotation display
+                            <div className="border border-slate-200 rounded-xl overflow-hidden">
+                              <table className="w-full text-sm">
+                                <tbody className="divide-y divide-slate-100">
+                                  {[{ label: "Subtotal", val: `₹${(activeOrder.quoteDetails.subtotal || 0).toLocaleString("en-IN")}` }, { label: "Discount", val: `−₹${(activeOrder.quoteDetails.discount || 0).toLocaleString("en-IN")}` }, { label: "GST", val: `₹${(activeOrder.quoteDetails.tax || 0).toLocaleString("en-IN")}` }].map((row, i) => (
+                                    <tr key={i}><td className="px-4 py-2.5 text-slate-500 text-xs">{row.label}</td><td className="px-4 py-2.5 text-right text-slate-800 font-bold text-xs">{row.val}</td></tr>
+                                  ))}
+                                  <tr className="bg-slate-50"><td className="px-4 py-3 font-black text-[#1E40AF] text-sm">Grand Total</td><td className="px-4 py-3 text-right font-black text-emerald-700 font-mono">₹{(activeOrder.quoteDetails.grandTotal || 0).toLocaleString("en-IN")}</td></tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          {/* Grand total summary */}
+                          <div className="flex justify-between items-center px-4 py-3 bg-slate-50 rounded-xl">
+                            <span className="font-black text-[#0b1c30]">Grand Total</span>
+                            <span className="font-black text-emerald-700 text-lg">₹{(activeOrder.quoteDetails.grandTotal || 0).toLocaleString("en-IN")}</span>
+                          </div>
+
+                          {/* Approve / Decline */}
+                          {activeOrder.quoteDetails.status !== "Approved" && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                              <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed, or request revisions</p>
+                              {showQuoteDeclineInput ? (
+                                <div className="space-y-2">
+                                  <textarea rows={3} value={quoteFeedback} onChange={e => setQuoteFeedback(e.target.value)} placeholder="Your revision feedback..." className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500" />
+                                  <div className="flex gap-2">
+                                    <button onClick={() => setShowQuoteDeclineInput(false)} className="px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg text-xs font-bold">Cancel</button>
+                                    <button onClick={handleDeclineQuote} disabled={!quoteFeedback.trim() || !!updatingStatus} className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50">Submit</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex gap-2">
+                                  <button onClick={() => setShowQuoteDeclineInput(true)} className="px-4 py-2 border border-slate-300 bg-white text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50">Request Revision</button>
+                                  <button onClick={handleApproveQuote} disabled={!!updatingStatus} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50">
+                                    <Check size={13} /> Approve Quotation
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {activeOrder.quoteDetails.status === "Approved" && (
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+                              <Check size={16} className="text-emerald-600 stroke-[2.5]" />
+                              <span className="text-sm font-bold text-emerald-700">Quotation Approved ✓</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Sub-section C: Advance Payment (stage = Quotation Approved) ── */}
+                    {(activeOrder?.stage === "Quotation Approved" || activeOrder?.quoteDetails?.advancePaid) && activeOrder?.quoteDetails && (
+                      <div className="border border-emerald-200 rounded-xl overflow-hidden">
+                        <div className="bg-emerald-50 px-4 py-3 border-b border-emerald-100 flex items-center justify-between">
+                          <span className="text-sm font-black text-emerald-800">💰 Advance Payment</span>
+                          {activeOrder.quoteDetails.advancePaid
+                            ? <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-bold">✅ Paid</span>
+                            : <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-bold">Pending</span>
+                          }
+                        </div>
+                        <div className="p-4 space-y-4">
+                          {/* Amount due */}
+                          <div className="grid grid-cols-3 gap-3">
+                            {[
+                              { label: "Project Value", value: activeOrder.quoteDetails.grandTotal || 0 },
+                              { label: `Advance (${activeOrder.quoteDetails.advancePercent || 25}%)`, value: activeOrder.quoteDetails.advanceAmount || 0, highlight: true },
+                              { label: "Balance Due", value: (activeOrder.quoteDetails.grandTotal || 0) - (activeOrder.quoteDetails.advanceAmount || 0) },
+                            ].map(row => (
+                              <div key={row.label} style={{ padding: "12px", background: row.highlight ? "#1e40af" : "#f8fafc", borderRadius: 10, textAlign: "center", border: `1px solid ${row.highlight ? "#1e40af" : "#e2e8f0"}` }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: row.highlight ? "rgba(255,255,255,0.7)" : "#94a3b8", marginBottom: 4 }}>{row.label}</div>
+                                <div style={{ fontSize: 14, fontWeight: 900, color: row.highlight ? "white" : "#0f172a" }}>₹{(row.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Invoice details */}
+                          {activeOrder.advanceInvoiceDetails && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs space-y-1">
+                              <div className="flex justify-between"><span className="text-slate-500">Invoice #</span><span className="font-bold">{activeOrder.advanceInvoiceDetails.invoiceNumber}</span></div>
+                              <div className="flex justify-between"><span className="text-slate-500">Due Date</span><span className="font-bold">{new Date(activeOrder.advanceInvoiceDetails.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></div>
+                            </div>
+                          )}
+
+                          {/* Payment submission or verification notice */}
+                          {!activeOrder.quoteDetails.advancePaid && (
+                            (() => {
+                              const hasPendingPayment = (activeOrder.paymentHistory || []).some((p: any) => p.status === "Pending Verification");
+                              
+                              if (hasPendingPayment) {
+                                return (
+                                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center space-y-3">
+                                    <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mx-auto text-amber-600">
+                                      <Clock size={20} className="animate-pulse" />
+                                    </div>
+                                    <div>
+                                      <h4 className="text-xs font-black text-amber-900 uppercase tracking-wider">Payment Verification In Progress</h4>
+                                      <p className="text-xs text-amber-700 mt-2 max-w-sm mx-auto leading-relaxed font-semibold">
+                                        Your payment receipt has been submitted and is currently being verified by our finance team. Once approved, your order will automatically advance to the Design stage.
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+                                  <p className="text-xs font-bold text-slate-600">Submit your payment details</p>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Payment Method</label>
+                                      <select id="portal-payment-method" className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50">
+                                        <option value="UPI">UPI</option>
+                                        <option value="Bank Transfer">Bank Transfer</option>
+                                        <option value="Cash">Cash</option>
+                                        <option value="Cheque">Cheque</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">UTR / Reference No.</label>
+                                      <input id="portal-payment-ref" type="text" placeholder="Transaction ID" className="w-full text-xs border border-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-slate-50" />
+                                    </div>
+                                  </div>
+                                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs">
+                                    <div className="font-bold text-[#0b1c30] mb-1">Payment Details</div>
+                                    <div className="text-slate-500 space-y-0.5">
+                                      <div>UPI: <span className="font-mono font-bold">printec@upi</span></div>
+                                      <div>Bank: HDFC Bank · A/C: 12345678901 · IFSC: HDFC0001234</div>
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      if (!activeOrder) return;
+                                      const method = (document.getElementById("portal-payment-method") as HTMLSelectElement)?.value || "UPI";
+                                      const ref = (document.getElementById("portal-payment-ref") as HTMLInputElement)?.value || "";
+                                      const supabase = createClient();
+                                      const advAmt = activeOrder.quoteDetails?.advanceAmount || 0;
+                                      const existing = Array.isArray(activeOrder.paymentHistory) ? activeOrder.paymentHistory : [];
+                                      const updated = [...existing, { method, reference: ref, amount: advAmt, paidAt: new Date().toISOString(), status: "Pending Verification" }];
+                                      
+                                      setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, paymentHistory: updated } : o));
+                                      
+                                      await supabase.from("orders").update({ payment_history: updated }).eq("id", activeOrder.id);
+                                      await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: `Customer submitted ₹${advAmt.toLocaleString("en-IN")} via ${method}. Ref: ${ref || "—"}` });
+                                      alert("Payment submitted! Our team will verify and update the order status.");
+                                    }}
+                                    className="w-full py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    <Check size={14} /> Confirm Payment Submitted
+                                  </button>
+                                </div>
+                              );
+                            })()
+                          )}
+
+                          {/* Payment history */}
+                          {(activeOrder.paymentHistory || []).length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-xs font-bold text-slate-500 uppercase">Payment History</p>
+                              {(activeOrder.paymentHistory || []).map((p: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                                  <div>
+                                    <span className="font-bold text-[#0b1c30]">₹{p.amount?.toLocaleString("en-IN")}</span>
+                                    <span className="text-slate-400 ml-1">via {p.method}</span>
+                                    {p.reference && <span className="text-slate-400 ml-1">· {p.reference}</span>}
+                                  </div>
+                                  <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${ p.status === "Paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700" }`}>{p.status || "Pending"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── No quotation yet ── */}
+                    {activeOrder?.stage === "Quotation In Progress" && !activeOrder?.quoteDetails && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 text-center">
+                        <div className="text-2xl mb-2">📊</div>
+                        <p className="text-sm font-bold text-[#1E40AF]">Quotation In Progress</p>
+                        <p className="text-xs text-slate-500 mt-1">Our team is preparing your customized quotation. You'll be notified when it's ready.</p>
                       </div>
                     )}
                   </div>
@@ -720,96 +1062,10 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               </div>
             </div>
 
-
-
-            {/* ── PAYMENT (if applicable) ── */}
-            {(currentStep >= 2) && (qd.grandTotal || activeOrder?.budget) && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-                <h3 className="text-sm font-black text-[#0b1c30] flex items-center gap-2">
-                  <CreditCard size={15} className="text-slate-400" />
-                  Invoicing & Payments
-                </h3>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: "Total Value", val: `₹${(qd.grandTotal || activeOrder?.budget || 0).toLocaleString("en-IN")}`, color: "slate" },
-                    { label: "Paid", val: `₹${(activeOrder?.depositPaid || 0).toLocaleString("en-IN")}`, color: "emerald" },
-                    { label: "Balance", val: `₹${Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}`, color: "amber" },
-                  ].map((card, i) => (
-                    <div key={i} className={`rounded-xl p-3.5 text-center border ${
-                      card.color === "emerald" ? "bg-emerald-50 border-emerald-100" :
-                        card.color === "amber" ? "bg-amber-50 border-amber-100" : "bg-slate-50 border-slate-200"
-                    }`}>
-                      <span className={`text-[9px] font-black uppercase tracking-wide ${
-                        card.color === "emerald" ? "text-emerald-600" : card.color === "amber" ? "text-amber-600" : "text-slate-400"
-                      }`}>{card.label}</span>
-                      <p className={`text-sm font-black mt-1 font-mono ${
-                        card.color === "emerald" ? "text-emerald-800" : card.color === "amber" ? "text-amber-800" : "text-slate-800"
-                      }`}>{card.val}</p>
-                    </div>
-                  ))}
-                </div>
-                {Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0) > 0 && (
-                  <div className="flex justify-end">
-                    <button onClick={() => setShowPaymentModal(true)} className="px-4 py-2 bg-[#F97316] text-white rounded-xl text-xs font-bold hover:bg-orange-600 transition-all flex items-center gap-2">
-                      <CreditCard size={13} /> Make Payment
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* ── RIGHT SIDEBAR ── */}
           <div className="space-y-5">
-
-            {/* Project Logistics */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3.5 border-b border-slate-100">
-                <h3 className="text-xs font-black text-[#0b1c30] uppercase tracking-widest">Project Logistics</h3>
-              </div>
-
-              {/* Location Image */}
-              <div className="relative h-36 bg-slate-100 overflow-hidden">
-                <img
-                  src="https://images.unsplash.com/photo-1486325212027-8081e485255e?w=400&auto=format&fit=crop"
-                  alt="Site Location"
-                  className="w-full h-full object-cover"
-                  onError={e => { e.currentTarget.style.display = "none"; }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-              </div>
-
-              <div className="p-4 space-y-3">
-                {/* Address */}
-                <div className="flex items-start gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <MapPin size={13} className="text-slate-500" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-[#0b1c30] leading-relaxed">
-                      {sv.customerAddress || customer.shippingAddress || "Site address will appear after scheduling"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Project Manager */}
-                <div className="flex items-center gap-2.5 py-2 border-t border-slate-100">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-white flex items-center justify-center font-black text-xs flex-shrink-0">
-                    S
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-[#0b1c30]">Sarah Jenkins</p>
-                    <p className="text-[10px] text-slate-400">Project Manager</p>
-                  </div>
-                </div>
-
-                <button className="w-full flex items-center justify-center gap-2 py-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
-                  <Phone size={12} />
-                  Contact Manager
-                </button>
-              </div>
-            </div>
-
             {/* Updates & Chat */}
             {activeOrder && (
               <CustomerChat
@@ -823,33 +1079,6 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
         </div>
       </div>
 
-      {/* ─── PAYMENT MODAL ─── */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <h2 className="text-sm font-bold text-[#0b1c30]">UPI Payment Confirmation</h2>
-              <button onClick={() => setShowPaymentModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded"><X size={16} /></button>
-            </div>
-            <div className="p-6 space-y-4 text-center">
-              <QrCode size={100} className="text-[#0b1c30] mx-auto" />
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Amount Due</span>
-                <p className="text-xl font-black text-slate-800 font-mono mt-1">
-                  ₹{Math.max((qd.grandTotal || activeOrder?.budget || 0) - (activeOrder?.depositPaid || 0), 0).toLocaleString("en-IN")}
-                </p>
-              </div>
-              <p className="text-xs text-slate-500">Scan or transfer via netbanking, then confirm below.</p>
-            </div>
-            <div className="px-5 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
-              <button onClick={() => setShowPaymentModal(false)} className="px-4 py-2 border border-slate-300 text-slate-600 rounded-xl text-xs font-bold">Cancel</button>
-              <button onClick={handleConfirmMockPayment} disabled={paymentLoading} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold disabled:opacity-50">
-                {paymentLoading ? "Processing..." : "Confirm Payment"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─── MOBILE FLOATING CHAT BUTTON (hidden on lg+) ─── */}
       {activeOrder && (

@@ -1,57 +1,23 @@
 "use client";
 
-import React, { useState, useTransition } from "react";
+import React, { useState, useEffect, useTransition, useRef } from "react";
 import {
-  Search,
-  Plus,
-  X,
-  Pencil,
-  Trash2,
-  Package,
-  ToggleLeft,
-  ToggleRight,
-  ChevronDown,
-  Tag,
-  Ruler,
-  Hash,
+  Search, Plus, X, Pencil, Trash2, Package, ToggleLeft, ToggleRight,
+  Upload, Image as ImageIcon, Loader2, IndianRupee, ChevronDown, Tag, Ruler, Hash,
 } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
 import {
-  createProduct,
-  updateProduct,
-  deleteProduct,
+  createProduct, updateProduct, deleteProduct, type Product, type CreateProductPayload,
 } from "../actions/productActions";
 
-type PricingType = "per_unit" | "per_sqft";
-
-interface Product {
-  id: string;
-  product_id: string;
-  name: string;
-  description: string | null;
-  category: string | null;
-  pricing_type: PricingType;
-  unit_price: number;
-  unit: string;
-  is_active: boolean;
-  created_at: string;
-}
-
 const CATEGORIES = [
-  "Flex Banner",
-  "ACP Board",
-  "LED Signage",
-  "Acrylic Letters",
-  "Vinyl Wrap",
-  "Glow Sign",
-  "Metal Sign",
-  "Wooden Sign",
-  "Other",
+  "ACP Sheets", "Acrylic Sheets", "SS Letters", "MS Frames", "LED Modules",
+  "Vinyl", "Flex", "Powder Coating", "Electrical Components",
+  "Flex Banner", "ACP Board", "LED Signage", "Acrylic Letters",
+  "Vinyl Wrap", "Glow Sign", "Metal Sign", "Wooden Sign", "Other",
 ];
 
-const PRICING_UNIT_MAP: Record<PricingType, string> = {
-  per_unit: "nos",
-  per_sqft: "sq ft",
-};
+const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Per Running Ft", "Multiple"];
 
 function generateProductId(existing: Product[]): string {
   const maxNum = existing.reduce((max, p) => {
@@ -63,324 +29,521 @@ function generateProductId(existing: Product[]): string {
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  border: "1px solid #e2e8f0",
-  borderRadius: "8px",
-  fontSize: "13px",
-  fontFamily: "inherit",
-  outline: "none",
-  transition: "border-color 0.15s, box-shadow 0.15s",
-  boxSizing: "border-box",
+  width: "100%", padding: "9px 12px", border: "1px solid #e2e8f0",
+  borderRadius: "8px", fontSize: "13px", fontFamily: "inherit",
+  outline: "none", transition: "border-color 0.15s, box-shadow 0.15s", boxSizing: "border-box",
 };
-
 const labelStyle: React.CSSProperties = {
-  fontSize: "12px",
-  fontWeight: "700",
-  color: "#374151",
-  marginBottom: "5px",
-  display: "block",
-  letterSpacing: "0.02em",
+  fontSize: "11px", fontWeight: "700", color: "#374151",
+  marginBottom: "4px", display: "block", textTransform: "uppercase", letterSpacing: "0.04em",
 };
 
-// ── Drawer ──────────────────────────────────────────────────────────────────
-
-function ProductDrawer({
-  open,
-  onClose,
-  editProduct,
-  existingProducts,
+// ── Image Upload Component ───────────────────────────────────────────────────
+function ProductImageUpload({
+  images,
+  onChange,
 }: {
-  open: boolean;
-  onClose: () => void;
-  editProduct: Product | null;
-  existingProducts: Product[];
+  images: string[];
+  onChange: (imgs: string[]) => void;
 }) {
-  const isEdit = !!editProduct;
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState("");
+  const supabase = createClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
-  const [form, setForm] = useState({
-    product_id: editProduct?.product_id ?? generateProductId(existingProducts),
-    name: editProduct?.name ?? "",
-    description: editProduct?.description ?? "",
-    category: editProduct?.category ?? "",
-    pricing_type: (editProduct?.pricing_type ?? "per_unit") as PricingType,
-    unit_price: editProduct?.unit_price?.toString() ?? "",
-    unit: editProduct?.unit ?? "nos",
-  });
-
-  // Sync unit when pricing_type changes
-  const setPricingType = (pt: PricingType) => {
-    setForm((f) => ({ ...f, pricing_type: pt, unit: PRICING_UNIT_MAP[pt] }));
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploading(true);
+    const newUrls: string[] = [];
+    for (const file of files) {
+      const ext = file.name.split(".").pop();
+      const path = `products/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("product-images")
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (upErr) {
+        console.error("Storage upload error:", upErr);
+        alert(`Upload failed: ${upErr.message}`);
+      } else {
+        const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(path);
+        newUrls.push(urlData.publicUrl);
+      }
+    }
+    onChange([...images, ...newUrls]);
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  React.useEffect(() => {
-    if (open) {
-      setError("");
-      setForm({
-        product_id: editProduct?.product_id ?? generateProductId(existingProducts),
-        name: editProduct?.name ?? "",
-        description: editProduct?.description ?? "",
-        category: editProduct?.category ?? "",
-        pricing_type: (editProduct?.pricing_type ?? "per_unit") as PricingType,
-        unit_price: editProduct?.unit_price?.toString() ?? "",
-        unit: editProduct?.unit ?? "nos",
-      });
-    }
-  }, [open, editProduct]);
+  const removeImage = (idx: number) => {
+    onChange(images.filter((_, i) => i !== idx));
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  return (
+    <div>
+      <label style={labelStyle}>Product Images</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+        {images.map((url, idx) => (
+          <div key={idx} style={{ position: "relative", width: 72, height: 72 }}>
+            <img
+              src={url} alt={`img-${idx}`}
+              style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #e2e8f0" }}
+            />
+            <button
+              type="button"
+              onClick={() => removeImage(idx)}
+              style={{
+                position: "absolute", top: -6, right: -6, width: 18, height: 18,
+                borderRadius: "50%", background: "#EF4444", color: "white",
+                border: "none", cursor: "pointer", display: "flex", alignItems: "center",
+                justifyContent: "center", fontSize: 10,
+              }}
+            >
+              <X size={10} />
+            </button>
+          </div>
+        ))}
+        {images.length < 5 && (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            style={{
+              width: 72, height: 72, borderRadius: 8, border: "2px dashed #cbd5e1",
+              background: "#f8fafc", cursor: "pointer", display: "flex",
+              flexDirection: "column", alignItems: "center", justifyContent: "center",
+              gap: 4, color: "#94a3b8", fontSize: 10, fontWeight: 600,
+            }}
+          >
+            {uploading ? <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} /> : <Upload size={16} />}
+            {!uploading && <span>Upload</span>}
+          </button>
+        )}
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+        capture={undefined}
+      />
+      <p style={{ fontSize: 10, color: "#94a3b8", margin: 0 }}>
+        Upload from gallery or camera · Max 5 images · JPEG / PNG / WebP
+      </p>
+    </div>
+  );
+}
+
+function isFieldDisabled(key: string, pricingType?: string | null): boolean {
+  if (!pricingType || pricingType === "Multiple") return false;
+  if (pricingType === "Per Sq.Ft" && key === "price_per_sqft") return false;
+  if (pricingType === "Per Unit" && key === "price_per_unit") return false;
+  if (pricingType === "Per Running Ft" && key === "price_per_running_ft") return false;
+  return true;
+}
+
+// ── Pricing Section ──────────────────────────────────────────────────────────
+function PricingSection({
+  form, setForm,
+}: {
+  form: Partial<CreateProductPayload>;
+  setForm: React.Dispatch<React.SetStateAction<Partial<CreateProductPayload>>>;
+}) {
+  const pricingFields = [
+    { key: "price_per_sqft", label: "Price / Sq.Ft", placeholder: "e.g. 120" },
+    { key: "price_per_unit", label: "Price / Unit", placeholder: "e.g. 500" },
+    { key: "price_per_running_ft", label: "Price / Running Ft", placeholder: "e.g. 80" },
+  ] as const;
+
+  return (
+    <div>
+      <label style={labelStyle}>Pricing (fill whichever apply)</label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", marginBottom: "12px" }}>
+        {pricingFields.map(({ key, label, placeholder }) => {
+          const disabled = isFieldDisabled(key, form.pricing_type);
+          return (
+            <div key={key}>
+              <label style={{ ...labelStyle, fontSize: 10, textTransform: "none" }}>{label}</label>
+              <div style={{ position: "relative" }}>
+                <IndianRupee size={11} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: disabled ? "#cbd5e1" : "#94a3b8", pointerEvents: "none" }} />
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  placeholder={placeholder}
+                  disabled={disabled}
+                  value={(form as any)[key] ?? ""}
+                  onChange={e => setForm(f => ({ ...f, [key]: e.target.value === "" ? null : parseFloat(e.target.value) }))}
+                  style={{
+                    ...inputStyle,
+                    paddingLeft: 26,
+                    background: disabled ? "#f8fafc" : "white",
+                    color: disabled ? "#cbd5e1" : "#374151",
+                    cursor: disabled ? "not-allowed" : "text",
+                    borderColor: disabled ? "#f1f5f9" : "#cbd5e1"
+                  }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Product Form Modal ───────────────────────────────────────────────────────
+function ProductFormModal({
+  product, allProducts, onClose, onSaved,
+}: {
+  product: Product | null;
+  allProducts: Product[];
+  onClose: () => void;
+  onSaved: (p: Product) => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+  const isEdit = !!product;
+
+  const [form, setForm] = useState<Partial<CreateProductPayload>>(() => ({
+    product_id: product?.product_id ?? generateProductId(allProducts),
+    name: product?.name ?? "",
+    description: product?.description ?? "",
+    category: product?.category ?? "",
+    pricing_type: product?.pricing_type ? (
+      product.pricing_type === "per_unit" ? "Per Unit" :
+      product.pricing_type === "per_sqft" ? "Per Sq.Ft" :
+      product.pricing_type
+    ) : "",
+    price_per_sqft: product?.price_per_sqft ?? null,
+    price_per_unit: product?.price_per_unit ?? null,
+    price_per_running_ft: product?.price_per_running_ft ?? null,
+    images: product?.images ?? [],
+    is_active: product?.is_active ?? true,
+  }));
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!form.name.trim()) { setError("Product name is required."); return; }
-    if (!form.product_id.trim()) { setError("Product ID is required."); return; }
-    const price = parseFloat(form.unit_price);
-    if (isNaN(price) || price < 0) { setError("Enter a valid price."); return; }
-
+    if (!form.name?.trim()) { setError("Product name is required."); return; }
     startTransition(async () => {
       try {
-        if (isEdit && editProduct) {
-          await updateProduct(editProduct.id, {
-            name: form.name.trim(),
-            description: form.description.trim() || undefined,
-            category: form.category || undefined,
-            pricing_type: form.pricing_type,
-            unit_price: price,
-            unit: form.unit.trim(),
-          });
+        if (isEdit) {
+          const res = await updateProduct(product!.id, form);
+          onSaved({ ...product!, ...form, ...(res?.[0] || {}) } as Product);
         } else {
-          await createProduct({
-            product_id: form.product_id.trim(),
-            name: form.name.trim(),
-            description: form.description.trim() || undefined,
-            category: form.category || undefined,
-            pricing_type: form.pricing_type,
-            unit_price: price,
-            unit: form.unit.trim(),
-          });
+          const res = await createProduct(form as CreateProductPayload);
+          onSaved({ ...form, ...(res?.[0] || {}), id: res?.[0]?.id || "" } as Product);
         }
         onClose();
       } catch (err: any) {
-        setError(err.message || "Something went wrong.");
+        setError(err.message || "Failed to save product.");
       }
     });
   };
 
-  if (!open) return null;
-
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.3)",
-          zIndex: 100, backdropFilter: "blur(2px)",
-        }}
-      />
-      {/* Panel */}
-      <div
-        style={{
-          position: "fixed", top: 0, right: 0, bottom: 0,
-          width: "420px", background: "white",
-          boxShadow: "-8px 0 40px rgba(0,0,0,0.15)",
-          zIndex: 101, display: "flex", flexDirection: "column",
-          animation: "slideInRight 0.25s ease",
-        }}
-      >
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+      <div style={{ background: "white", width: "100%", maxWidth: 620, maxHeight: "90vh", overflowY: "auto", borderRadius: 16, padding: "28px 28px 24px", boxShadow: "0 24px 48px rgba(0,0,0,0.18)" }}>
         {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <div>
-            <div style={{ fontSize: "17px", fontWeight: "800", color: "#0f172a" }}>
-              {isEdit ? "Edit Product" : "Add New Product"}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Package size={18} style={{ color: "#1e40af" }} />
             </div>
-            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
-              {isEdit ? `Editing ${editProduct?.product_id}` : "Fill in the details below"}
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: 0 }}>{isEdit ? "Edit Product" : "Add Product"}</h3>
+              <p style={{ fontSize: 11, color: "#64748b", margin: 0 }}>Product Master — Quotation Catalogue</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{ width: 32, height: 32, borderRadius: "8px", border: "1px solid #e2e8f0", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#64748b" }}
-          >
-            <X size={16} />
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "#f1f5f9", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <X size={14} style={{ color: "#64748b" }} />
           </button>
         </div>
 
-        {/* Form */}
-        <form id="products-drawer-form" onSubmit={handleSubmit} style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "18px" }}>
-          {error && (
-            <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", fontSize: "13px", color: "#dc2626", fontWeight: "600" }}>
-              {error}
+        {error && <div style={{ padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, color: "#b91c1c", fontWeight: 600, marginBottom: 16 }}>{error}</div>}
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Row 1: ID + Name */}
+          <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Product ID</label>
+              <input type="text" readOnly value={form.product_id} style={{ ...inputStyle, background: "#f8fafc", color: "#64748b", fontFamily: "monospace", fontSize: 12 }} />
             </div>
-          )}
-
-          {/* Product ID */}
-          <div>
-            <label style={labelStyle}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Hash size={12} /> PRODUCT ID
-              </span>
-            </label>
-            <input
-              id="product-id"
-              style={{ ...inputStyle, background: isEdit ? "#f8fafc" : "white", color: isEdit ? "#64748b" : "#0f172a", fontFamily: "monospace", fontWeight: 700 }}
-              value={form.product_id}
-              onChange={e => setForm(f => ({ ...f, product_id: e.target.value }))}
-              readOnly={isEdit}
-              placeholder="PRD-001"
-            />
-            {!isEdit && (
-              <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>Auto-generated. You can customize it.</div>
-            )}
+            <div>
+              <label style={labelStyle}>Product Name *</label>
+              <input
+                type="text" required placeholder="e.g. SS Letters 3D" autoFocus
+                value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                style={inputStyle}
+              />
+            </div>
           </div>
 
-          {/* Product Name */}
-          <div>
-            <label style={labelStyle}>PRODUCT NAME *</label>
-            <input
-              id="product-name"
-              style={inputStyle}
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Flex Banner (Outdoor)"
-              required
-            />
-          </div>
-
-          {/* Category */}
-          <div>
-            <label style={labelStyle}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Tag size={12} /> CATEGORY
-              </span>
-            </label>
-            <div style={{ position: "relative" }}>
-              <select
-                id="product-category"
-                style={{ ...inputStyle, appearance: "none", paddingRight: "36px", cursor: "pointer" }}
-                value={form.category}
-                onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              >
-                <option value="">Select category…</option>
+          {/* Row 2: Category + Unit Type */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={labelStyle}>Category</label>
+              <select value={form.category ?? ""} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ ...inputStyle, appearance: "none" }}>
+                <option value="">Select category...</option>
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-              <ChevronDown size={14} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
             </div>
-          </div>
-
-          {/* Pricing Type */}
-          <div>
-            <label style={labelStyle}>PRICING TYPE *</label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              {(["per_unit", "per_sqft"] as PricingType[]).map(pt => (
-                <button
-                  key={pt}
-                  type="button"
-                  onClick={() => setPricingType(pt)}
-                  style={{
-                    padding: "12px",
-                    borderRadius: "10px",
-                    border: `2px solid ${form.pricing_type === pt ? "var(--color-primary, #0f172a)" : "#e2e8f0"}`,
-                    background: form.pricing_type === pt ? "#f1f5f9" : "white",
-                    cursor: "pointer",
-                    transition: "all 0.15s",
-                    textAlign: "center",
-                  }}
-                >
-                  <div style={{ fontSize: "20px", marginBottom: "4px" }}>{pt === "per_unit" ? "🔢" : "📐"}</div>
-                  <div style={{ fontSize: "12px", fontWeight: "700", color: form.pricing_type === pt ? "#0f172a" : "#64748b" }}>
-                    {pt === "per_unit" ? "Per Unit (nos)" : "Per Sq Ft"}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Price */}
-          <div>
-            <label style={labelStyle}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <Ruler size={12} /> PRICE (₹ per {PRICING_UNIT_MAP[form.pricing_type]}) *
-              </span>
-            </label>
-            <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: "13px", color: "#64748b", fontWeight: "700" }}>₹</span>
-              <input
-                id="product-price"
-                type="number"
-                min="0"
-                step="0.01"
-                style={{ ...inputStyle, paddingLeft: "28px" }}
-                value={form.unit_price}
-                onChange={e => setForm(f => ({ ...f, unit_price: e.target.value }))}
-                placeholder="0.00"
-                required
-              />
+            <div>
+              <label style={labelStyle}>Pricing Type</label>
+              <select
+                value={form.pricing_type ?? ""}
+                onChange={e => {
+                  const nextPricingType = e.target.value;
+                  setForm(f => {
+                    const next = { ...f, pricing_type: nextPricingType };
+                    if (nextPricingType === "Per Sq.Ft") {
+                      next.price_per_unit = null;
+                      next.price_per_running_ft = null;
+                    } else if (nextPricingType === "Per Unit") {
+                      next.price_per_sqft = null;
+                      next.price_per_running_ft = null;
+                    } else if (nextPricingType === "Per Running Ft") {
+                      next.price_per_sqft = null;
+                      next.price_per_unit = null;
+                    } else if (!nextPricingType) {
+                      next.price_per_sqft = null;
+                      next.price_per_unit = null;
+                      next.price_per_running_ft = null;
+                    }
+                    return next;
+                  });
+                }}
+                style={{ ...inputStyle, appearance: "none" }}
+              >
+                <option value="">Select pricing type...</option>
+                {PRICING_TYPES.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
             </div>
           </div>
 
           {/* Description */}
           <div>
-            <label style={labelStyle}>DESCRIPTION / NOTES</label>
+            <label style={labelStyle}>Description</label>
             <textarea
-              id="product-description"
-              style={{ ...inputStyle, resize: "vertical", minHeight: "80px" }}
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              placeholder="Optional notes about this product…"
+              placeholder="Describe material, specifications, finish..."
+              value={form.description ?? ""} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              rows={2}
+              style={{ ...inputStyle, resize: "vertical", minHeight: 60 }}
             />
           </div>
-        </form>
 
-        {/* Footer */}
-        <div style={{ padding: "16px 24px", borderTop: "1px solid #e2e8f0", display: "flex", gap: "10px", flexShrink: 0 }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{ flex: 1, padding: "11px", borderRadius: "8px", border: "1px solid #e2e8f0", background: "white", fontSize: "13px", fontWeight: "600", color: "#64748b", cursor: "pointer" }}
-          >
-            Cancel
-          </button>
-          <button
-            form="products-drawer-form"
-            type="submit"
-            disabled={isPending}
-            style={{
-              flex: 2, padding: "11px", borderRadius: "8px", border: "none",
-              background: isPending ? "#94a3b8" : "var(--color-primary, #0f172a)",
-              color: "white", fontSize: "13px", fontWeight: "700", cursor: isPending ? "not-allowed" : "pointer",
-              transition: "background 0.15s",
-            }}
-          >
-            {isPending ? "Saving…" : isEdit ? "Save Changes" : "Add Product"}
-          </button>
-        </div>
-        <style>{`
-          @keyframes slideInRight {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-          }
-        `}</style>
+          {/* Pricing Section */}
+          <PricingSection form={form} setForm={setForm} />
+
+          {/* Image Upload */}
+          <ProductImageUpload
+            images={form.images ?? []}
+            onChange={imgs => setForm(f => ({ ...f, images: imgs }))}
+          />
+
+          {/* Status */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, is_active: !f.is_active }))}
+              style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}
+            >
+              {form.is_active
+                ? <ToggleRight size={22} style={{ color: "#16a34a" }} />
+                : <ToggleLeft size={22} style={{ color: "#94a3b8" }} />}
+              <span style={{ fontSize: 13, fontWeight: 700, color: form.is_active ? "#16a34a" : "#94a3b8" }}>
+                {form.is_active ? "Active" : "Inactive"}
+              </span>
+            </button>
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>Active products appear in quotation builder</span>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: "10px 16px", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 13, fontWeight: 700, color: "#64748b", cursor: "pointer" }}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              style={{ flex: 2, padding: "10px 16px", background: "#1e40af", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800, color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+            >
+              {isPending ? <Loader2 size={14} style={{ animation: "prt-spin 1s linear infinite" }} /> : (isEdit ? "Save Changes" : "Add Product")}
+            </button>
+          </div>
+        </form>
       </div>
-    </>
+    </div>
   );
 }
 
-// ── Main View ────────────────────────────────────────────────────────────────
+// ── Product Card ─────────────────────────────────────────────────────────────
+function ProductCard({
+  product, onEdit, onDelete, onToggle,
+}: {
+  product: Product;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggle: () => void;
+}) {
+  const images = product.images || [];
+  const [currentIdx, setCurrentIdx] = useState(0);
 
+  useEffect(() => {
+    if (images.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentIdx((prev) => (prev + 1) % images.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [images.length]);
+
+  const hasPricing = product.price_per_sqft || product.price_per_unit || product.price_per_running_ft;
+
+  return (
+    <div style={{
+      background: "white", border: "1px solid #e2e8f0", borderRadius: 14,
+      overflow: "hidden", transition: "box-shadow 0.15s, transform 0.15s",
+      display: "flex", flexDirection: "column",
+    }}
+      onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 20px rgba(0,0,0,0.08)"; (e.currentTarget as HTMLDivElement).style.transform = "translateY(-1px)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.boxShadow = "none"; (e.currentTarget as HTMLDivElement).style.transform = "none"; }}
+    >
+      {/* Image or placeholder */}
+      <div style={{ height: 120, background: images.length ? "transparent" : "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", borderBottom: "1px solid #f1f5f9", position: "relative", overflow: "hidden" }}>
+        {images.length > 0 ? (
+          images.map((url, idx) => (
+            <img
+              key={url}
+              src={url}
+              alt={`${product.name}-${idx}`}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                opacity: idx === currentIdx ? 1 : 0,
+                transition: "opacity 0.6s ease-in-out",
+              }}
+            />
+          ))
+        ) : (
+          <Package size={32} style={{ color: "#cbd5e1" }} />
+        )}
+
+        {/* Carousel Dots */}
+        {images.length > 1 && (
+          <div style={{ position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4, zIndex: 10 }}>
+            {images.map((_, idx) => (
+              <div
+                key={idx}
+                style={{
+                  width: 5,
+                  height: 5,
+                  borderRadius: "50%",
+                  background: idx === currentIdx ? "white" : "rgba(255,255,255,0.4)",
+                  transition: "background 0.3s",
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Image count badge */}
+        {images.length > 1 && (
+          <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: "white", borderRadius: 6, padding: "2px 7px", fontSize: 10, fontWeight: 700, zIndex: 10 }}>
+            +{images.length - 1}
+          </div>
+        )}
+        {/* Status badge */}
+        <div style={{
+          position: "absolute", top: 8, left: 8,
+          padding: "3px 8px", borderRadius: 6, fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em",
+          background: product.is_active ? "#dcfce7" : "#fee2e2",
+          color: product.is_active ? "#16a34a" : "#dc2626",
+          border: `1px solid ${product.is_active ? "#bbf7d0" : "#fecaca"}`,
+          zIndex: 10,
+        }}>
+          {product.is_active ? "Active" : "Inactive"}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "14px 14px 12px", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", lineHeight: 1.3 }}>{product.name}</div>
+            {product.category && <div style={{ fontSize: 10, color: "#64748b", fontWeight: 600, marginTop: 2 }}>{product.category}</div>}
+          </div>
+          <span style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", fontFamily: "monospace", flexShrink: 0 }}>{product.product_id}</span>
+        </div>
+
+        {product.pricing_type && (
+          <span style={{ display: "inline-block", padding: "2px 8px", background: "#eff6ff", color: "#1e40af", borderRadius: 5, fontSize: 10, fontWeight: 700, border: "1px solid #bfdbfe" }}>
+            {product.pricing_type === "per_unit" ? "Per Unit" : product.pricing_type === "per_sqft" ? "Per Sq.Ft" : product.pricing_type}
+          </span>
+        )}
+
+        {/* Pricing display */}
+        {hasPricing && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 8px", marginTop: 2 }}>
+            {product.price_per_sqft && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_sqft).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/sqft</span></span>}
+            {product.price_per_unit && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_unit).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/unit</span></span>}
+            {product.price_per_running_ft && <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>₹{Number(product.price_per_running_ft).toLocaleString("en-IN")}<span style={{ fontWeight: 500, color: "#64748b", fontSize: 9 }}>/rft</span></span>}
+          </div>
+        )}
+
+        {product.description && (
+          <p style={{ fontSize: 11, color: "#64748b", margin: 0, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {product.description}
+          </p>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 6, padding: "10px 14px", borderTop: "1px solid #f1f5f9" }}>
+        <button
+          onClick={onToggle}
+          title={product.is_active ? "Deactivate" : "Activate"}
+          style={{ flex: 1, padding: "7px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          {product.is_active ? <ToggleRight size={15} style={{ color: "#16a34a" }} /> : <ToggleLeft size={15} style={{ color: "#94a3b8" }} />}
+        </button>
+        <button onClick={onEdit} style={{ flex: 3, padding: "7px 10px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#374151" }}>
+          <Pencil size={12} /> Edit
+        </button>
+        <button onClick={onDelete} style={{ flex: 2, padding: "7px 10px", borderRadius: 8, border: "1px solid #fecaca", background: "#fff5f5", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#dc2626" }}>
+          <Trash2 size={12} /> Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
 export function ProductsView({ initialProducts }: { initialProducts: Product[] }) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [search, setSearch] = useState("");
-  const [filterCategory, setFilterCategory] = useState("All");
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editProduct, setEditProduct] = useState<Product | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
+  const [showForm, setShowForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const openAdd = () => { setEditProduct(null); setDrawerOpen(true); };
-  const openEdit = (p: Product) => { setEditProduct(p); setDrawerOpen(true); };
-  const closeDrawer = () => { setDrawerOpen(false); setEditProduct(null); };
+  const uniqueCategories = ["All", ...Array.from(new Set(products.map(p => p.category).filter(Boolean) as string[]))];
+
+  const filtered = products.filter(p => {
+    const matchSearch = !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || p.product_id?.toLowerCase().includes(search.toLowerCase()) || (p.category || "").toLowerCase().includes(search.toLowerCase());
+    const matchCategory = categoryFilter === "All" || p.category === categoryFilter;
+    const matchStatus = statusFilter === "All" || (statusFilter === "Active" ? p.is_active : !p.is_active);
+    return matchSearch && matchCategory && matchStatus;
+  });
+
+  const handleOpenAdd = () => { setEditingProduct(null); setShowForm(true); };
+  const handleOpenEdit = (p: Product) => { setEditingProduct(p); setShowForm(true); };
 
   const handleDelete = (id: string) => {
     startTransition(async () => {
@@ -390,300 +553,129 @@ export function ProductsView({ initialProducts }: { initialProducts: Product[] }
     });
   };
 
-  const handleToggleActive = (p: Product) => {
+  const handleToggle = (product: Product) => {
     startTransition(async () => {
-      await updateProduct(p.id, { is_active: !p.is_active });
-      setProducts(prev => prev.map(x => x.id === p.id ? { ...x, is_active: !x.is_active } : x));
+      await updateProduct(product.id, { is_active: !product.is_active });
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_active: !p.is_active } : p));
     });
   };
 
-  const categories = ["All", ...Array.from(new Set(products.map(p => p.category).filter(Boolean) as string[]))];
+  const handleSaved = (saved: Product) => {
+    setProducts(prev => {
+      const idx = prev.findIndex(p => p.id === saved.id);
+      if (idx >= 0) { const next = [...prev]; next[idx] = saved; return next; }
+      return [saved, ...prev];
+    });
+  };
 
-  const filtered = products.filter(p => {
-    const matchSearch =
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.product_id.toLowerCase().includes(search.toLowerCase()) ||
-      (p.category ?? "").toLowerCase().includes(search.toLowerCase());
-    const matchCat = filterCategory === "All" || p.category === filterCategory;
-    return matchSearch && matchCat;
-  });
-
-  const totalActive = products.filter(p => p.is_active).length;
-  const perUnitCount = products.filter(p => p.pricing_type === "per_unit").length;
-  const perSqftCount = products.filter(p => p.pricing_type === "per_sqft").length;
-
-  const stats = [
-    { label: "TOTAL PRODUCTS", value: products.length.toString(), color: "var(--color-primary, #0f172a)", icon: Package },
-    { label: "ACTIVE", value: totalActive.toString(), color: "#22c55e", icon: ToggleRight },
-    { label: "PRICED PER UNIT", value: perUnitCount.toString(), color: "#3b82f6", icon: Hash },
-    { label: "PRICED PER SQ FT", value: perSqftCount.toString(), color: "#f59e0b", icon: Ruler },
-  ];
+  const activeCount = products.filter(p => p.is_active).length;
 
   return (
-    <div style={{ padding: "32px", background: "#f8fafc", minHeight: "100vh" }}>
-
+    <div style={{ padding: "28px 28px 40px", minHeight: "100%" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", margin: "0 0 6px" }}>
-            Products Catalogue
-          </h1>
-          <p style={{ fontSize: "14px", color: "#64748b", margin: 0 }}>
-            Manage signage products, categories, and pricing
+          <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>Product Master</h1>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0", fontWeight: 500 }}>
+            Catalogue of signage materials & components for quotation building.
+            <span style={{ marginLeft: 8, fontWeight: 700, color: "#1e40af" }}>{activeCount} active</span>
           </p>
         </div>
         <button
-          id="add-product-btn"
-          onClick={openAdd}
+          onClick={handleOpenAdd}
           style={{
-            display: "flex", alignItems: "center", gap: "8px",
-            padding: "10px 18px", background: "var(--color-primary, #0f172a)",
-            color: "white", border: "none", borderRadius: "10px",
-            fontSize: "13px", fontWeight: "700", cursor: "pointer",
-            transition: "opacity 0.15s", boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "10px 20px", background: "#1e40af", color: "white",
+            border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800,
+            cursor: "pointer", boxShadow: "0 2px 8px rgba(30,64,175,0.3)", transition: "all 0.15s",
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "0.85"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.opacity = "1"; }}
         >
           <Plus size={16} /> Add Product
         </button>
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "28px" }}>
-        {stats.map((s, i) => {
-          const Icon = s.icon;
-          return (
-            <div key={i} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                <span style={{ fontSize: "11px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</span>
-                <div style={{ width: "32px", height: "32px", background: `${s.color}18`, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Icon size={16} style={{ color: s.color }} />
-                </div>
-              </div>
-              <div style={{ fontSize: "30px", fontWeight: "800", color: "#0f172a" }}>{s.value}</div>
-            </div>
-          );
-        })}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 22 }}>
+        {[
+          { label: "Total Products", value: products.length, color: "#1e40af", bg: "#eff6ff" },
+          { label: "Active", value: activeCount, color: "#16a34a", bg: "#f0fdf4" },
+          { label: "Inactive", value: products.length - activeCount, color: "#dc2626", bg: "#fef2f2" },
+        ].map(stat => (
+          <div key={stat.label} style={{ padding: "14px 18px", background: stat.bg, borderRadius: 12, border: `1px solid ${stat.bg}` }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: stat.color }}>{stat.value}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: stat.color, opacity: 0.75, textTransform: "uppercase", letterSpacing: "0.04em" }}>{stat.label}</div>
+          </div>
+        ))}
       </div>
 
-      {/* Table Card */}
-      <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
+      {/* Search + Filters */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 22, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+          <Search size={14} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+          <input
+            type="text" placeholder="Search products..."
+            value={search} onChange={e => setSearch(e.target.value)}
+            style={{ ...inputStyle, paddingLeft: 36, height: 40 }}
+          />
+        </div>
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{ ...inputStyle, width: "auto", height: 40, paddingRight: 28 }}>
+          {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} style={{ ...inputStyle, width: "auto", height: 40 }}>
+          <option value="All">All Status</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
 
-        {/* Toolbar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: "200px", position: "relative" }}>
-            <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-            <input
-              type="text"
-              placeholder="Search by name, ID, or category…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{
-                width: "100%", padding: "9px 12px 9px 36px",
-                border: "1px solid #e2e8f0", borderRadius: "8px",
-                fontSize: "13px", fontFamily: "inherit", outline: "none",
-                boxSizing: "border-box",
-              }}
+      {/* Grid */}
+      {filtered.length === 0 ? (
+        <div style={{ padding: "60px 20px", textAlign: "center" }}>
+          <Package size={40} style={{ color: "#cbd5e1", margin: "0 auto 12px" }} />
+          <p style={{ fontSize: 14, fontWeight: 600, color: "#94a3b8" }}>No products found.</p>
+          <button onClick={handleOpenAdd} style={{ marginTop: 12, padding: "8px 20px", background: "#1e40af", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+            Add First Product
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 16 }}>
+          {filtered.map(p => (
+            <ProductCard
+              key={p.id}
+              product={p}
+              onEdit={() => handleOpenEdit(p)}
+              onDelete={() => setDeleteConfirm(p.id)}
+              onToggle={() => handleToggle(p)}
             />
-          </div>
-          <div style={{ position: "relative" }}>
-            <select
-              value={filterCategory}
-              onChange={e => setFilterCategory(e.target.value)}
-              style={{
-                padding: "9px 32px 9px 12px", border: "1px solid #e2e8f0",
-                borderRadius: "8px", fontSize: "13px", fontFamily: "inherit",
-                outline: "none", appearance: "none", cursor: "pointer", background: "white",
-              }}
-            >
-              {categories.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <ChevronDown size={13} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
-          </div>
-          <div style={{ fontSize: "12px", color: "#94a3b8", whiteSpace: "nowrap" }}>
-            {filtered.length} product{filtered.length !== 1 ? "s" : ""}
+          ))}
+        </div>
+      )}
+
+      {/* Delete Confirm */}
+      {deleteConfirm && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 110 }}>
+          <div style={{ background: "white", borderRadius: 14, padding: 28, maxWidth: 340, width: "100%", boxShadow: "0 20px 40px rgba(0,0,0,0.15)" }}>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: "0 0 8px" }}>Delete Product?</h3>
+            <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px" }}>This product will be permanently removed from the catalogue.</p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: "9px", borderRadius: 8, border: "1px solid #e2e8f0", background: "#f8fafc", fontSize: 13, fontWeight: 700, color: "#475569", cursor: "pointer" }}>Cancel</button>
+              <button onClick={() => handleDelete(deleteConfirm)} disabled={isPending} style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", background: "#dc2626", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                {isPending ? "Deleting..." : "Delete"}
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Table */}
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-                {["PRODUCT ID", "NAME", "CATEGORY", "PRICING TYPE", "UNIT PRICE", "STATUS", "ACTIONS"].map(col => (
-                  <th key={col} style={{ padding: "12px 20px", textAlign: col === "ACTIONS" ? "center" : "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ padding: "60px 20px", textAlign: "center", color: "#94a3b8" }}>
-                    <Package size={36} style={{ color: "#e2e8f0", marginBottom: "12px", display: "block", margin: "0 auto 12px" }} />
-                    <div style={{ fontSize: "14px", fontWeight: "600" }}>No products found</div>
-                    <div style={{ fontSize: "12px", marginTop: "4px" }}>Add your first product using the button above.</div>
-                  </td>
-                </tr>
-              ) : filtered.map(p => (
-                <tr
-                  key={p.id}
-                  style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.background = "#f8fafc"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.background = "transparent"; }}
-                >
-                  {/* Product ID */}
-                  <td style={{ padding: "14px 20px", whiteSpace: "nowrap" }}>
-                    <span style={{
-                      fontFamily: "monospace", fontSize: "12px", fontWeight: "700",
-                      color: "#0f172a", background: "#f1f5f9", padding: "3px 8px",
-                      borderRadius: "5px", border: "1px solid #e2e8f0",
-                    }}>
-                      {p.product_id}
-                    </span>
-                  </td>
-
-                  {/* Name */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <div style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>{p.name}</div>
-                    {p.description && (
-                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px", maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {p.description}
-                      </div>
-                    )}
-                  </td>
-
-                  {/* Category */}
-                  <td style={{ padding: "14px 20px" }}>
-                    {p.category ? (
-                      <span style={{
-                        padding: "3px 10px", background: "#eff6ff", color: "#2563eb",
-                        borderRadius: "99px", fontSize: "11px", fontWeight: "700",
-                        border: "1px solid #bfdbfe", whiteSpace: "nowrap",
-                      }}>
-                        {p.category}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: "12px", color: "#cbd5e1" }}>—</span>
-                    )}
-                  </td>
-
-                  {/* Pricing Type */}
-                  <td style={{ padding: "14px 20px", whiteSpace: "nowrap" }}>
-                    <span style={{
-                      padding: "3px 10px", borderRadius: "99px", fontSize: "11px", fontWeight: "700",
-                      background: p.pricing_type === "per_sqft" ? "#fefce8" : "#f0fdf4",
-                      color: p.pricing_type === "per_sqft" ? "#854d0e" : "#166534",
-                      border: `1px solid ${p.pricing_type === "per_sqft" ? "#fde68a" : "#bbf7d0"}`,
-                    }}>
-                      {p.pricing_type === "per_sqft" ? "📐 Per Sq Ft" : "🔢 Per Unit"}
-                    </span>
-                  </td>
-
-                  {/* Unit Price */}
-                  <td style={{ padding: "14px 20px", whiteSpace: "nowrap" }}>
-                    <span style={{ fontSize: "14px", fontWeight: "800", color: "#0f172a" }}>
-                      ₹{Number(p.unit_price).toLocaleString("en-IN")}
-                    </span>
-                    <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "4px" }}>
-                      / {p.unit}
-                    </span>
-                  </td>
-
-                  {/* Status */}
-                  <td style={{ padding: "14px 20px" }}>
-                    <button
-                      onClick={() => handleToggleActive(p)}
-                      disabled={isPending}
-                      title={p.is_active ? "Click to deactivate" : "Click to activate"}
-                      style={{
-                        display: "flex", alignItems: "center", gap: "6px",
-                        padding: "4px 10px", borderRadius: "99px", fontSize: "11px", fontWeight: "700",
-                        border: `1px solid ${p.is_active ? "#bbf7d0" : "#e2e8f0"}`,
-                        background: p.is_active ? "#f0fdf4" : "#f8fafc",
-                        color: p.is_active ? "#16a34a" : "#94a3b8",
-                        cursor: "pointer", transition: "all 0.15s",
-                      }}
-                    >
-                      {p.is_active
-                        ? <><ToggleRight size={13} /> Active</>
-                        : <><ToggleLeft size={13} /> Inactive</>
-                      }
-                    </button>
-                  </td>
-
-                  {/* Actions */}
-                  <td style={{ padding: "14px 20px", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-                      <button
-                        onClick={() => openEdit(p)}
-                        title="Edit"
-                        style={{
-                          width: 30, height: 30, borderRadius: "7px", border: "1px solid #e2e8f0",
-                          background: "white", display: "flex", alignItems: "center", justifyContent: "center",
-                          cursor: "pointer", color: "#64748b", transition: "all 0.15s",
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#3b82f6"; (e.currentTarget as HTMLButtonElement).style.color = "#3b82f6"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#e2e8f0"; (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      {deleteConfirm === p.id ? (
-                        <div style={{ display: "flex", gap: "4px" }}>
-                          <button
-                            onClick={() => handleDelete(p.id)}
-                            style={{
-                              padding: "4px 10px", borderRadius: "6px", border: "none",
-                              background: "#ef4444", color: "white", fontSize: "11px",
-                              fontWeight: "700", cursor: "pointer",
-                            }}
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirm(null)}
-                            style={{
-                              padding: "4px 8px", borderRadius: "6px", border: "1px solid #e2e8f0",
-                              background: "white", fontSize: "11px", fontWeight: "700",
-                              color: "#64748b", cursor: "pointer",
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setDeleteConfirm(p.id)}
-                          title="Delete"
-                          style={{
-                            width: 30, height: 30, borderRadius: "7px", border: "1px solid #e2e8f0",
-                            background: "white", display: "flex", alignItems: "center", justifyContent: "center",
-                            cursor: "pointer", color: "#64748b", transition: "all 0.15s",
-                          }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#ef4444"; (e.currentTarget as HTMLButtonElement).style.color = "#ef4444"; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#e2e8f0"; (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Drawer */}
-      <ProductDrawer
-        open={drawerOpen}
-        onClose={() => { closeDrawer(); window.location.reload(); }}
-        editProduct={editProduct}
-        existingProducts={products}
-      />
+      {/* Form Modal */}
+      {showForm && (
+        <ProductFormModal
+          product={editingProduct}
+          allProducts={products}
+          onClose={() => { setShowForm(false); setEditingProduct(null); }}
+          onSaved={handleSaved}
+        />
+      )}
     </div>
   );
 }

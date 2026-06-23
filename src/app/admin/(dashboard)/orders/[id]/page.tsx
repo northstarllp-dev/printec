@@ -5,7 +5,7 @@ import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getProducts } from "@/features/products/actions/productActions";
-import { getQuotationByOrderId } from "@/features/quotations/actions/quotationActions";
+import { getQuotationByOrderId, getQuotationMaterialPreferences, getSiteVisitMeasurementsForOrder } from "@/features/quotations/actions/quotationActions";
 import { OrderDetailPageClient } from "./OrderDetailPageClient";
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,12 +16,14 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     redirect("/admin/orders");
   }
 
-  const [customersData, employeesData, allOrdersData, productsData, quotationData] = await Promise.all([
+  const [customersData, employeesData, allOrdersData, productsData, quotationData, siteVisitItemsData, materialPrefsData] = await Promise.all([
     getCustomers(),
     getEmployees(),
     getOrders(),
     getProducts().catch(() => []),
     getQuotationByOrderId(order.id).catch(() => null),
+    getSiteVisitMeasurementsForOrder(order.id).catch(() => []),
+    getQuotationMaterialPreferences(order.id).catch(() => []),
   ]);
 
   const mappedOrder = {
@@ -53,6 +55,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     orderId: order.order_id || order.id,
     health: order.health || "Active",
     lost_reason: order.lost_reason,
+    paymentHistory: order.payment_history || [],
+    advanceInvoiceDetails: order.advance_invoice_details || null,
   };
 
   const mappedCustomers = customersData?.map((c) => ({
@@ -102,9 +106,20 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     name: p.name,
     category: p.category ?? null,
     pricing_type: p.pricing_type,
-    unit_price: Number(p.unit_price),
-    unit: p.unit,
     is_active: p.is_active,
+    price_per_sqft: p.price_per_sqft != null ? Number(p.price_per_sqft) : null,
+    price_per_unit: p.price_per_unit != null ? Number(p.price_per_unit) : null,
+    price_per_running_ft: p.price_per_running_ft != null ? Number(p.price_per_running_ft) : null,
+    images: Array.isArray(p.images) ? p.images : [],
+  }));
+
+  const mappedSiteVisitItems = (siteVisitItemsData || []).map((m: any) => ({
+    id: m.id,
+    name: m.name,
+    width: m.width ?? null,
+    height: m.height ?? null,
+    depth: m.depth ?? null,
+    notes: m.notes ?? null,
   }));
 
   return (
@@ -117,6 +132,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       currentEmployee={null}
       products={mappedProducts}
       initialQuotation={quotationData}
+      siteVisitItems={mappedSiteVisitItems}
+      materialPreferences={materialPrefsData || []}
     />
   );
 }

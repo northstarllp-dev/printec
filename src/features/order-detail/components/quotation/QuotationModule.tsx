@@ -1,20 +1,43 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useTransition } from "react";
-import { Plus, Trash2, Search, Check, ChevronDown } from "lucide-react";
-import { upsertQuotation } from "@/features/quotations/actions/quotationActions";
+import { createPortal } from "react-dom";
+import { 
+  Plus, Trash2, Search, Check, ChevronDown, Info, 
+  Sparkles, ShieldCheck, ClipboardList, IndianRupee, Loader2, AlertCircle
+} from "lucide-react";
+import { 
+  upsertQuotation, 
+  sendQuotationToCustomer,
+  adminConfirmAdvanceReceived,
+  adminVerifySinglePayment
+} from "@/features/quotations/actions/quotationActions";
+import { createClient } from "@/utils/supabase/client";
 
-type PricingType = "per_unit" | "per_sqft";
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface Product {
   id: string;
   product_id: string;
   name: string;
   category: string | null;
-  pricing_type: PricingType;
-  unit_price: number;
-  unit: string;
+  pricing_type: string;
   is_active: boolean;
+  price_per_sqft?: number | null;
+  price_per_unit?: number | null;
+  price_per_running_ft?: number | null;
+  images?: string[];
+}
+
+interface SiteVisitItem {
+  id: string;
+  name: string;
+  width?: number | null;
+  height?: number | null;
+  depth?: number | null;
+  notes?: string | null;
 }
 
 interface LineItem {
@@ -22,26 +45,38 @@ interface LineItem {
   productId?: string;
   description: string;
   quantity: number;
-  pricingType: PricingType;
+  pricingType: "per_unit" | "per_sqft" | "per_running_ft";
   unit: string;
   unitPrice: number;
   totalSqFt: number;
   gstRate: number;
 }
 
+interface SignageSection {
+  siteVisitItemId: string;
+  itemLabel: string;
+  lines: LineItem[];
+  notes?: string;
+}
+
 interface Quotation {
   id?: string;
   quotation_id?: string;
   customer_name?: string;
-  status: "Draft" | "Sent" | "Approved" | "Rejected";
-  items: LineItem[];
+  status: "Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval";
+  signage_options?: SignageSection[];
+  items?: LineItem[]; // legacy flat items
   subtotal: number;
   discount: number;
   tax: number;
   grand_total: number;
+  shipping?: number;
+  amount_paid?: number;
   notes: string;
   terms: string;
   valid_until: string;
+  advance_percent?: number;
+  advance_amount?: number;
 }
 
 interface QuotationModuleProps {
@@ -51,15 +86,23 @@ interface QuotationModuleProps {
     projectName: string;
     customerName?: string;
     customerId?: string;
+    paymentHistory?: any[];
+    stage?: string;
   };
   isEmployee: boolean;
   products: Product[];
   initialQuotation: Quotation | null;
+  siteVisitItems?: SiteVisitItem[];
+  materialPreferences?: any[];
 }
 
 const GST_OPTIONS = [0, 5, 12, 18, 28];
 
-function newItem(): LineItem {
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+function newItem(gstRate: number = 18): LineItem {
   return {
     id: crypto.randomUUID(),
     description: "",
@@ -68,32 +111,64 @@ function newItem(): LineItem {
     unit: "nos",
     unitPrice: 0,
     totalSqFt: 0,
-    gstRate: 18,
+    gstRate,
   };
 }
 
 function calcLineAmount(item: LineItem): number {
-  if (item.pricingType === "per_sqft") {
+  if (item.pricingType === "per_sqft" || item.pricingType === "per_running_ft") {
     return item.quantity * item.totalSqFt * item.unitPrice;
   }
   return item.quantity * item.unitPrice;
 }
 
-function recalcTotals(items: LineItem[], discount: number) {
-  const subtotal = items.reduce((s, i) => s + calcLineAmount(i), 0);
-  const tax = items.reduce((s, i) => {
-    const base = calcLineAmount(i);
-    return s + base * (i.gstRate / 100);
-  }, 0);
-  const grand_total = subtotal - discount + tax;
-  return {
-    subtotal: Math.round(subtotal * 100) / 100,
-    tax: Math.round(tax * 100) / 100,
-    grand_total: Math.round(grand_total * 100) / 100,
-  };
+function resolveInitialPricing(p: Product): { pricingType: "per_unit" | "per_sqft" | "per_running_ft"; price: number } {
+  let pricingType: "per_unit" | "per_sqft" | "per_running_ft" = "per_unit";
+  let price = 0;
+
+  const ut = (p.pricing_type || "").toLowerCase().trim();
+
+  if (ut === "per sq.ft" || ut === "per sqft" || ut === "sqft" || ut === "per_sqft") {
+    pricingType = "per_sqft";
+    price = p.price_per_sqft ?? 0;
+  } else if (ut === "per running ft" || ut === "per running foot" || ut === "per rft" || ut === "rft" || ut === "per_running_ft") {
+    pricingType = "per_running_ft";
+    price = p.price_per_running_ft ?? 0;
+  } else if (ut === "per unit" || ut === "per_unit" || ut === "unit" || ut === "nos") {
+    pricingType = "per_unit";
+    price = p.price_per_unit ?? 0;
+  } else {
+    if (p.price_per_sqft != null && p.price_per_sqft > 0) {
+      pricingType = "per_sqft";
+      price = p.price_per_sqft;
+    } else if (p.price_per_running_ft != null && p.price_per_running_ft > 0) {
+      pricingType = "per_running_ft";
+      price = p.price_per_running_ft;
+    } else if (p.price_per_unit != null && p.price_per_unit > 0) {
+      pricingType = "per_unit";
+      price = p.price_per_unit;
+    } else {
+      pricingType = "per_unit";
+      price = 0;
+    }
+  }
+
+  return { pricingType, price };
 }
 
-// ── Product Search Dropdown ──────────────────────────────────────────────────
+function getProductPriceForType(p: Product, type: "per_unit" | "per_sqft" | "per_running_ft"): number {
+  if (type === "per_sqft") {
+    return p.price_per_sqft ?? 0;
+  }
+  if (type === "per_running_ft") {
+    return p.price_per_running_ft ?? 0;
+  }
+  return p.price_per_unit ?? 0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Search component
+// ─────────────────────────────────────────────────────────────────────────────
 
 function ProductSearch({
   value,
@@ -112,7 +187,9 @@ function ProductSearch({
   const [query, setQuery] = useState(value);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setQuery(value); }, [value]);
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -135,13 +212,17 @@ function ProductSearch({
     : [];
 
   return (
-    <div ref={ref} style={{ position: "relative", flex: 1 }}>
+    <div ref={ref} style={{ position: "relative", width: "100%" }}>
       <div style={{ position: "relative" }}>
         <Search
           size={11}
           style={{
-            position: "absolute", left: 8, top: "50%",
-            transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none",
+            position: "absolute",
+            left: 8,
+            top: "50%",
+            transform: "translateY(-50%)",
+            color: "#94a3b8",
+            pointerEvents: "none",
           }}
         />
         <input
@@ -153,9 +234,12 @@ function ProductSearch({
             onChange(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => { if (query) setOpen(true); }}
-          placeholder="Type to search products…"
-          className="w-full border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          onFocus={() => {
+            setQuery(value);
+            setOpen(true);
+          }}
+          placeholder="Item description or search..."
+          className="w-full border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
           style={{ padding: "6px 8px 6px 24px", fontFamily: "inherit" }}
         />
       </div>
@@ -163,203 +247,488 @@ function ProductSearch({
       {open && filtered.length > 0 && (
         <div
           style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-            background: "white", border: "1px solid #e2e8f0", borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 200,
-            maxHeight: 220, overflowY: "auto",
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            left: 0,
+            right: 0,
+            background: "white",
+            border: "1px solid #e2e8f0",
+            borderRadius: 8,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+            zIndex: 9999,
+            maxHeight: 200,
+            overflowY: "auto",
           }}
         >
-          {filtered.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onSelect(p);
-                setQuery(p.name);
-                setOpen(false);
-              }}
-              style={{
-                width: "100%", textAlign: "left", padding: "8px 12px",
-                background: "none", border: "none", cursor: "pointer",
-                borderBottom: "1px solid #f1f5f9", display: "flex",
-                alignItems: "center", justifyContent: "space-between", gap: 8,
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "none"; }}
-            >
-              <div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>{p.name}</span>
-                {p.category && (
-                  <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 6 }}>{p.category}</span>
-                )}
-              </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: "#0f172a", fontFamily: "monospace" }}>
-                  ₹{Number(p.unit_price).toLocaleString("en-IN")}
+          {filtered.map((p) => {
+            const resolved = resolveInitialPricing(p);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onSelect(p);
+                  setQuery(p.name);
+                  setOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "8px 12px",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  borderBottom: "1px solid #f1f5f9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#f8fafc";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "none";
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#0f172a" }}>{p.name}</span>
+                  {p.category && (
+                    <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 6 }}>{p.category}</span>
+                  )}
                 </div>
-                <div style={{ fontSize: 10, color: "#64748b" }}>per {p.unit}</div>
-              </div>
-            </button>
-          ))}
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: "#0f172a", fontFamily: "monospace" }}>
+                    ₹{resolved.price.toLocaleString("en-IN")}
+                  </div>
+                  <div style={{ fontSize: 9, color: "#64748b" }}>
+                    per {resolved.pricingType === "per_sqft" ? "sqft" : resolved.pricingType === "per_running_ft" ? "rft" : "unit"}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const QuotationModule: React.FC<QuotationModuleProps> = ({
   order,
   isEmployee,
   products,
   initialQuotation,
+  siteVisitItems = [],
+  materialPreferences = [],
 }) => {
   const [isPending, startTransition] = useTransition();
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
+  const [sendingToCustomer, setSendingToCustomer] = useState(false);
+  const [pushingToAdmin, setPushingToAdmin] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
-  const [quotation, setQuotation] = useState<Quotation>(() =>
-    initialQuotation
-      ? {
-          ...initialQuotation,
-          quotation_id: initialQuotation.quotation_id || "",
-          customer_name: initialQuotation.customer_name || order.customerName || "",
-          items: (initialQuotation.items || []).map((i: any) => ({
-            id: i.id || crypto.randomUUID(),
-            productId: i.productId,
-            description: i.description || "",
-            quantity: Number(i.quantity) || 1,
-            pricingType: i.pricingType || "per_unit",
-            unit: i.unit || "nos",
-            unitPrice: Number(i.unitPrice) || 0,
-            totalSqFt: Number(i.totalSqFt) || 0,
-            gstRate: Number(i.gstRate) ?? 18,
-          })),
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channelName = `quotation-sync-${order.id}-${Date.now()}`;
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "quotations",
+          filter: `order_id=eq.${order.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const newQuote = payload.new as any;
+            if (newQuote) {
+              if (newQuote.quotation_id) setQuotationId(newQuote.quotation_id);
+              if (newQuote.status) setStatus(newQuote.status);
+              if (newQuote.valid_until !== undefined) setValidUntil(newQuote.valid_until ?? "");
+              if (newQuote.customer_name) setCustomerName(newQuote.customer_name);
+              if (newQuote.notes !== undefined) setNotes(newQuote.notes ?? "");
+              if (newQuote.terms !== undefined) setTerms(newQuote.terms ?? "");
+              if (newQuote.advance_percent !== undefined) setAdvancePercent(newQuote.advance_percent);
+              if (newQuote.discount !== undefined) setDiscount(Number(newQuote.discount) || 0);
+              if (newQuote.shipping !== undefined) setShipping(Number(newQuote.shipping) || 0);
+              if (newQuote.amount_paid !== undefined) setAmountPaid(Number(newQuote.amount_paid) || 0);
+              if (Array.isArray(newQuote.signage_options)) {
+                setSections(newQuote.signage_options);
+              }
+            }
+          }
         }
-      : {
-          quotation_id: "",
-          customer_name: order.customerName || "",
-          status: "Draft",
-          items: [newItem()],
-          subtotal: 0,
-          discount: 0,
-          tax: 0,
-          grand_total: 0,
-          notes: "",
-          terms: "",
-          valid_until: "",
-        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [order.id]);
+
+  // Core metadata states
+  const [quotationId, setQuotationId] = useState(initialQuotation?.quotation_id ?? "");
+  const [status, setStatus] = useState<"Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval">(
+    initialQuotation?.status ?? "Draft"
+  );
+  const [validUntil, setValidUntil] = useState(initialQuotation?.valid_until ?? "");
+  const [customerName, setCustomerName] = useState(
+    initialQuotation?.customer_name ?? order.customerName ?? ""
   );
 
-  // ── Item helpers ─────────────────────────────────────────────────────────
+  // Redesigned: multi-section structure without options A/B
+  const [sections, setSections] = useState<SignageSection[]>(() => {
+    const savedSections = initialQuotation?.signage_options || [];
 
-  function updateItems(updater: (prev: LineItem[]) => LineItem[]) {
-    setQuotation((q) => {
-      const items = updater(q.items);
-      const totals = recalcTotals(items, q.discount);
-      return { ...q, items, ...totals };
+    if (siteVisitItems && siteVisitItems.length > 0) {
+      const mapped = siteVisitItems.map((item) => {
+        const existing = savedSections.find((s) => s.siteVisitItemId === item.id);
+        if (existing) {
+          return {
+            ...existing,
+            itemLabel: item.name, // Keep latest name
+          };
+        }
+
+        // Default empty row inside a section
+        return {
+          siteVisitItemId: item.id,
+          itemLabel: item.name,
+          lines: [
+            {
+              id: crypto.randomUUID(),
+              description: "",
+              quantity: 1,
+              pricingType: "per_unit" as const,
+              unit: "nos",
+              unitPrice: 0,
+              totalSqFt: (item.width && item.height) ? item.width * item.height : 0,
+              gstRate: 18,
+            },
+          ],
+          notes: item.notes || "",
+        };
+      });
+
+      // Keep any saved sections that do not correspond to any site visit item ID (e.g. custom sections or fallback ones)
+      const unmatched = savedSections.filter(
+        (s) => !siteVisitItems.some((item) => item.id === s.siteVisitItemId)
+      );
+
+      return [...mapped, ...unmatched];
+    }
+
+    if (savedSections.length > 0) {
+      return savedSections;
+    }
+
+    // Fallback: single empty section if absolutely nothing
+    return [
+      {
+        siteVisitItemId: crypto.randomUUID(),
+        itemLabel: "General Signage",
+        lines: [newItem(18)],
+        notes: "",
+      },
+    ];
+  });
+
+  // Recreated 2nd SS bottom section states
+  const [discount, setDiscount] = useState<number>(
+    initialQuotation?.discount ? Number(initialQuotation.discount) : 0
+  );
+  const [shipping, setShipping] = useState<number>(
+    initialQuotation?.shipping ? Number(initialQuotation.shipping) : 0
+  );
+  const [amountPaid, setAmountPaid] = useState<number>(
+    initialQuotation?.amount_paid ? Number(initialQuotation.amount_paid) : 0
+  );
+  
+  const [taxPercent, setTaxPercent] = useState<number>(() => {
+    if (initialQuotation) {
+      const sub = Number(initialQuotation.subtotal) || 0;
+      const tx = Number(initialQuotation.tax) || 0;
+      if (sub > 0) {
+        return Math.round((tx / sub) * 100);
+      }
+    }
+    return 18; // default to 18%
+  });
+
+  const [showDiscountInput, setShowDiscountInput] = useState(discount > 0);
+  const [showShippingInput, setShowShippingInput] = useState(shipping > 0);
+
+  const [notes, setNotes] = useState(initialQuotation?.notes ?? "");
+  const [terms, setTerms] = useState(
+    initialQuotation?.terms ?? "Terms and conditions - late fees, payment methods, delivery schedule"
+  );
+  const [advancePercent, setAdvancePercent] = useState<number>(
+    initialQuotation?.advance_percent ?? 50
+  );
+
+  // Calculations
+  const subtotal = sections.reduce((sum, sec) => {
+    return sum + sec.lines.reduce((s, line) => s + calcLineAmount(line), 0);
+  }, 0);
+
+  const tax = Math.round((subtotal - discount) * (taxPercent / 100) * 100) / 100;
+  const grandTotal = Math.round((subtotal - discount + tax + shipping) * 100) / 100;
+  const balanceDue = Math.round((grandTotal - amountPaid) * 100) / 100;
+  const advanceAmount = Math.round(grandTotal * (advancePercent / 100) * 100) / 100;
+
+  const isLocked = (status === "Sent" || status === "Approved" || status === "Pending Approval") && isEmployee;
+  const orderStage = order.stage || "";
+
+  // ── Sync Global Tax to Line Items ──
+  const syncGlobalTaxToLines = (newTaxRate: number) => {
+    setSections(prev => 
+      prev.map(sec => ({
+        ...sec,
+        lines: sec.lines.map(line => ({ ...line, gstRate: newTaxRate }))
+      }))
+    );
+  };
+
+  // ── Section Actions ──
+  function updateSection(id: string, updater: (sec: SignageSection) => SignageSection) {
+    setSections((prev) => prev.map((s) => (s.siteVisitItemId === id ? updater(s) : s)));
+  }
+
+  function removeSection(sectionId: string) {
+    if (confirm("Are you sure you want to remove this entire signage section?")) {
+      setSections((prev) => prev.filter((s) => s.siteVisitItemId !== sectionId));
+    }
+  }
+
+  function addLine(sectionId: string) {
+    updateSection(sectionId, (sec) => ({
+      ...sec,
+      lines: [...sec.lines, newItem(taxPercent)],
+    }));
+  }
+
+  function removeLine(sectionId: string, lineId: string) {
+    updateSection(sectionId, (sec) => {
+      const remaining = sec.lines.filter((l) => l.id !== lineId);
+      return {
+        ...sec,
+        lines: remaining.length > 0 ? remaining : [newItem(taxPercent)],
+      };
     });
   }
 
-  function addItem() {
-    updateItems((items) => [...items, newItem()]);
+  function updateLine(sectionId: string, lineId: string, patch: Partial<LineItem>) {
+    updateSection(sectionId, (sec) => ({
+      ...sec,
+      lines: sec.lines.map((l) => (l.id === lineId ? { ...l, ...patch } : l)),
+    }));
   }
 
-  function removeItem(id: string) {
-    updateItems((items) => items.filter((i) => i.id !== id));
-  }
+  function selectProduct(sectionId: string, lineId: string, p: Product) {
+    const resolved = resolveInitialPricing(p);
+    const siteVisitItem = siteVisitItems.find((sv) => sv.id === sectionId);
+    const defaultSqFt = (siteVisitItem?.width && siteVisitItem?.height) ? siteVisitItem.width * siteVisitItem.height : 1;
 
-  function updateItem(id: string, patch: Partial<LineItem>) {
-    updateItems((items) =>
-      items.map((i) => (i.id === id ? { ...i, ...patch } : i))
-    );
-  }
-
-  function selectProduct(itemId: string, p: Product) {
-    updateItem(itemId, {
+    updateLine(sectionId, lineId, {
       productId: p.id,
       description: p.name,
-      pricingType: p.pricing_type,
-      unit: p.unit,
-      unitPrice: Number(p.unit_price),
-      totalSqFt: p.pricing_type === "per_sqft" ? 1 : 0,
+      pricingType: resolved.pricingType,
+      unit: resolved.pricingType === "per_sqft" ? "sqft" : resolved.pricingType === "per_running_ft" ? "rft" : "nos",
+      unitPrice: resolved.price,
+      totalSqFt: resolved.pricingType === "per_sqft" ? defaultSqFt : 0,
     });
   }
 
-  function updateDiscount(val: number) {
-    setQuotation((q) => {
-      const totals = recalcTotals(q.items, val);
-      return { ...q, discount: val, ...totals };
-    });
-  }
-
-  // ── Save ─────────────────────────────────────────────────────────────────
-
+  // ── Save/Send Actions ──
   function handleSave() {
+    setSaveMsg(null);
     startTransition(async () => {
       try {
         await upsertQuotation(order.id, {
-          quotation_id: quotation.quotation_id || undefined,
-          items: quotation.items,
-          subtotal: quotation.subtotal,
-          discount: quotation.discount,
-          tax: quotation.tax,
-          grand_total: quotation.grand_total,
-          status: quotation.status,
-          notes: quotation.notes || undefined,
-          terms: quotation.terms || undefined,
-          valid_until: quotation.valid_until || null,
+          quotation_id: quotationId || undefined,
+          signage_options: sections,
+          items: [], // Legacy flat items is empty now
+          subtotal,
+          discount,
+          tax,
+          grand_total: grandTotal,
+          status,
+          notes,
+          terms,
+          valid_until: validUntil || null,
           customer_id: order.customerId,
-          customer_name: quotation.customer_name || order.customerName,
+          customer_name: customerName,
+          advance_percent: advancePercent,
+          advance_amount: advanceAmount,
+          shipping,
+          amount_paid: amountPaid,
         });
         setSaveMsg({ text: "Quotation saved ✓", ok: true });
+        setTimeout(() => setSaveMsg(null), 3000);
       } catch (err: any) {
         setSaveMsg({ text: err.message || "Save failed", ok: false });
-      } finally {
-        setTimeout(() => setSaveMsg(null), 3000);
       }
     });
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  const handleSendToCustomer = async () => {
+    setSendingToCustomer(true);
+    try {
+      const saved = await upsertQuotation(order.id, {
+        quotation_id: quotationId || undefined,
+        signage_options: sections,
+        items: [],
+        subtotal,
+        discount,
+        tax,
+        grand_total: grandTotal,
+        status: "Sent",
+        notes,
+        terms,
+        valid_until: validUntil || null,
+        customer_id: order.customerId,
+        customer_name: customerName,
+        advance_percent: advancePercent,
+        advance_amount: advanceAmount,
+        shipping,
+        amount_paid: amountPaid,
+      });
+      await sendQuotationToCustomer(saved.id, "Staff/Admin");
+      setStatus("Sent");
+      setSaveMsg({ text: "Quotation sent to customer successfully!", ok: true });
+      setTimeout(() => setSaveMsg(null), 4000);
+    } catch (err: any) {
+      setSaveMsg({ text: err.message || "Send failed", ok: false });
+    } finally {
+      setSendingToCustomer(false);
+    }
+  };
+  
+  const handlePushToAdmin = async () => {
+    setPushingToAdmin(true);
+    try {
+      await upsertQuotation(order.id, {
+        quotation_id: quotationId || undefined,
+        signage_options: sections,
+        items: [],
+        subtotal,
+        discount,
+        tax,
+        grand_total: grandTotal,
+        status: "Pending Approval",
+        notes,
+        terms,
+        valid_until: validUntil || null,
+        customer_id: order.customerId,
+        customer_name: customerName,
+        advance_percent: advancePercent,
+        advance_amount: advanceAmount,
+        shipping,
+        amount_paid: amountPaid,
+      });
+      setStatus("Pending Approval");
+      setSaveMsg({ text: "Quotation submitted to Admin for approval!", ok: true });
+      setTimeout(() => setSaveMsg(null), 4000);
+    } catch (err: any) {
+      setSaveMsg({ text: err.message || "Submission failed", ok: false });
+    } finally {
+      setPushingToAdmin(false);
+    }
+  };
+
+  const handleRejectToDraft = async () => {
+    startTransition(async () => {
+      try {
+        await upsertQuotation(order.id, {
+          quotation_id: quotationId || undefined,
+          signage_options: sections,
+          items: [],
+          subtotal,
+          discount,
+          tax,
+          grand_total: grandTotal,
+          status: "Draft",
+          notes,
+          terms,
+          valid_until: validUntil || null,
+          customer_id: order.customerId,
+          customer_name: customerName,
+          advance_percent: advancePercent,
+          advance_amount: advanceAmount,
+          shipping,
+          amount_paid: amountPaid,
+        });
+        setStatus("Draft");
+        setSaveMsg({ text: "Quotation returned to Draft status.", ok: true });
+        setTimeout(() => setSaveMsg(null), 4000);
+      } catch (err: any) {
+        setSaveMsg({ text: err.message || "Failed to return to draft", ok: false });
+      }
+    });
+  };
+
+  const addCustomSection = () => {
+    const label = prompt("Enter custom signage item name:");
+    if (!label?.trim()) return;
+    setSections((prev) => [
+      ...prev,
+      {
+        siteVisitItemId: crypto.randomUUID(),
+        itemLabel: label,
+        lines: [newItem(taxPercent)],
+        notes: "",
+      },
+    ]);
+  };
 
   const inputCls = "border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6" style={{ fontFamily: "inherit" }}>
       {/* Header Row */}
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-            Product Quotation
+      <div className="flex items-center justify-between bg-slate-50 p-4 border border-slate-200 rounded-2xl">
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+            <ClipboardList size={16} className="text-blue-600" />
+            Quotation Builder
           </h3>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] text-slate-400 font-bold uppercase">Quote No:</span>
             <input
               type="text"
-              value={quotation.quotation_id || ""}
-              disabled={isEmployee}
-              onChange={(e) => setQuotation(q => ({ ...q, quotation_id: e.target.value }))}
-              placeholder="e.g. QT-001"
-              className="border-b border-dashed border-slate-300 text-xs font-mono text-slate-600 focus:outline-none focus:border-blue-500 bg-transparent px-1 py-0.5"
+              value={quotationId}
+              disabled={isLocked}
+              onChange={(e) => setQuotationId(e.target.value)}
+              placeholder="Auto-generated"
+              className="border-b border-dashed border-slate-300 text-xs font-mono text-slate-700 focus:outline-none focus:border-blue-500 bg-transparent px-1 py-0.5"
               style={{ width: "120px" }}
             />
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {/* Status selector */}
           <div style={{ position: "relative" }}>
             <select
-              value={quotation.status}
-              onChange={(e) =>
-                setQuotation((q) => ({ ...q, status: e.target.value as any }))
-              }
-              className={`${inputCls} pl-3 pr-7 py-1.5 appearance-none cursor-pointer`}
-              style={{ fontFamily: "inherit" }}
+              value={status}
+              disabled={isLocked}
+              onChange={(e) => setStatus(e.target.value as any)}
+              className={`${inputCls} pl-3 pr-8 py-1.5 appearance-none cursor-pointer font-bold bg-white text-slate-800`}
             >
-              {["Draft", "Sent", "Approved", "Rejected"].map((s) => (
+              {["Draft", "Sent", "Approved", "Rejected", "Pending Approval"].map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
@@ -369,277 +738,794 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           {/* Valid Until */}
           <input
             type="date"
-            value={quotation.valid_until || ""}
-            onChange={(e) => setQuotation((q) => ({ ...q, valid_until: e.target.value }))}
-            className={`${inputCls} px-2 py-1.5`}
-            style={{ fontFamily: "inherit" }}
+            value={validUntil}
+            disabled={isLocked}
+            onChange={(e) => setValidUntil(e.target.value)}
+            className={`${inputCls} px-2 py-1.5 bg-white`}
             title="Valid Until"
           />
-          <span className="text-[10px] text-slate-400 font-bold">STAGE 2</span>
+
+          <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${
+            status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+            status === "Sent" ? "bg-blue-50 border-blue-200 text-blue-700" :
+            status === "Rejected" ? "bg-rose-50 border-rose-200 text-rose-700" :
+            "bg-slate-100 border-slate-200 text-slate-600"
+          }`}>
+            {status}
+          </span>
         </div>
       </div>
 
-      {/* Customer strip */}
-      <div className="bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 flex justify-between items-start text-xs">
+      {status === "Pending Approval" && (
+        <div className={`p-4 rounded-2xl border flex items-center gap-3 shadow-sm ${
+          isEmployee 
+            ? "bg-blue-50 border-blue-200 text-blue-800" 
+            : "bg-amber-50 border-amber-200 text-amber-800"
+        }`}>
+          <Info size={16} className={isEmployee ? "text-blue-600" : "text-amber-600"} />
+          <div className="text-xs font-semibold">
+            {isEmployee 
+              ? "Submitted for Approval: This quotation is pending review by Admin and is locked for editing."
+              : "Pending Review: This quotation was submitted by staff. Please review the details, then approve and send it to the customer."}
+          </div>
+        </div>
+      )}
+
+      {/* Customer Info Card */}
+      <div className="bg-white rounded-2xl px-5 py-4 border border-slate-200 flex justify-between items-start text-xs shadow-sm">
         <div className="space-y-1.5 flex-1 max-w-[60%]">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Bill To</div>
+          <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Bill To</div>
           <input
             type="text"
-            value={quotation.customer_name || ""}
-            disabled={isEmployee}
-            onChange={(e) => setQuotation(q => ({ ...q, customer_name: e.target.value }))}
-            placeholder="Biller Name..."
-            className="w-full font-bold text-slate-800 bg-transparent border-b border-dashed border-slate-300 focus:outline-none focus:border-blue-500 py-0.5"
-            style={{ fontFamily: "inherit" }}
+            value={customerName}
+            disabled={isLocked}
+            onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="Customer Name..."
+            className="w-full font-black text-slate-800 bg-transparent border-b border-dashed border-slate-200 focus:outline-none focus:border-blue-500 py-0.5"
           />
-          <div className="text-slate-500">{order.projectName}</div>
+          <div className="text-slate-500 font-medium">{order.projectName}</div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Date</div>
-          <div className="font-mono text-slate-700">{new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
+          <div className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-0.5">Date</div>
+          <div className="font-mono text-slate-700 font-bold" suppressHydrationWarning>
+            {new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+          </div>
         </div>
       </div>
 
-      {/* Line Items Table */}
-      <div className="border border-slate-200 rounded-2xl bg-white relative z-10">
-        {/* Table Header */}
-        <div
-          className="grid gap-2 px-3 py-2 text-[10px] font-bold text-white uppercase tracking-wider"
-          style={{
-            gridTemplateColumns: "2fr 60px 80px 70px 60px 60px 28px",
-            background: "#0f172a",
-            borderTopLeftRadius: "15px",
-            borderTopRightRadius: "15px",
-          }}
-        >
-          <div>Item / Description</div>
-          <div className="text-center">Qty</div>
-          <div className="text-center">Rate (₹)</div>
-          <div className="text-center">Sq Ft</div>
-          <div className="text-center">GST %</div>
-          <div className="text-right">Amount</div>
-          <div />
+      {/* Customer Material Preferences Context Banner */}
+      {materialPreferences.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2.5 shadow-sm">
+          <h4 className="text-xs font-black text-amber-800 flex items-center gap-1.5">
+            <Sparkles size={14} />
+            Customer Saved Material Preferences
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {materialPreferences.map((pref: any) => {
+              const p = pref.preferences || {};
+              const list = Object.entries(p).filter(([_, v]) => !!v);
+              if (list.length === 0) return null;
+              return (
+                <div key={pref.id} className="bg-white border border-amber-100 rounded-lg p-2.5">
+                  <div className="font-bold text-slate-800 mb-1 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                    {pref.signage_item_label}
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
+                    {list.map(([k, v]) => (
+                      <div key={k}>
+                        <span className="font-semibold text-slate-400 capitalize">{k.replace("_", " ")}:</span> {v as string}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
+      )}
 
-        {/* Items */}
-        <div className="divide-y divide-slate-100">
-          {quotation.items.map((item, idx) => {
-            const amount = calcLineAmount(item);
-            const isPerSqft = item.pricingType === "per_sqft";
+      {/* Signage Sections */}
+      <div className="space-y-6">
+        {sections.map((section, sIdx) => {
+          const itemTotal = section.lines.reduce((s, line) => s + calcLineAmount(line), 0);
+          // Check matching site visit measurements for details
+          const svItem = siteVisitItems.find((sv) => sv.id === section.siteVisitItemId);
 
-            return (
+          return (
+            <div key={section.siteVisitItemId} className="border border-slate-200 rounded-2xl bg-white shadow-sm overflow-visible">
+              {/* Section Header */}
+              <div className="bg-[#f8fafc] px-5 py-3.5 border-b border-slate-100 flex items-center justify-between rounded-t-2xl">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-black text-[#0f172a] uppercase tracking-wider">{section.itemLabel}</span>
+                  {svItem && (svItem.width || svItem.height) && (
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">
+                      Site Measurement: {svItem.width ?? "—"} × {svItem.height ?? "—"} ft
+                      {svItem.depth ? ` · depth: ${svItem.depth} in` : ""}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-400 font-black uppercase">Subtotal:</span>
+                    <span className="text-sm font-black text-[#1e40af] font-mono">
+                      ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      onClick={() => removeSection(section.siteVisitItemId)}
+                      className="text-slate-400 hover:text-rose-500 transition-colors p-1"
+                      title="Remove section"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Line Items Table Header */}
               <div
-                key={item.id}
-                className="grid gap-2 px-3 py-2.5 items-center"
-                style={{ 
-                  gridTemplateColumns: "2fr 60px 80px 70px 60px 60px 28px",
-                  position: "relative",
-                  zIndex: activeRowId === item.id ? 50 : 1
-                }}
-                onFocus={() => setActiveRowId(item.id)}
-                onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                    setActiveRowId(null);
-                  }
+                className="grid gap-2 px-4 py-2.5 text-[10px] font-black text-[#64748b] uppercase tracking-wider bg-slate-50 border-b border-slate-100"
+                style={{
+                  gridTemplateColumns: "1fr 70px 105px 80px 105px 40px 90px 28px",
                 }}
               >
-                {/* Description + product search */}
-                <ProductSearch
-                  value={item.description}
-                  products={products}
-                  disabled={isEmployee}
-                  onSelect={(p) => selectProduct(item.id, p)}
-                  onChange={(val) => updateItem(item.id, { description: val, productId: undefined })}
-                />
-
-                {/* Qty */}
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={item.quantity === 0 ? "" : item.quantity}
-                  disabled={isEmployee}
-                  onChange={(e) => updateItem(item.id, { quantity: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) })}
-                  className={`${inputCls} w-full px-2 py-1.5 text-center font-mono`}
-                  style={{ fontFamily: "monospace" }}
-                  placeholder="0"
-                />
-
-                {/* Rate */}
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">₹</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.unitPrice === 0 ? "" : item.unitPrice}
-                    disabled={isEmployee}
-                    onChange={(e) => updateItem(item.id, { unitPrice: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) })}
-                    className={`${inputCls} w-full pl-5 pr-2 py-1.5 text-right font-mono`}
-                    style={{ fontFamily: "monospace" }}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                {/* Sq Ft — only relevant for per_sqft */}
-                {isPerSqft ? (
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.totalSqFt === 0 ? "" : item.totalSqFt}
-                    disabled={isEmployee}
-                    onChange={(e) => updateItem(item.id, { totalSqFt: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) })}
-                    className={`${inputCls} w-full px-2 py-1.5 text-center font-mono`}
-                    style={{ fontFamily: "monospace" }}
-                    placeholder="0"
-                  />
-                ) : (
-                  <div className="text-center text-[10px] text-slate-300">—</div>
-                )}
-
-                {/* GST % */}
-                <select
-                  value={item.gstRate}
-                  disabled={isEmployee}
-                  onChange={(e) => updateItem(item.id, { gstRate: Number(e.target.value) })}
-                  className={`${inputCls} w-full px-1 py-1.5 text-center`}
-                  style={{ fontFamily: "inherit" }}
-                >
-                  {GST_OPTIONS.map((g) => (
-                    <option key={g} value={g}>{g}%</option>
-                  ))}
-                </select>
-
-                {/* Amount */}
-                <div className="text-right text-xs font-bold font-mono text-slate-800 whitespace-nowrap">
-                  ₹{amount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-
-                {/* Delete */}
-                <button
-                  type="button"
-                  disabled={isEmployee || quotation.items.length <= 1}
-                  onClick={() => removeItem(item.id)}
-                  className="text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <Trash2 size={13} />
-                </button>
+                <div>Item Description</div>
+                <div className="text-center">Qty</div>
+                <div className="text-center">Unit Type</div>
+                <div className="text-center">Measure</div>
+                <div className="text-right">Rate (₹)</div>
+                <div className="text-center">GST</div>
+                <div className="text-right">Amount (₹)</div>
+                <div />
               </div>
-            );
-          })}
-        </div>
 
-        {/* Add Item */}
-        {!isEmployee && (
-          <div className="border-t border-slate-200 p-3">
-            <button
-              type="button"
-              onClick={addItem}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-slate-300 rounded-lg text-xs font-semibold text-slate-500 hover:border-blue-500 hover:text-blue-600 transition-colors"
-            >
-              <Plus size={13} /> Add Line Item
-            </button>
-          </div>
-        )}
+              {/* Lines */}
+              <div className="divide-y divide-slate-100 overflow-visible">
+                {section.lines.map((line) => {
+                  const lineAmt = calcLineAmount(line);
+                  const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
+
+                  return (
+                    <div
+                      key={line.id}
+                      className="grid gap-2 px-4 py-3.5 items-center overflow-visible"
+                      style={{
+                        gridTemplateColumns: "1fr 70px 105px 80px 105px 40px 90px 28px",
+                        position: "relative",
+                        zIndex: activeRowId === line.id ? 50 : 1,
+                      }}
+                      onFocus={() => setActiveRowId(line.id)}
+                      onBlur={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                          setActiveRowId(null);
+                        }
+                      }}
+                    >
+                      {/* Product Search / Description */}
+                      <ProductSearch
+                        value={line.description}
+                        products={products}
+                        disabled={isLocked}
+                        onSelect={(p) => selectProduct(section.siteVisitItemId, line.id, p)}
+                        onChange={(val) =>
+                          updateLine(section.siteVisitItemId, line.id, {
+                            description: val,
+                            productId: undefined,
+                          })
+                        }
+                      />
+
+                      {/* Qty */}
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={line.quantity === 0 ? "" : line.quantity}
+                        disabled={isLocked}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={() => {
+                          if (line.quantity <= 0) {
+                            updateLine(section.siteVisitItemId, line.id, { quantity: 1 });
+                          }
+                        }}
+                        onChange={(e) =>
+                          updateLine(section.siteVisitItemId, line.id, {
+                            quantity: Number(e.target.value) || 0,
+                          })
+                        }
+                        className={`${inputCls} w-full py-1.5 text-center font-mono`}
+                        placeholder="0"
+                      />
+
+                      {/* Unit Type Selector */}
+                      <select
+                        value={line.pricingType}
+                        disabled={isLocked}
+                        onChange={(e) => {
+                          const newType = e.target.value as "per_unit" | "per_sqft" | "per_running_ft";
+                          const patch: Partial<LineItem> = { pricingType: newType };
+                          if (line.productId) {
+                            const p = products.find((prod) => prod.id === line.productId);
+                            if (p) {
+                              patch.unitPrice = getProductPriceForType(p, newType);
+                            }
+                          }
+                          updateLine(section.siteVisitItemId, line.id, patch);
+                        }}
+                        className={`${inputCls} w-full py-1.5 px-2 bg-white`}
+                      >
+                        <option value="per_unit">Per Unit</option>
+                        <option value="per_sqft">Per Sq.Ft</option>
+                        <option value="per_running_ft">Per Run.Ft</option>
+                      </select>
+
+                      {/* Measure (SqFt / Running Ft) */}
+                      {isSqft ? (
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={line.totalSqFt === 0 ? "" : line.totalSqFt}
+                          disabled={isLocked}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) =>
+                            updateLine(section.siteVisitItemId, line.id, {
+                              totalSqFt: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className={`${inputCls} w-full py-1.5 text-center font-mono`}
+                          placeholder={line.pricingType === "per_sqft" ? "Sq.Ft" : "Run.Ft"}
+                        />
+                      ) : (
+                        <div className="text-center text-[10px] text-slate-300 font-bold">—</div>
+                      )}
+
+                      {/* Rate */}
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.unitPrice === 0 ? "" : line.unitPrice}
+                          disabled={isLocked}
+                          onFocus={(e) => e.target.select()}
+                          onChange={(e) =>
+                            updateLine(section.siteVisitItemId, line.id, {
+                              unitPrice: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className={`${inputCls} w-full pl-5 pr-2 py-1.5 text-right font-mono`}
+                          placeholder="0.00"
+                        />
+                      </div>
+
+                      {/* GST */}
+                      <select
+                        value={line.gstRate}
+                        disabled={isLocked}
+                        onChange={(e) =>
+                          updateLine(section.siteVisitItemId, line.id, {
+                            gstRate: Number(e.target.value),
+                          })
+                        }
+                        className={`${inputCls} w-full py-1.5 text-center bg-white`}
+                      >
+                        {GST_OPTIONS.map((g) => (
+                          <option key={g} value={g}>{g}%</option>
+                        ))}
+                      </select>
+
+                      {/* Line Amount */}
+                      <div className="text-right text-xs font-black font-mono text-slate-800 whitespace-nowrap">
+                        ₹{lineAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+
+                      {/* Delete button */}
+                      <button
+                        type="button"
+                        disabled={isLocked}
+                        onClick={() => removeLine(section.siteVisitItemId, line.id)}
+                        className="text-slate-300 hover:text-rose-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add Line inside section */}
+              {!isLocked && (
+                <div className="border-t border-slate-100 p-3 bg-slate-50/50 rounded-b-2xl">
+                  <button
+                    type="button"
+                    onClick={() => addLine(section.siteVisitItemId)}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-all bg-white shadow-sm"
+                  >
+                    <Plus size={13} /> Add Line Item
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Bottom: Notes + Totals */}
-      <div className="grid grid-cols-2 gap-5">
-        {/* Notes & Terms */}
-        <div className="space-y-3">
+      {/* Add Custom signage section button */}
+      {!isLocked && (
+        <button
+          type="button"
+          onClick={addCustomSection}
+          className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-slate-300 rounded-2xl text-xs font-black text-slate-500 hover:border-blue-500 hover:text-blue-600 hover:bg-slate-50 transition-all"
+        >
+          <Plus size={14} /> Add Custom Signage Item
+        </button>
+      )}
+
+      {/* Payment Approval & Stage Advancement Section */}
+      {(!isEmployee || (order.paymentHistory && order.paymentHistory.length > 0)) && (
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-sm">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
+                <IndianRupee size={16} className="stroke-[2.5]" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                  Payment Approval & Verification
+                </h4>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
+                  Advance expected: ₹{(advanceAmount || 0).toLocaleString("en-IN")} ({advancePercent}%)
+                </p>
+              </div>
+            </div>
+            {order.stage && (
+              <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${
+                (order.stage !== "Site Visit Pending" && 
+                 order.stage !== "Site Visit Scheduled" && 
+                 order.stage !== "Site Visit Completed" && 
+                 !order.stage.startsWith("Quotation"))
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                  : "bg-amber-50 border-amber-200 text-amber-700"
+              }`}>
+                {order.stage}
+              </span>
+            )}
+          </div>
+
+          {/* Payment submissions list */}
+          {(!order.paymentHistory || order.paymentHistory.length === 0) ? (
+            <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs text-slate-400 font-medium">
+              Awaiting customer payment submission. Customer can submit receipts in their portal.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                Customer Payment Receipts
+              </div>
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden bg-slate-50">
+                {order.paymentHistory.map((p: any, idx: number) => {
+                  const isPendingVerification = p.status !== "Verified" && p.status !== "Paid";
+                  const identifier = p.reference || p.paidAt;
+                  return (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 bg-white hover:bg-slate-50/50 transition-colors">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-extrabold text-slate-800">
+                            ₹{Number(p.amount || 0).toLocaleString("en-IN")}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-bold uppercase">
+                            {p.method}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          {p.reference && <span>Ref ID: <code className="font-mono text-slate-700 font-bold">{p.reference}</code> • </span>}
+                          <span>Paid: {p.paidAt ? new Date(p.paidAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${
+                          !isPendingVerification
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                            : "bg-amber-50 border-amber-200 text-amber-700"
+                        }`}>
+                          {p.status || "Pending Verification"}
+                        </span>
+                        
+                        {!isEmployee && isPendingVerification && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (confirm(`Are you sure you want to verify and approve payment of ₹${Number(p.amount || 0).toLocaleString("en-IN")}?`)) {
+                                try {
+                                  await adminVerifySinglePayment(order.id, identifier, "Admin");
+                                  alert("Receipt verified!");
+                                } catch (err: any) {
+                                  alert(err.message || "Failed to verify receipt");
+                                }
+                              }
+                            }}
+                            className="py-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black transition-all flex items-center gap-1 shadow-sm"
+                          >
+                            <Check size={11} /> Approve
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Verification / Advancement Call To Action */}
+          {!isEmployee && (order.stage === "Quotation Approved" || order.stage === "Quotation Sent" || order.stage === "Quotation Negotiation" || order.stage === "Quotation In Progress") && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (confirm("Confirm all payments verified and advance this order to the Design stage?")) {
+                    try {
+                      await adminConfirmAdvanceReceived(order.id, "Admin");
+                      alert("Payments approved! Order advanced to Design phase.");
+                    } catch (err: any) {
+                      alert(err.message || "Failed to advance order stage");
+                    }
+                  }
+                }}
+                className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-[0.99] transform"
+              >
+                <Check className="stroke-[3]" size={14} /> Approve All Payments & Proceed to Design Stage
+              </button>
+            </div>
+          )}
+          
+          {(orderStage !== "Site Visit Pending" && 
+            orderStage !== "Site Visit Scheduled" && 
+            orderStage !== "Site Visit Completed" && 
+            !orderStage.startsWith("Quotation")) && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3 text-emerald-800">
+              <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                ✓
+              </div>
+              <div className="text-xs font-semibold">
+                Advance Payment Confirmed: Order is currently in <strong>{orderStage}</strong> phase.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Recreated 2nd SS bottom section layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+        {/* Left Column: Notes, Included Services, Terms */}
+        <div className="space-y-4">
+          {/* Notes */}
           <div>
-            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Notes</label>
+            <label className="block text-[10px] font-black text-[#0f172a] uppercase tracking-wider mb-1">Notes</label>
             <textarea
-              value={quotation.notes || ""}
-              disabled={isEmployee}
-              onChange={(e) => setQuotation((q) => ({ ...q, notes: e.target.value }))}
+              value={notes}
+              disabled={isLocked}
+              onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              placeholder="Any relevant notes for the customer…"
-              className={`${inputCls} w-full px-3 py-2 resize-none`}
-              style={{ fontFamily: "inherit" }}
+              placeholder="Internal notes or notes for customer..."
+              className={`${inputCls} w-full px-3.5 py-2.5 resize-none bg-white font-medium`}
             />
           </div>
+
+
+
+          {/* Terms & Conditions */}
           <div>
-            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Terms & Conditions</label>
+            <label className="block text-[10px] font-black text-[#0f172a] uppercase tracking-wider mb-1">Terms & Conditions</label>
             <textarea
-              value={quotation.terms || ""}
-              disabled={isEmployee}
-              onChange={(e) => setQuotation((q) => ({ ...q, terms: e.target.value }))}
+              value={terms}
+              disabled={isLocked}
+              onChange={(e) => setTerms(e.target.value)}
               rows={3}
-              placeholder="Payment terms, delivery schedule, late fees…"
-              className={`${inputCls} w-full px-3 py-2 resize-none`}
-              style={{ fontFamily: "inherit" }}
+              placeholder="Terms and conditions - late fees, payment methods, delivery schedule"
+              className={`${inputCls} w-full px-3.5 py-2.5 resize-none bg-white font-medium`}
             />
           </div>
         </div>
 
-        {/* Totals */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 space-y-3">
-          {/* Discount */}
-          <div>
-            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-              Discount (₹)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold">₹</span>
+        {/* Right Column: Invoice summary details */}
+        <div className="bg-[#f8fafc] border border-slate-200/80 rounded-3xl p-6 space-y-4 shadow-sm h-fit">
+          {/* Subtotal */}
+          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+            <span>Subtotal</span>
+            <span className="font-mono text-slate-800 text-sm">
+              ₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          {/* Tax% Input with swap icon */}
+          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider py-1">
+            <span>Tax</span>
+            <div className="flex items-center gap-1.5">
               <input
                 type="number"
                 min="0"
-                value={quotation.discount}
-                disabled={isEmployee}
-                onChange={(e) => updateDiscount(Number(e.target.value) || 0)}
-                className={`${inputCls} w-full pl-7 pr-3 py-2 font-mono font-bold`}
-                style={{ fontFamily: "monospace" }}
+                max="100"
+                value={taxPercent}
+                disabled={isLocked}
+                onChange={(e) => {
+                  const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
+                  setTaxPercent(val);
+                  syncGlobalTaxToLines(val);
+                }}
+                className={`${inputCls} w-16 px-2 py-1 text-center font-mono font-bold bg-white`}
+              />
+              <span className="text-slate-600">%</span>
+              <button
+                type="button"
+                title="Sync global tax to all lines"
+                onClick={() => syncGlobalTaxToLines(taxPercent)}
+                className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <ChevronDown size={14} className="transform rotate-180" />
+              </button>
+            </div>
+          </div>
+
+          {/* Tax Amount Display */}
+          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
+            <span>Tax Amount ({taxPercent}%)</span>
+            <span className="font-mono text-slate-800">
+              ₹{tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          {/* Discount & Shipping Buttons / Inputs */}
+          <div className="space-y-3.5 py-1.5">
+            <div className="flex gap-4">
+              {!showDiscountInput && (
+                <button
+                  type="button"
+                  onClick={() => setShowDiscountInput(true)}
+                  className="text-xs font-black text-[#1e40af] hover:text-[#173087] flex items-center gap-1 transition-colors"
+                >
+                  + Discount
+                </button>
+              )}
+              {!showShippingInput && (
+                <button
+                  type="button"
+                  onClick={() => setShowShippingInput(true)}
+                  className="text-xs font-black text-[#1e40af] hover:text-[#173087] flex items-center gap-1 transition-colors"
+                >
+                  + Shipping
+                </button>
+              )}
+            </div>
+
+            {showDiscountInput && (
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-black text-[#0f172a] uppercase tracking-wider">Discount (₹)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiscount(0);
+                      setShowDiscountInput(false);
+                    }}
+                    className="text-[10px] text-rose-500 hover:underline font-bold"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-black">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={discount === 0 ? "" : discount}
+                    disabled={isLocked && isEmployee}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                    className={`${inputCls} w-full pl-7 pr-3 py-2 font-mono font-bold bg-white`}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            )}
+
+            {showShippingInput && (
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-black text-[#0f172a] uppercase tracking-wider">Shipping (₹)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShipping(0);
+                      setShowShippingInput(false);
+                    }}
+                    className="text-[10px] text-rose-500 hover:underline font-bold"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-black">₹</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={shipping === 0 ? "" : shipping}
+                    disabled={isLocked}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setShipping(parseFloat(e.target.value) || 0)}
+                    className={`${inputCls} w-full pl-7 pr-3 py-2 font-mono font-bold bg-white`}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Grand Total */}
+          <div className="flex justify-between items-center py-4 border-t border-slate-200">
+            <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Total</span>
+            <span className="font-black text-[#0f172a] text-xl font-mono">
+              ₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          {/* Amount Paid Input */}
+          <div className="space-y-1">
+            <label className="block text-[10px] font-black text-[#0f172a] uppercase tracking-wider">Amount Paid (₹)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-black">Rs</span>
+              <input
+                type="number"
+                min="0"
+                value={amountPaid === 0 ? "" : amountPaid}
+                disabled={isLocked}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
+                className={`${inputCls} w-full pl-8 pr-3 py-2 font-mono font-bold bg-white`}
+                placeholder="Rs"
               />
             </div>
           </div>
 
-          {/* Summary lines */}
-          <div className="pt-3 border-t border-slate-200/80 space-y-2 text-xs font-semibold text-slate-600">
-            <div className="flex justify-between">
-              <span>Subtotal</span>
-              <span className="font-mono text-slate-800">₹{quotation.subtotal.toLocaleString("en-IN")}</span>
-            </div>
-            {quotation.discount > 0 && (
-              <div className="flex justify-between text-rose-600">
-                <span>Less Discount</span>
-                <span className="font-mono">− ₹{quotation.discount.toLocaleString("en-IN")}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span>Total GST</span>
-              <span className="font-mono text-slate-800">₹{quotation.tax.toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex justify-between text-sm font-bold text-slate-900 pt-2 border-t border-dashed border-slate-200">
-              <span>Grand Total</span>
-              <span className="font-mono text-emerald-700">₹{quotation.grand_total.toLocaleString("en-IN")}</span>
-            </div>
+          {/* Balance Due Display */}
+          <div className="flex justify-between items-center py-3 border-t border-slate-200">
+            <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Balance Due</span>
+            <span className="font-black text-[#1e40af] text-xl font-mono">
+              ₹{balanceDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+            </span>
           </div>
 
-          {/* Save button */}
-          {!isEmployee && (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isPending}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold text-white transition-all"
-              style={{
-                background: isPending ? "#94a3b8" : "#0f172a",
-                cursor: isPending ? "not-allowed" : "pointer",
-              }}
-            >
-              {isPending ? (
-                "Saving…"
-              ) : saveMsg ? (
-                <><Check size={13} /> {saveMsg.text}</>
-              ) : (
-                "Save Quotation"
-              )}
-            </button>
+          {/* Advance % Setup Row */}
+          {!isLocked && (
+            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pt-2">
+              <span>Advance payment expected</span>
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={advancePercent}
+                  onChange={(e) => setAdvancePercent(Number(e.target.value))}
+                  className={`${inputCls} py-1 px-2 bg-white`}
+                >
+                  <option value={25}>25%</option>
+                  <option value={50}>50%</option>
+                  <option value={75}>75%</option>
+                  <option value={100}>100%</option>
+                </select>
+                <span className="text-[11px] text-slate-400 font-bold">
+                  (₹{advanceAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })})
+                </span>
+              </div>
+            </div>
           )}
         </div>
       </div>
+
+      {/* Save Msg Notification */}
+      {saveMsg && (
+        <div className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm border ${
+          saveMsg.ok ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-rose-50 border-rose-200 text-rose-700"
+        }`}>
+          {saveMsg.ok ? <Check size={14} /> : <AlertCircle size={14} />}
+          {saveMsg.text}
+        </div>
+      )}
+
+      {/* Action Buttons Row */}
+      {(() => {
+        const portalTarget = isMounted ? document.getElementById("modal-footer-portal") : null;
+        const actionButtons = (
+          <>
+            {/* Employee Action Buttons */}
+            {isEmployee && !isLocked && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isPending}
+                  className="py-2 px-4 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-black text-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  {isPending ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
+                  Save Draft
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePushToAdmin}
+                  disabled={pushingToAdmin || grandTotal === 0}
+                  className="py-2 px-4 bg-[#1e40af] hover:bg-[#153186] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  {pushingToAdmin ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
+                  Push to Admin
+                </button>
+              </>
+            )}
+
+            {isEmployee && isLocked && (
+              <div className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                <Check size={14} /> Submitted & Locked
+              </div>
+            )}
+
+            {/* Admin Action Buttons */}
+            {!isEmployee && status !== "Approved" && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isPending}
+                  className="py-2 px-4 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-black text-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  {isPending ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
+                  Save Draft
+                </button>
+                {status === "Pending Approval" && (
+                  <button
+                    type="button"
+                    onClick={handleRejectToDraft}
+                    disabled={isPending}
+                    className="py-2 px-4 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    Reject & Return to Draft
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleSendToCustomer}
+                  disabled={sendingToCustomer || grandTotal === 0}
+                  className="py-2 px-4 bg-[#1e40af] hover:bg-[#153186] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {sendingToCustomer ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
+                  {status === "Sent" ? "Re-send to Customer" : "Approve & Send to Customer"}
+                </button>
+              </>
+            )}
+            {!isEmployee && status === "Approved" && (
+              <div className="py-2 px-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                <Check size={14} /> Customer Approved
+              </div>
+            )}
+          </>
+        );
+
+        if (portalTarget) {
+          return createPortal(
+            <div className="flex gap-2.5 items-center justify-end w-full">
+              {actionButtons}
+            </div>,
+            portalTarget
+          );
+        }
+
+        return (
+          <div className="flex gap-3 bg-slate-50 p-4 border border-slate-200 rounded-2xl mt-4">
+            {actionButtons}
+          </div>
+        );
+      })()}
     </div>
   );
 };
