@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Download,
   Plus,
@@ -116,8 +116,16 @@ interface OrdersEnhancedDashboardProps {
 
 export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [selectedStage, setSelectedStage] = useState<string | null>(null);
   const [orders] = useState(mockOrders);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
 
   // Calculate metrics
   const totalActive = orders.filter(o => o.stage !== "completed").length;
@@ -129,9 +137,9 @@ export function OrdersEnhancedDashboard({ onAddOrder }: OrdersEnhancedDashboardP
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch =
-      order.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.id.toLowerCase().includes(searchTerm.toLowerCase());
+      order.projectName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      order.customer.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      order.id.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
     const matchesStage = !selectedStage || order.stage === selectedStage;
     return matchesSearch && matchesStage;
   });

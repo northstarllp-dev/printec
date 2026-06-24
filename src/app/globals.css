@@ -375,3 +375,14 @@ body {
 .prt-animate-in {
   animation: prt-slide-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Fix for native select dropdown black flash glitch */
+select {
+  color-scheme: light !important;
+  transition-property: border-color, box-shadow, color, outline !important;
+}
+
+select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}

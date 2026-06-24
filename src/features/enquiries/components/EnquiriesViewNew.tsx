@@ -86,6 +86,17 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [enquiries, setEnquiries] = useState(initialEnquiries);
   const [customers, setCustomers] = useState(initialCustomers);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("All");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
@@ -103,11 +114,12 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const handleAddEnquiry = async (data: EnquiryFormData) => {
     try {
       const newEnq = {
+        company_id: "11111111-1111-1111-1111-111111111111",
         lead_name: data.leadName,
-        phone: data.phone,
-        whatsapp: data.whatsappNumber,
+        phone: data.phone.replace(/\s+/g, ""),
+        whatsapp: data.whatsappNumber.replace(/\s+/g, ""),
         email: data.email,
-        source: data.primaryMode === "whatsapp" ? "WhatsApp" : "Phone Call",
+        source: data.source,
         notes: data.notes,
         primary_communication_mode: data.primaryMode === "whatsapp" ? "WHATSAPP" : "MAIL",
         location: data.location,
@@ -127,7 +139,8 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
           notes: result[0].notes,
           primaryCommunicationMode: result[0].primary_communication_mode,
           location: result[0].location,
-          enquireId: result[0].enquire_id
+          enquireId: result[0].enquire_id,
+          addedBy: result[0].added_by
         };
         setEnquiries([mapped, ...enquiries]);
         setIsAddModalOpen(false);
@@ -312,24 +325,48 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               }}
             />
           </div>
-          <button
-            style={{
-              padding: "10px 16px",
-              background: "#f1f5f9",
-              border: "1px solid #cbd5e1",
-              borderRadius: "8px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: "600",
-              color: "#475569",
-              transition: "all 0.2s",
-            }}
-          >
-            <Filter size={16} /> Filters
-          </button>
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f1f5f9", padding: "8px 12px", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                style={{ border: "none", background: "transparent", fontSize: "13px", fontWeight: "600", color: startDate ? "#0f172a" : "#94a3b8", outline: "none", cursor: "pointer", fontFamily: "inherit" }}
+                title="Start Date"
+              />
+              <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>-</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                style={{ border: "none", background: "transparent", fontSize: "13px", fontWeight: "600", color: endDate ? "#0f172a" : "#94a3b8", outline: "none", cursor: "pointer", fontFamily: "inherit" }}
+                title="End Date"
+              />
+            </div>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              style={{
+                padding: "10px 16px",
+                background: "#f1f5f9",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: "#475569",
+                transition: "all 0.2s",
+                outline: "none"
+              }}
+            >
+              <option value="All">All Sources</option>
+              <option value="Meta Ads">Meta Ads</option>
+              <option value="Referrals">Referrals</option>
+              <option value="Walk-ins">Walk-ins</option>
+              <option value="Google Enquiry (Ph Call)">Google Enquiry (Ph Call)</option>
+              <option value="Website">Website</option>
+            </select>
+          </div>
         </div>
 
         {/* Table with Scrollbar */}
@@ -342,12 +379,35 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>LEAD NAME</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>SOURCE</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>REQ NOTES</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ADDED BY</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CUST / ORDER</th>
                 <th style={{ padding: "14px 20px", textAlign: "right", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
-              {enquiries.filter(e => e.leadName.toLowerCase().includes(searchTerm.toLowerCase()) || e.phone.includes(searchTerm)).map((enq) => {
+              {enquiries.filter(e => {
+                const matchesSearch = e.leadName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || e.phone.includes(debouncedSearchTerm);
+                const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
+                
+                let matchesDate = true;
+                if (startDate || endDate) {
+                  try {
+                    const enqDateStr = new Date(e.dateReceived).toISOString().split('T')[0];
+                    if (startDate && endDate) {
+                      matchesDate = enqDateStr >= startDate && enqDateStr <= endDate;
+                    } else if (startDate) {
+                      matchesDate = enqDateStr >= startDate;
+                    } else if (endDate) {
+                      matchesDate = enqDateStr <= endDate;
+                    }
+                  } catch (err) {
+                    matchesDate = false;
+                  }
+                }
+                
+                return matchesSearch && matchesSource && matchesDate;
+              }).map((enq) => {
                 const statusColor = getStatusColor(enq.status);
                 return (
                   <tr key={enq.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
@@ -356,6 +416,12 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{enq.leadName}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{enq.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>{enq.source}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", maxWidth: "200px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={enq.notes || "No notes"}>
+                      {enq.notes || <span style={{color: "#94a3b8", fontStyle: "italic"}}>No notes</span>}
+                    </td>
+                    <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b", fontWeight: "600" }}>
+                      {enq.addedBy || "Admin"}
+                    </td>
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>
                       {enq.customerId ? (
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -392,7 +458,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               })}
               {enquiries.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
+                  <td colSpan={9} style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
                     No enquiries found matching your search.
                   </td>
                 </tr>

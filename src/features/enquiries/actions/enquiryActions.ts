@@ -44,6 +44,19 @@ export async function getEnquiries() {
 
 export async function createEnquiry(formData: any) {
   const supabase = await getSupabase();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  let addedBy = "System";
+  if (user) {
+    const { data: profile } = await supabase.from("users").select("name").eq("id", user.id).single();
+    if (profile && profile.name) {
+      addedBy = profile.name;
+    } else {
+      addedBy = user.email || "Admin";
+    }
+  }
+  formData.added_by = addedBy;
+
   const { data, error } = await supabase.from("enquiries").insert([formData]).select();
   if (error) throw new Error(error.message);
   revalidatePath("/admin/enquire");

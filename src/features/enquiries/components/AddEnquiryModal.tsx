@@ -15,6 +15,7 @@ export interface EnquiryFormData {
   whatsappNumber: string;
   email: string;
   primaryMode: "email" | "whatsapp";
+  source: "Meta Ads" | "Referrals" | "Walk-ins" | "Google Enquiry (Ph Call)" | "Website";
   notes: string;
   location: string;
 }
@@ -61,6 +62,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     whatsappNumber: "",
     email: "",
     primaryMode: "whatsapp",
+    source: "Website",
     notes: "",
     location: "",
   });
@@ -140,6 +142,7 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
       whatsappNumber: "",
       email: "",
       primaryMode: "whatsapp",
+      source: "Website",
       notes: "",
       location: "",
     });
@@ -388,15 +391,45 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
                 onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
               >
-                <option value="phone">Phone Call</option>
-                <option value="email">Email</option>
                 <option value="whatsapp">WhatsApp</option>
                 <option value="email">Email</option>
               </select>
             </div>
 
+            {/* Source */}
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                Source *
+              </label>
+              <select
+                name="source"
+                value={formData.source}
+                onChange={handleChange}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
+                  background: "#f8fafc",
+                  transition: "all 0.2s",
+                  cursor: "pointer"
+                }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "#018F10"; e.currentTarget.style.background = "white"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#cbd5e1"; e.currentTarget.style.background = "#f8fafc"; }}
+              >
+                <option value="Meta Ads">Meta Ads</option>
+                <option value="Referrals">Referrals</option>
+                <option value="Walk-ins">Walk-ins</option>
+                <option value="Google Enquiry (Ph Call)">Google Enquiry (Ph Call)</option>
+                <option value="Website">Website</option>
+              </select>
+            </div>
+
             {/* Location */}
-            <div style={{ gridColumn: "1 / -1" }}>
+            <div>
               <label style={{ display: "block", fontSize: "12px", fontWeight: "700", color: "#0f172a", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.03em" }}>
                 Location / Area
               </label>

@@ -251,7 +251,7 @@ export interface Order {
   orderId?: string;
 }
 
-export type EnquirySource = "Website" | "Phone Call" | "WhatsApp";
+export type EnquirySource = "Meta Ads" | "Referrals" | "Walk-ins" | "Google Enquiry (Ph Call)" | "Website";
 
 export interface Enquiry {
   id: string;
