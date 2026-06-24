@@ -220,8 +220,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             stageStatus: updated.stage_status,
             stageAdminNotes: updated.stage_admin_notes,
             chatHistory: updated.chat_history || prev.chatHistory,
-            paymentHistory: updated.payment_history || prev.paymentHistory,
-            advanceInvoiceDetails: updated.advance_invoice_details || prev.advanceInvoiceDetails,
             designDetails: updated.design_details || prev.designDetails,
             productionDetails: updated.production_details || prev.productionDetails,
             installationDetails: updated.installation_details || prev.installationDetails,
@@ -494,7 +492,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             projectName: order.projectName,
             customerName: order.customerName,
             customerId: order.customerId,
-            paymentHistory: order.paymentHistory,
             stage: order.stage,
           }}
           isEmployee={isEmployee}

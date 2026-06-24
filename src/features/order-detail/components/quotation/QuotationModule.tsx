@@ -8,9 +8,7 @@ import {
 } from "lucide-react";
 import { 
   upsertQuotation, 
-  sendQuotationToCustomer,
-  adminConfirmAdvanceReceived,
-  adminVerifySinglePayment
+  sendQuotationToCustomer
 } from "@/features/quotations/actions/quotationActions";
 import { createClient } from "@/utils/supabase/client";
 
@@ -86,7 +84,6 @@ interface QuotationModuleProps {
     projectName: string;
     customerName?: string;
     customerId?: string;
-    paymentHistory?: any[];
     stage?: string;
   };
   isEmployee: boolean;
@@ -1095,140 +1092,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         </button>
       )}
 
-      {/* Payment Approval & Stage Advancement Section */}
-      {(!isEmployee || (order.paymentHistory && order.paymentHistory.length > 0)) && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-sm">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-                <IndianRupee size={16} className="stroke-[2.5]" />
-              </div>
-              <div>
-                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                  Payment Approval & Verification
-                </h4>
-                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
-                  Advance expected: ₹{(advanceAmount || 0).toLocaleString("en-IN")} ({advancePercent}%)
-                </p>
-              </div>
-            </div>
-            {order.stage && (
-              <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${
-                (order.stage !== "Site Visit Pending" && 
-                 order.stage !== "Site Visit Scheduled" && 
-                 order.stage !== "Site Visit Completed" && 
-                 !order.stage.startsWith("Quotation"))
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-amber-50 border-amber-200 text-amber-700"
-              }`}>
-                {order.stage}
-              </span>
-            )}
-          </div>
 
-          {/* Payment submissions list */}
-          {(!order.paymentHistory || order.paymentHistory.length === 0) ? (
-            <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs text-slate-400 font-medium">
-              Awaiting customer payment submission. Customer can submit receipts in their portal.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
-                Customer Payment Receipts
-              </div>
-              <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden bg-slate-50">
-                {order.paymentHistory.map((p: any, idx: number) => {
-                  const isPendingVerification = p.status !== "Verified" && p.status !== "Paid";
-                  const identifier = p.reference || p.paidAt;
-                  return (
-                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-3 bg-white hover:bg-slate-50/50 transition-colors">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-extrabold text-slate-800">
-                            ₹{Number(p.amount || 0).toLocaleString("en-IN")}
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-500 font-bold uppercase">
-                            {p.method}
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-medium">
-                          {p.reference && <span>Ref ID: <code className="font-mono text-slate-700 font-bold">{p.reference}</code> • </span>}
-                          <span>Paid: {p.paidAt ? new Date(p.paidAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${
-                          !isPendingVerification
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                            : "bg-amber-50 border-amber-200 text-amber-700"
-                        }`}>
-                          {p.status || "Pending Verification"}
-                        </span>
-                        
-                        {!isEmployee && isPendingVerification && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (confirm(`Are you sure you want to verify and approve payment of ₹${Number(p.amount || 0).toLocaleString("en-IN")}?`)) {
-                                try {
-                                  await adminVerifySinglePayment(order.id, identifier, "Admin");
-                                  alert("Receipt verified!");
-                                } catch (err: any) {
-                                  alert(err.message || "Failed to verify receipt");
-                                }
-                              }
-                            }}
-                            className="py-1 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black transition-all flex items-center gap-1 shadow-sm"
-                          >
-                            <Check size={11} /> Approve
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Verification / Advancement Call To Action */}
-          {!isEmployee && (order.stage === "Quotation Approved" || order.stage === "Quotation Sent" || order.stage === "Quotation Negotiation" || order.stage === "Quotation In Progress") && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (confirm("Confirm all payments verified and advance this order to the Design stage?")) {
-                    try {
-                      await adminConfirmAdvanceReceived(order.id, "Admin");
-                      alert("Payments approved! Order advanced to Design phase.");
-                    } catch (err: any) {
-                      alert(err.message || "Failed to advance order stage");
-                    }
-                  }
-                }}
-                className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-2xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-[0.99] transform"
-              >
-                <Check className="stroke-[3]" size={14} /> Approve All Payments & Proceed to Design Stage
-              </button>
-            </div>
-          )}
-          
-          {(orderStage !== "Site Visit Pending" && 
-            orderStage !== "Site Visit Scheduled" && 
-            orderStage !== "Site Visit Completed" && 
-            !orderStage.startsWith("Quotation")) && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3 text-emerald-800">
-              <div className="w-7 h-7 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs shrink-0">
-                ✓
-              </div>
-              <div className="text-xs font-semibold">
-                Advance Payment Confirmed: Order is currently in <strong>{orderStage}</strong> phase.
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Recreated 2nd SS bottom section layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">

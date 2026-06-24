@@ -56,8 +56,7 @@ interface Order {
   orderCode?: string;
   orderId?: string;
   // New quotation workflow fields
-  advanceInvoiceDetails?: any;
-  paymentHistory?: any[];
+
   siteVisitItems?: Array<{ id: string; name: string; width?: number | null; height?: number | null; depth?: number | null; notes?: string | null }>;
   materialPreferences?: any[];
 }
@@ -211,8 +210,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 ...o,
                 stage: updatedOrder.stage,
                 depositPaid: Number(updatedOrder.deposit_paid) || 0,
-                paymentHistory: updatedOrder.payment_history || [],
-                advanceInvoiceDetails: updatedOrder.advance_invoice_details || null,
+
                 siteVisitDetails: o.siteVisitDetails,
                 designDetails: updatedOrder.design_details,
                 productionDetails: updatedOrder.production_details,

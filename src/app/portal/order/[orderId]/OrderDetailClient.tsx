@@ -223,8 +223,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
                 ...prev,
                 stage: updatedOrder.stage,
                 depositPaid: Number(updatedOrder.deposit_paid) || 0,
-                paymentHistory: updatedOrder.payment_history || [],
-                advanceInvoiceDetails: updatedOrder.advance_invoice_details || null,
+
                 designDetails: updatedOrder.design_details,
                 productionDetails: updatedOrder.production_details,
                 installationDetails: updatedOrder.installation_details,

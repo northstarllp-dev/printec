@@ -50,8 +50,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     orderId: order.order_id || order.id,
     health: order.health || "Active",
     lost_reason: order.lost_reason,
-    paymentHistory: order.payment_history || [],
-    advanceInvoiceDetails: order.advance_invoice_details || null,
+
   };
 
   const mappedCustomers = customersData?.map((c) => ({

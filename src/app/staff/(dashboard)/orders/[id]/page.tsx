@@ -62,8 +62,7 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     customerName: order.customer_name || "",
     orderCode: order.order_id || order.id,
     orderId: order.order_id || order.id,
-    paymentHistory: order.payment_history || [],
-    advanceInvoiceDetails: order.advance_invoice_details || null,
+
   };
 
   const mappedCustomers = customersData?.map(c => ({

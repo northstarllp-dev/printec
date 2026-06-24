@@ -215,8 +215,7 @@ export default async function PortalPage({
       stageAdminNotes: o.stage_admin_notes,
       orderCode: o.order_id || o.id,
       orderId: o.order_id || o.id,
-      advanceInvoiceDetails: o.advance_invoice_details ?? null,
-      paymentHistory: o.payment_history ?? [],
+
       siteVisitItems,
       materialPreferences,
     };
