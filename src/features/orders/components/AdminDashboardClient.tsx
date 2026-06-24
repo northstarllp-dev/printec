@@ -38,17 +38,13 @@ const STAGE_LABEL: Record<string, { label: string; dot: string }> = {
   "Closed":                { label: "Closed",      dot: "#22C55E" },
 };
 
+
+
 const PRIORITY_STYLES: Record<string, { bg: string; text: string; border: string }> = {
   High:   { bg: "#FEF2F2", text: "#DC2626", border: "#FECACA" },
   Medium: { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
   Low:    { bg: "#F0FDF4", text: "#16A34A", border: "#BBF7D0" },
 };
-
-function getPriority(order: any): "High" | "Medium" | "Low" {
-  if (order.urgent) return "High";
-  if (order.deadlineStatus === "Action Required" || order.deadlineStatus === "Delayed") return "Medium";
-  return "Low";
-}
 
 const PIPELINE_STAGES = [
   "Site Visit Pending",
@@ -356,8 +352,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
           >
             {recentOrders.map((order, i) => {
               const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, dot: "#94A3B8" };
-              const priority = getPriority(order);
-              const pStyles = PRIORITY_STYLES[priority];
+
               return (
                 <div
                   key={order.id}
@@ -406,17 +401,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
                     </span>
                   </div>
 
-                  {/* Priority Badge */}
-                  <span
-                    style={{
-                      fontSize: "10px", fontWeight: "800", textTransform: "uppercase",
-                      padding: "3px 8px", borderRadius: "6px",
-                      background: pStyles.bg, color: pStyles.text, border: `1px solid ${pStyles.border}`,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {priority}
-                  </span>
+
 
                   {/* Dots menu */}
                   <div style={{ position: "relative" }}>

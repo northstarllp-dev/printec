@@ -48,10 +48,8 @@ interface Order {
   customerId: string;
   customerName?: string;
   stage: string;
-  urgent: boolean;
   assignedEmployees: string[];
   dateCreated: string;
-  deadlineStatus: string;
   versionHistory: any[];
   chatHistory: any[];
   siteVisitDetails?: any;

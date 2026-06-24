@@ -54,17 +54,7 @@ const STAGE_LABEL: Record<string, { label: string; color: string }> = {
   "Closed": { label: "Closed", color: "#22C55E" },
 };
 
-const PRIORITY: (o: any) => "High" | "Medium" | "Low" = (o) => {
-  if (o.urgent) return "High";
-  if (o.deadlineStatus === "Action Required" || o.deadlineStatus === "Delayed") return "Medium";
-  return "Low";
-};
 
-const PRIORITY_STYLE = {
-  High: { bg: "#FEF2F2", text: "#DC2626", border: "#FECACA" },
-  Medium: { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
-  Low: { bg: "#F0FDF4", text: "#16A34A", border: "#BBF7D0" },
-};
 
 const WORKFLOW_STEPS = [
   { label: "Enquiry", tab: -1, icon: "📋" },
@@ -619,8 +609,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               {filteredOrders.map((o) => {
                 const isSelected = o.id === order.id;
                 const stageInfo = STAGE_LABEL[o.stage] || { label: o.stage, color: "#94A3B8" };
-                const pri = PRIORITY(o);
-                const priStyle = PRIORITY_STYLE[pri];
+
                 const progress = Math.round(((stageToTabIndex(o.stage) + 1) / 5) * 100);
 
                 return (
@@ -642,9 +631,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                       <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A", lineHeight: 1.3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {o.projectName}
                       </span>
-                      <span style={{ fontSize: "9px", fontWeight: "800", padding: "2px 6px", borderRadius: "4px", background: priStyle.bg, color: priStyle.text, border: `1px solid ${priStyle.border}`, flexShrink: 0, textTransform: "uppercase" }}>
-                        {pri}
-                      </span>
+
                     </div>
                     <div style={{ fontSize: "11px", color: "#94A3B8", marginBottom: "6px" }}>
                       {o.orderCode} • {o.customerName || "—"}

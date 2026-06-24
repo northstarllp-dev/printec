@@ -11,7 +11,6 @@ interface OrderItem {
   customerId: string;
   customerName: string;
   stage: string;
-  urgent: boolean;
   dateCreated: string;
   orderId: string;
   orderCode: string;
@@ -40,7 +39,6 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
 
   // Calculations
   const activeJobs = initialOrders.filter(o => o.stage === "Design Approved" || o.stage === "Production" || o.stage === "Ready For Installation").length;
-  const urgentJobs = initialOrders.filter(o => o.urgent && o.stage !== "Completed" && o.stage !== "Closed").length;
   const completedJobs = initialOrders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
 
   const filteredOrders = initialOrders.filter(order => {
@@ -71,7 +69,7 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* Active Jobs Card */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
           <div className="flex justify-between items-start mb-4">
@@ -84,20 +82,6 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
           </div>
           <div className="text-3xl font-black text-slate-800 mb-1">{activeJobs}</div>
           <p className="text-xs text-slate-500 font-semibold">Orders in production or ready for installation</p>
-        </div>
-
-        {/* Urgent Jobs Card */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200">
-          <div className="flex justify-between items-start mb-4">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Urgent Priority
-            </span>
-            <div className="w-8 height-8 bg-amber-50 rounded-lg flex items-center justify-center">
-              <AlertTriangle size={16} className="text-amber-600" />
-            </div>
-          </div>
-          <div className="text-3xl font-black text-slate-800 mb-1">{urgentJobs}</div>
-          <p className="text-xs text-slate-500 font-semibold">High priority workshop fabrication</p>
         </div>
 
         {/* Completed Jobs Card */}
@@ -156,7 +140,6 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Project Name</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Customer</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Current Stage</th>
-                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Priority</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date Initiated</th>
                 <th className="text-right py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Action</th>
               </tr>
@@ -193,18 +176,7 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
                         </span>
                       </td>
 
-                      {/* Priority */}
-                      <td className="py-4 px-6">
-                        {order.urgent ? (
-                          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-black rounded-md bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider">
-                            Urgent
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-50 text-slate-500 border border-slate-200 uppercase tracking-wider">
-                            Normal
-                          </span>
-                        )}
-                      </td>
+
 
                       {/* Date Created */}
                       <td className="py-4 px-6 text-sm text-slate-500 font-medium">
@@ -230,7 +202,7 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-sm font-semibold text-slate-400">
+                  <td colSpan={6} className="py-12 text-center text-sm font-semibold text-slate-400">
                     No production-ready fabrication orders found.
                   </td>
                 </tr>

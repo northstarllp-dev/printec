@@ -166,13 +166,11 @@ export default async function OrderDetailPage({
     customerId: orderData.customer_id,
     customerName: orderData.customer_name,
     stage: orderData.stage,
-                productType: orderData.product_type,
+    productType: orderData.product_type,
     requirements: orderData.requirements,
-        urgent: Boolean(orderData.urgent),
     assignedEmployees: orderData.assigned_employees || [],
     dateCreated: orderData.date_created,
-    deadlineStatus: orderData.deadline_status,
-        versionHistory: orderData.version_history || [],
+    versionHistory: orderData.version_history || [],
     chatHistory: orderData.chat_history || [],
     siteVisitDetails: mapSiteVisitFromDb(
       Array.isArray(orderData.site_visits)

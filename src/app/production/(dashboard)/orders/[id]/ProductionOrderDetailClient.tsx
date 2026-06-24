@@ -122,11 +122,7 @@ export function ProductionOrderDetailClient({
             <h1 className="text-2xl font-black text-slate-900 tracking-tight">
               {order.projectName}
             </h1>
-            {order.urgent && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black rounded-md bg-rose-50 text-rose-700 border border-rose-200 uppercase tracking-wider animate-pulse">
-                <AlertOctagon size={10} /> Urgent
-              </span>
-            )}
+
           </div>
           <p className="text-xs text-slate-500 font-semibold">
             Status: <span className="text-blue-600 font-bold">{order.stage}</span>

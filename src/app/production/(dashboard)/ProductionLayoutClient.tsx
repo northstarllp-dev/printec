@@ -50,14 +50,6 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
       time: "2 hours ago",
       type: "success",
       read: false
-    },
-    {
-      id: "NOT-P2",
-      title: "Urgent Order Alert",
-      message: "Order Neon Window Signage is marked as urgent. Check layout specifications.",
-      time: "5 hours ago",
-      type: "warning",
-      read: false
     }
   ]);
 

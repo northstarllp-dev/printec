@@ -39,10 +39,8 @@ interface Order {
   notes: string;
   productType?: string;
   requirements?: string;
-  urgent: boolean;
   assignedEmployees: string[];
   dateCreated: string;
-  deadlineStatus: string;
   imageMockup: string;
   versionHistory: any[];
   chatHistory: any[];

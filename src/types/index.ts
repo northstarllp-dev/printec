@@ -235,10 +235,8 @@ export interface Order {
   stage: PipelineStage;
   productType?: string;
   requirements?: string;
-  urgent: boolean;
   assignedEmployees: string[];
   dateCreated: string;
-  deadlineStatus: "Missed Measurement" | "On Track" | "Delayed" | "Action Required" | "None";
   versionHistory: VersionItem[];
   chatHistory: ChatMessage[];
   siteVisitDetails?: SiteVisitDetails;

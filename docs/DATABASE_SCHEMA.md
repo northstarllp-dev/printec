@@ -147,18 +147,122 @@
 | `project_name` | `text` | NO | — | |
 | `stage` | `text` | NO | — | Pipeline stage |
 | `health` | `text` | YES | `'Active'` | `Active` / `Lost` / `Completed` |
-| `stage_status` | `text` | YES | `'Normal'` | |
-| `deadline_status` | `text` | YES | `'On Track'` | |
-| `date_created` | `timestamptz` | YES | `now()` | |
-| `urgent` | `boolean` | YES | `false` | |
-| `version_history` | `jsonb` | YES | `'[]'` | |
-| `chat_history` | `jsonb` | YES | `'[]'` | |
-| `production_details` | `jsonb` | YES | null | |
-| `installation_details` | `jsonb` | YES | null | |
-| `advance_invoice_details` | `jsonb` | YES | null | |
-| `payment_history` | `jsonb` | YES | `'[]'` | |
-| `requirements` | `text` | YES | null | |
-| `product_type` | `text` | YES | null | |
+| `lost_reason` | `text` | YES | — | Reason if health = Lost |
+| `stage_status` | `text` | YES | `'Normal'` | Stage health indicator |
+| `dimensions` | `text` | YES | — | Overall dimensions notes |
+| `notes` | `text` | YES | — | General notes |
+| `stage_admin_notes` | `text` | YES | — | Admin-only notes per stage |
+| `image_mockup` | `text` | YES | — | URL/path to mockup image |
+| `budget` | `numeric` | YES | `0` | Budget amount |
+| `deposit_paid` | `numeric` | YES | `0` | Deposit received |
+| `date_created` | `timestamptz` | YES | `now()` | Order creation timestamp |
+
+#### Assignment Arrays
+
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| `assigned_employees` | `uuid[]` | `'{}'` | General assignees |
+| `assigned_designers` | `uuid[]` | `'{}'` | Designer assignees |
+| `assigned_marketers` | `uuid[]` | `'{}'` | Marketer assignees |
+
+#### JSONB Stage Details
+
+| Column | Type | Default | Purpose |
+|--------|------|---------|---------|
+| `quote_details` | `jsonb` | — | Quotation: items[], subtotal, tax, discount, grandTotal |
+| `design_details` | `jsonb` | — | Design stage artefacts |
+| `production_details` | `jsonb` | — | Production tracking |
+| `installation_details` | `jsonb` | — | Installation tracking |
+
+#### Activity Tracking
+
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| `version_history` | `jsonb` | `'[]'` | Stage progression log: `[{version, date, notes}]` |
+| `chat_history` | `jsonb` | `'[]'` | Inline activity feed: `[{id, time, sender, message}]` |
+
+#### Pipeline Stages (observed values)
+
+```
+Site Visit Pending → Site Visit Scheduled → Site Visit Completed
+→ Quotation In Progress → Quotation Sent → Quotation Negotiation
+→ Quotation Approved → Design In Progress
+```
+
+#### quote_details Structure
+
+```jsonc
+{
+  "status": "Approved",   // optional
+  "tax": 1176,
+  "items": [{
+    "id": "843610b3-...",
+    "gstRate": 12,
+    "quantity": 1,
+    "totalSqFt": 98,
+    "unitPrice": 9800,
+    "costPerSqFt": 100,
+    "description": "Acrylic sheet"
+  }],
+  "discount": 100,
+  "subtotal": 9800,
+  "grandTotal": 10876
+}
+```
+
+#### version_history Structure
+
+```jsonc
+[
+  {
+    "version": "v4.0",
+    "date": "17/6/2026",
+    "notes": "Admin approved stage progression from \"Quotation Approved\" to \"Design In Progress\"."
+  }
+  // ... more entries, oldest first
+]
+```
+
+#### chat_history Structure
+
+```jsonc
+[
+  {
+    "id": "1",                    // or "1781626079270" (timestamp), or "sys-1781688031390"
+    "time": "Just now",           // or "02:50 pm", "11:15 AM"
+    "sender": "System",           // or "Admin", staff name
+    "message": "Order created successfully from Enquiry.",
+    "verified": true              // optional, on portal links
+  }
+  // ... more entries
+]
+```
+
+**Current Data (7 rows):**
+
+| order_id | project_name | customer_name | stage | health |
+|----------|-------------|---------------|-------|--------|
+| `A010-001` | Sign board for ff21 | ff21 | Design In Progress | Active |
+| `A011-001` | Sign board for Northstar LLP | Northstar LLP | Quotation Sent | Active |
+| `A012-001` | New Project for Northstar LLP | Northstar LLP | Quotation Approved | Active |
+| `A012-002` | New Project for hari | Northstar LLP | Site Visit Pending | Active |
+| `A012-003` | ACP neon sign for Hari factories | Northstar LLP | Site Visit Pending | Active |
+| `A013-001` | New Project for Prasad | Prasad | Site Visit Pending | Active |
+| `A014-001` | New Project for sathya | sathya | Site Visit Pending | Active |
+
+**Referenced by:** `enquiries.order_id`, `audit_logs.order_id` (UUID FK); `order_messages.order_id`, `order_files.order_id`, `portal_access_tokens.order_id` (TEXT, not FK)
+
+**RLS Policies:**
+- `Enable all access for authenticated users` — USING/WITH CHECK both `true` for authenticated
+- `Enable update access for anon users` — USING/WITH CHECK both `true` for anonymous (⚠️ security concern)
+
+**Trigger:** `generate_order_id_field()` — auto-generates `order_id` on insert
+
+---
+
+### 5. enquiries
+
+Incoming leads. Created from contact forms, WhatsApp, phone calls. When converted, a Customer and Order are created and linked.
 
 ### 5. order_assignments
 | Column | Type | Nullable | Default | Notes |
