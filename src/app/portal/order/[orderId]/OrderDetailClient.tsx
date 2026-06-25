@@ -22,11 +22,13 @@ import {
   X,
   Package,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  UploadCloud
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { DesignTab } from "../../components/DesignTab";
 
 interface Customer {
   id: string;
@@ -633,18 +635,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
           />
         )}
         {activeTab === "design" && (
-          <DesignTab
-            order={order}
-            zoomLevel={zoomLevel}
-            setZoomLevel={setZoomLevel}
-            showDesignDeclineInput={showDesignDeclineInput}
-            setShowDesignDeclineInput={setShowDesignDeclineInput}
-            designFeedback={designFeedback}
-            setDesignFeedback={setDesignFeedback}
-            updatingStatus={updatingStatus}
-            handleApproveDesign={handleApproveDesign}
-            handleDeclineDesign={handleDeclineDesign}
-          />
+          <DesignTab order={order} customer={customer} />
         )}
         {activeTab === "billing" && <BillingTab order={order} />}
         {activeTab === "chat" && <ChatTab order={order} />}
@@ -1025,122 +1016,7 @@ function QuotationTab({
   );
 }
 
-interface DesignTabProps {
-  order: Order;
-  zoomLevel: number;
-  setZoomLevel: React.Dispatch<React.SetStateAction<number>>;
-  showDesignDeclineInput: boolean;
-  setShowDesignDeclineInput: (show: boolean) => void;
-  designFeedback: string;
-  setDesignFeedback: (val: string) => void;
-  updatingStatus: string | null;
-  handleApproveDesign: () => Promise<void>;
-  handleDeclineDesign: () => Promise<void>;
-}
 
-function DesignTab({
-  order,
-  zoomLevel,
-  setZoomLevel,
-  showDesignDeclineInput,
-  setShowDesignDeclineInput,
-  designFeedback,
-  setDesignFeedback,
-  updatingStatus,
-  handleApproveDesign,
-  handleDeclineDesign,
-}: DesignTabProps) {
-  const dd = order.designDetails || {};
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-200 p-8 shadow-sm">
-        <h2 className="text-2xl font-extrabold text-gray-900 mb-6">Design Preview</h2>
-
-        <div className="aspect-video bg-gray-100 rounded-xl flex items-center justify-center mb-6 relative overflow-hidden bg-[#0b1c30]">
-          {dd.proofUrl ? (
-            <>
-              <img
-                src={dd.proofUrl}
-                alt="Design Proof"
-                className="max-h-64 object-contain transition-all"
-                style={{ transform: `scale(${zoomLevel / 100})` }}
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = "https://images.unsplash.com/photo-1542744094-3a31f103e35f?w=400&auto=format&fit=crop";
-                }}
-              />
-              <div className="absolute bottom-3 right-3 bg-white/90 border border-slate-200 rounded-lg p-1.5 flex items-center gap-2">
-                <button onClick={() => setZoomLevel(v => Math.max(v - 20, 50))} className="p-0.5 text-slate-500 hover:text-slate-800"><ZoomOut size={12} /></button>
-                <span className="text-[10px] font-mono font-black">{zoomLevel}%</span>
-                <button onClick={() => setZoomLevel(v => Math.min(v + 20, 200))} className="p-0.5 text-slate-500 hover:text-slate-800"><ZoomIn size={12} /></button>
-              </div>
-            </>
-          ) : (
-            <div className="text-center bg-white p-10 flex flex-col items-center">
-              <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Layout size={48} className="text-gray-400" />
-              </div>
-              <p className="text-gray-500">Design proof will appear here once quotation is approved</p>
-            </div>
-          )}
-        </div>
-
-        {dd.proofUrl && dd.status !== "Approved" && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-            {showDesignDeclineInput ? (
-              <div className="space-y-2">
-                <textarea
-                  rows={3}
-                  value={designFeedback}
-                  onChange={(e) => setDesignFeedback(e.target.value)}
-                  placeholder="Design revision notes..."
-                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-red-500 bg-white"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowDesignDeclineInput(false)}
-                    className="px-3 py-1.5 border border-slate-200 text-slate-500 rounded-lg text-xs font-bold bg-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeclineDesign}
-                    disabled={!designFeedback.trim() || !!updatingStatus}
-                    className="px-3.5 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold disabled:opacity-50"
-                  >
-                    Send Notes
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowDesignDeclineInput(true)}
-                  className="px-4 py-2 border border-slate-300 bg-white text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-50"
-                >
-                  Request Edit
-                </button>
-                <button
-                  onClick={handleApproveDesign}
-                  disabled={!!updatingStatus}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {updatingStatus === "design-approve" ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} Approve Design
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {dd.status === "Approved" && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
-            <Check size={16} className="text-emerald-600 stroke-[2.5]" />
-            <span className="text-sm font-bold text-emerald-700">Design Approved — Moving to Fabrication</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function BillingTab({ order }: { order: Order }) {
   return (

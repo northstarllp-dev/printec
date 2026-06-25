@@ -211,9 +211,42 @@ export interface QuoteDetails {
   quotationId?: string;        // e.g. "QT-001"
 }
 
-export interface DesignDetails {
+export interface DesignResource {
+  id: string;
+  url: string;
+  name: string;
+  type: "link" | "file";
+  uploadedBy: "Customer" | "Staff";
+  createdAt: string;
+}
+
+export interface DesignComment {
+  id: string;
+  x: number; // percentage X position on the canvas
+  y: number; // percentage Y position on the canvas
+  content: string;
+  author: string;
+  createdAt: string;
+}
+
+export interface DesignVersion {
+  id: string;
+  versionNumber: number;
   proofUrl: string;
-  status: "Draft" | "Pending Approval" | "Approved";
+  fileName: string;
+  aiFileUrl?: string; 
+  status: "Draft" | "Pending Admin" | "Sent to Customer" | "Changes Requested" | "Approved";
+  comments: DesignComment[];
+  createdAt: string;
+}
+
+export interface DesignDetails {
+  proofUrl?: string; // Legacy
+  status?: string; // Legacy
+  resources?: DesignResource[];
+  versions?: DesignVersion[];
+  currentVersion?: number;
+  paymentVerified?: boolean;
 }
 
 export interface ProductionDetails {
