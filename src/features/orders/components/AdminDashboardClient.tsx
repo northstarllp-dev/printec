@@ -16,6 +16,9 @@ import {
   Eye,
   MoreHorizontal,
   AlertTriangle,
+  MapPin,
+  TrendingUp,
+  AlertCircle,
 } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "@/features/enquiries/components/AddEnquiryModal";
 import { createEnquiry } from "@/features/enquiries/actions/enquiryActions";
@@ -84,17 +87,20 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [selectedPipelineStage, setSelectedPipelineStage] = useState<string | null>(null);
+  const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
 
-  /* Stats */
+  /* Stats calculations */
   const totalOrders = orders.length;
-  const completedOrders = orders.filter(
-    (o) => o.stage === "Completed" || o.stage === "Closed"
-  ).length;
-  const inProduction = orders.filter(
-    (o) => o.stage === "Production" || o.stage === "Ready For Installation"
-  ).length;
-  const installations = orders.filter((o) => o.stage === "Installation Scheduled").length;
+  const completedOrders = orders.filter((o) => o.stage === "Completed" || o.stage === "Closed").length;
+  const activeOrders = orders.filter((o) => o.stage !== "Completed" && o.stage !== "Closed").length;
   const newEnquiries = enquiries.filter((e) => e.status === "Pending" || e.status === "New").length;
+  
+  const pendingApprovals = orders.filter((o) => o.stageStatus && o.stageStatus !== "Normal").length;
+  const siteVisitsPending = orders.filter((o) =>
+    (o.stage === "Site Visit Pending" || o.stage === "Site Visit Scheduled" || o.stage === "Site Visit Completed") &&
+    !o.siteVisitDetails?.auditDate
+  ).length;
+  const ordersOnHold = orders.filter((o) => o.health === "On Hold").length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
 
   /* Stat card config */
@@ -102,9 +108,8 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
     {
       label: "Total Orders",
       value: totalOrders,
-      sub: `${orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length} active`,
-      change: "+12% vs last month",
-      up: true,
+      sub: "All time",
+      filterKey: "total",
       icon: ShoppingCart,
       iconBg: "var(--secondary-container)",
       iconColor: "var(--color-secondary)",
@@ -112,70 +117,62 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
     {
       label: "Completed",
       value: completedOrders,
-      sub: "This month",
-      change: "+8% vs last month",
-      up: true,
+      sub: "All time",
+      filterKey: "completed",
       icon: CheckCircle2,
       iconBg: "#F0FDF4",
       iconColor: "#22C55E",
     },
     {
-      label: "Revenue",
-      value: "₹4,87,50,000",
-      sub: `Outstanding: ₹23,40,000`,
-      change: "+15% vs last month",
-      up: true,
-      icon: DollarSign,
-      iconBg: "#F0FDF4",
-      iconColor: "#16A34A",
-      large: true,
+      label: "Active Orders",
+      value: activeOrders,
+      sub: "Currently in pipeline",
+      filterKey: "active",
+      icon: TrendingUp,
+      iconBg: "#EFF6FF",
+      iconColor: "#3B82F6",
     },
     {
       label: "New Enquiries",
-      value: newEnquiries || 15,
-      sub: "8 visits scheduled",
-      change: "+3% vs last month",
-      up: true,
+      value: newEnquiries,
+      sub: "Pending action",
+      filterKey: "enquiries",
       icon: MessageSquare,
       iconBg: "var(--secondary-container)",
       iconColor: "var(--color-secondary)",
     },
     {
-      label: "In Production",
-      value: inProduction || 2,
-      sub: "1 in QC",
-      change: "",
-      up: null,
-      icon: Factory,
-      iconBg: "#EFF6FF",
-      iconColor: "#3B82F6",
+      label: "Pending Approvals",
+      value: pendingApprovals,
+      sub: "Requires admin review",
+      filterKey: "approvals",
+      icon: AlertTriangle,
+      iconBg: "#FFFBEB",
+      iconColor: "#D97706",
     },
     {
-      label: "Installations",
-      value: installations || 1,
-      sub: "Scheduled",
-      change: "",
-      up: null,
-      icon: Wrench,
-      iconBg: "#ECFEFF",
-      iconColor: "#0E7490",
+      label: "Site Visits Pending",
+      value: siteVisitsPending,
+      sub: "Customer has not scheduled site visit",
+      filterKey: "sitevisit",
+      icon: MapPin,
+      iconBg: "#EEF2FF",
+      iconColor: "#4F46E5",
     },
     {
-      label: "Open Tickets",
-      value: 7,
-      sub: "Support requests",
-      change: "",
-      up: null,
-      icon: LifeBuoy,
-      iconBg: "#FFF7ED",
-      iconColor: "#EA580C",
+      label: "Orders On Hold",
+      value: ordersOnHold,
+      sub: "Currently paused",
+      filterKey: "onhold",
+      icon: AlertCircle,
+      iconBg: "#FEF2F2",
+      iconColor: "#DC2626",
     },
     {
       label: "Lost Orders",
-      value: lostOrders || 6,
-      sub: "This quarter",
-      change: "",
-      up: null,
+      value: lostOrders,
+      sub: "All time",
+      filterKey: "lost",
       icon: XCircle,
       iconBg: "#FEF2F2",
       iconColor: "#DC2626",
@@ -192,13 +189,29 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
     };
   });
 
-  /* Recent Orders (filtered or last 5) */
-  const recentOrders = selectedPipelineStage
-    ? orders.filter((o) => {
-        const group = PIPELINE_STAGE_GROUPS[selectedPipelineStage] || [selectedPipelineStage];
-        return group.includes(o.stage);
-      })
-    : orders.slice(0, 5);
+  /* Table filter logic based on selected KPI or pipeline stage */
+  const getFilteredRows = () => {
+    if (selectedPipelineStage) {
+      const group = PIPELINE_STAGE_GROUPS[selectedPipelineStage] || [selectedPipelineStage];
+      return { type: "orders" as const, data: orders.filter((o) => group.includes(o.stage)) };
+    }
+    if (selectedKpi === "total")      return { type: "orders" as const, data: orders };
+    if (selectedKpi === "completed")  return { type: "orders" as const, data: orders.filter(o => o.stage === "Completed" || o.stage === "Closed") };
+    if (selectedKpi === "active")     return { type: "orders" as const, data: orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed") };
+    if (selectedKpi === "enquiries")  return { type: "enquiries" as const, data: enquiries.filter(e => e.status === "Pending" || e.status === "New") };
+    if (selectedKpi === "approvals")  return { type: "orders" as const, data: orders.filter(o => o.stageStatus && o.stageStatus !== "Normal") };
+    if (selectedKpi === "sitevisit")  return { type: "orders" as const, data: orders.filter(o => (o.stage === "Site Visit Pending" || o.stage === "Site Visit Scheduled" || o.stage === "Site Visit Completed") && !o.siteVisitDetails?.auditDate) };
+    if (selectedKpi === "onhold")     return { type: "orders" as const, data: orders.filter(o => o.health === "On Hold") };
+    if (selectedKpi === "lost")       return { type: "orders" as const, data: orders.filter(o => o.health === "Lost") };
+    return { type: "orders" as const, data: orders.slice(0, 5) };
+  };
+
+  const filteredRows = getFilteredRows();
+  const activeFilterLabel = selectedKpi
+    ? STATS.find(s => s.filterKey === selectedKpi)?.label
+    : selectedPipelineStage
+    ? STAGE_LABEL[selectedPipelineStage]?.label
+    : null;
 
   /* Pending Tickets — mock data */
   const pendingTickets = [
@@ -253,37 +266,46 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", marginBottom: "28px" }}>
         {STATS.map((stat, i) => {
           const Icon = stat.icon;
+          const isActive = selectedKpi === stat.filterKey;
           return (
             <div
               key={i}
-              style={{
-                background: "white",
-                border: "1px solid #E2E8F0",
-                borderRadius: "12px",
-                padding: "20px",
-                cursor: "default",
-                transition: "box-shadow 0.15s",
+              onClick={() => {
+                setSelectedKpi(isActive ? null : stat.filterKey);
+                setSelectedPipelineStage(null);
               }}
-              onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.06)")}
-              onMouseLeave={e => (e.currentTarget.style.boxShadow = "none")}
+              style={{
+                background: isActive ? stat.iconBg : "white",
+                border: isActive ? `2px solid ${stat.iconColor}` : "1px solid #E2E8F0",
+                borderRadius: "12px",
+                padding: isActive ? "19px" : "20px",
+                cursor: "pointer",
+                transition: "all 0.15s",
+                userSelect: "none",
+              }}
+              onMouseEnter={e => {
+                if (!isActive) {
+                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                }
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.boxShadow = "none";
+                e.currentTarget.style.transform = "translateY(0)";
+              }}
             >
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "12px" }}>
-                <p style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <p style={{ margin: 0, fontSize: "11px", fontWeight: "700", color: isActive ? stat.iconColor : "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   {stat.label}
                 </p>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: stat.iconBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: isActive ? "white" : stat.iconBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <Icon size={15} style={{ color: stat.iconColor }} />
                 </div>
               </div>
-              <div style={{ fontSize: stat.large ? "22px" : "28px", fontWeight: "800", color: "#0F172A", marginBottom: "6px", lineHeight: 1 }}>
+              <div style={{ fontSize: "28px", fontWeight: "800", color: isActive ? stat.iconColor : "#0F172A", marginBottom: "6px", lineHeight: 1 }}>
                 {stat.value}
               </div>
-              <div style={{ fontSize: "11px", color: "#64748B" }}>{stat.sub}</div>
-              {stat.change && (
-                <div style={{ fontSize: "10px", fontWeight: "700", color: stat.up ? "#16A34A" : "#DC2626", marginTop: "6px" }}>
-                  {stat.up ? "↑" : "↓"} {stat.change}
-                </div>
-              )}
+              <div style={{ fontSize: "11px", color: isActive ? stat.iconColor : "#64748B", opacity: isActive ? 0.8 : 1 }}>{stat.sub}</div>
             </div>
           );
         })}
@@ -292,14 +314,14 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
       {/* ── Bottom two columns: Recent Orders + Pending Tickets ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "20px", marginBottom: "24px" }}>
 
-        {/* Recent Orders */}
+        {/* Recent Orders / Enquiries Table */}
         <div style={{ background: "white", border: "1px solid #E2E8F0", borderRadius: "12px", overflow: "hidden" }}>
           <div style={{ padding: "18px 24px", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <h2 style={{ margin: 0, fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>
-                {selectedPipelineStage ? "Filtered Orders" : "Recent Orders"}
+                {activeFilterLabel ? `${activeFilterLabel}` : "Recent Orders"}
               </h2>
-              {selectedPipelineStage && (
+              {activeFilterLabel && (
                 <span
                   style={{
                     fontSize: "11px",
@@ -314,9 +336,9 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
                     gap: "6px",
                   }}
                 >
-                  Stage: {STAGE_LABEL[selectedPipelineStage]?.label || selectedPipelineStage}
+                  {filteredRows.data.length} result{filteredRows.data.length !== 1 ? "s" : ""}
                   <button
-                    onClick={() => setSelectedPipelineStage(null)}
+                    onClick={() => { setSelectedKpi(null); setSelectedPipelineStage(null); }}
                     style={{
                       background: "none",
                       border: "none",
@@ -336,7 +358,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
               )}
             </div>
             <button
-              onClick={() => router.push("/admin/orders")}
+              onClick={() => router.push(filteredRows.type === "enquiries" ? "/admin/enquiries" : "/admin/orders")}
               style={{ fontSize: "12px", fontWeight: "700", color: "var(--color-primary)", background: "none", border: "none", cursor: "pointer" }}
             >
               View All
@@ -344,96 +366,105 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
           </div>
           <div
             className="custom-scrollbar"
-            style={{
-              maxHeight: "360px",
-              height: "360px",
-              overflowY: "auto",
-            }}
+            style={{ maxHeight: "360px", height: "360px", overflowY: "auto" }}
           >
-            {recentOrders.map((order, i) => {
-              const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, dot: "#94A3B8" };
-
-              return (
-                <div
-                  key={order.id}
-                  style={{
-                    display: "flex", alignItems: "center",
-                    padding: "14px 24px",
-                    borderBottom: i < recentOrders.length - 1 ? "1px solid #F1F5F9" : "none",
-                    gap: "12px",
-                    cursor: "pointer",
-                    transition: "background 0.15s",
-                  }}
-                  onClick={() => router.push(`/admin/orders/${order.orderId || order.id}`)}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#F8FAFC")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                >
-                  {/* Order Code + Customer */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>
-                        {order.orderCode}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
-                          padding: "2px 6px", borderRadius: "4px",
-                          background: order.health === "Active" ? "#F0FDF4" : "#FEF2F2",
-                          color: order.health === "Active" ? "#16A34A" : "#DC2626",
-                          border: `1px solid ${order.health === "Active" ? "#BBF7D0" : "#FECACA"}`,
-                        }}
-                      >
-                        {order.health || "active"}
-                      </span>
+            {filteredRows.type === "enquiries" ? (
+              /* Enquiries view */
+              filteredRows.data.length === 0 ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "#94A3B8", fontSize: "13px" }}>No enquiries found.</div>
+              ) : (
+                filteredRows.data.map((enq: any, i: number) => (
+                  <div
+                    key={enq.id}
+                    style={{
+                      display: "flex", alignItems: "center",
+                      padding: "14px 24px",
+                      borderBottom: i < filteredRows.data.length - 1 ? "1px solid #F1F5F9" : "none",
+                      gap: "12px", cursor: "pointer", transition: "background 0.15s",
+                    }}
+                    onClick={() => router.push("/admin/enquiries")}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#F8FAFC")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>{enq.lead_name || enq.leadName}</div>
+                      <div style={{ fontSize: "12px", color: "#64748B", marginTop: "2px" }}>{enq.phone} • {enq.source}</div>
                     </div>
-                    <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {order.customerName || order.projectName}
-                    </p>
+                    <span style={{
+                      fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
+                      padding: "2px 8px", borderRadius: "4px",
+                      background: "#FFFBEB", color: "#D97706", border: "1px solid #FDE68A",
+                    }}>{enq.status}</span>
+                    <span style={{ fontSize: "11px", color: "#94A3B8" }}>{enq.enquire_id || enq.enquireId}</span>
                   </div>
-
-
-
-                  {/* Stage */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.dot, flexShrink: 0 }} />
-                    <span style={{ fontSize: "12px", color: "#475569", fontWeight: "600", whiteSpace: "nowrap" }}>
-                      {stageInfo.label}
-                    </span>
-                  </div>
-
-
-
-                  {/* Dots menu */}
-                  <div style={{ position: "relative" }}>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === order.id ? null : order.id); }}
-                      style={{ padding: "4px", background: "none", border: "none", cursor: "pointer", color: "#94A3B8", borderRadius: "4px" }}
+                ))
+              )
+            ) : (
+              /* Orders view */
+              filteredRows.data.length === 0 ? (
+                <div style={{ padding: "40px", textAlign: "center", color: "#94A3B8", fontSize: "13px" }}>No orders found.</div>
+              ) : (
+                filteredRows.data.map((order: any, i: number) => {
+                  const stageInfo = STAGE_LABEL[order.stage] || { label: order.stage, dot: "#94A3B8" };
+                  return (
+                    <div
+                      key={order.id}
+                      style={{
+                        display: "flex", alignItems: "center",
+                        padding: "14px 24px",
+                        borderBottom: i < filteredRows.data.length - 1 ? "1px solid #F1F5F9" : "none",
+                        gap: "12px", cursor: "pointer", transition: "background 0.15s",
+                      }}
+                      onClick={() => router.push(`/admin/orders/${order.orderId || order.id}`)}
+                      onMouseEnter={e => (e.currentTarget.style.background = "#F8FAFC")}
+                      onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                     >
-                      <MoreHorizontal size={16} />
-                    </button>
-                    {openMenuId === order.id && (
-                      <>
-                        <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setOpenMenuId(null)} />
-                        <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", zIndex: 50, minWidth: 140, overflow: "hidden" }}>
-                          <button
-                            onClick={() => { setOpenMenuId(null); router.push(`/admin/orders/${order.orderId || order.id}`); }}
-                            style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
-                            onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
-                            onMouseLeave={e => e.currentTarget.style.background = "none"}
-                          >
-                            <Eye size={13} /> View Order
-                          </button>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: "700", color: "#0F172A" }}>{order.orderCode}</span>
+                          <span style={{
+                            fontSize: "9px", fontWeight: "800", textTransform: "uppercase",
+                            padding: "2px 6px", borderRadius: "4px",
+                            background: order.health === "Active" ? "#F0FDF4" : "#FEF2F2",
+                            color: order.health === "Active" ? "#16A34A" : "#DC2626",
+                            border: `1px solid ${order.health === "Active" ? "#BBF7D0" : "#FECACA"}`,
+                          }}>{order.health || "Active"}</span>
                         </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {recentOrders.length === 0 && (
-              <div style={{ padding: "40px", textAlign: "center", color: "#94A3B8", fontSize: "13px" }}>
-                No orders yet.
-              </div>
+                        <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#64748B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {order.customerName || order.projectName}
+                        </p>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: stageInfo.dot, flexShrink: 0 }} />
+                        <span style={{ fontSize: "12px", color: "#475569", fontWeight: "600", whiteSpace: "nowrap" }}>{stageInfo.label}</span>
+                      </div>
+                      <div style={{ position: "relative" }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === order.id ? null : order.id); }}
+                          style={{ padding: "4px", background: "none", border: "none", cursor: "pointer", color: "#94A3B8", borderRadius: "4px" }}
+                        >
+                          <MoreHorizontal size={16} />
+                        </button>
+                        {openMenuId === order.id && (
+                          <>
+                            <div style={{ position: "fixed", inset: 0, zIndex: 49 }} onClick={() => setOpenMenuId(null)} />
+                            <div style={{ position: "absolute", right: 0, top: "calc(100% + 4px)", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", zIndex: 50, minWidth: 140, overflow: "hidden" }}>
+                              <button
+                                onClick={() => { setOpenMenuId(null); router.push(`/admin/orders/${order.orderId || order.id}`); }}
+                                style={{ width: "100%", padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", fontSize: "12px", fontWeight: "600", color: "#0F172A", cursor: "pointer", textAlign: "left" }}
+                                onMouseEnter={e => e.currentTarget.style.background = "#F8FAFC"}
+                                onMouseLeave={e => e.currentTarget.style.background = "none"}
+                              >
+                                <Eye size={13} /> View Order
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )
             )}
           </div>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2 } from "lucide-react";
+import { Search, Filter, Plus, MoreVertical, Users, Star, Clock, AlertCircle, Edit, Trash2, Briefcase, BarChart2 } from "lucide-react";
 import { Employee } from "@/types";
 import { EmployeeModal } from "./EmployeeModal";
 import { 
@@ -21,10 +21,6 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const [actionDropdownId, setActionDropdownId] = useState<string | null>(null);
 
-  const handleAddEmployee = () => {
-    setEditingEmployee(undefined);
-    setIsModalOpen(true);
-  };
 
   const handleEditEmployee = (emp: Employee) => {
     setEditingEmployee(emp);
@@ -58,13 +54,15 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
         if (result && result[0]) {
           const mapped = {
             id: result[0].id,
+            employeeId: result[0].employee_id,
             name: result[0].name,
             role: result[0].staff_role || "",
             phone: result[0].phone || "",
             email: result[0].email || "",
             status: result[0].status || "Active",
             rating: Number(result[0].rating) || 5.0,
-            workload: Number(result[0].workload) || 0
+            workload: Number(result[0].workload) || 0,
+            jobsAssigned: editingEmployee ? editingEmployee.jobsAssigned : 0
           };
           setEmployees(prev => prev.map(e => e.id === editingEmployee.id ? mapped : e));
         }
@@ -79,13 +77,15 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
         if (result && result[0]) {
           const mapped = {
             id: result[0].id,
+            employeeId: result[0].employee_id,
             name: result[0].name,
             role: result[0].staff_role || "",
             phone: result[0].phone || "",
             email: result[0].email || "",
             status: result[0].status || "Active",
             rating: Number(result[0].rating) || 5.0,
-            workload: Number(result[0].workload) || 0
+            workload: Number(result[0].workload) || 0,
+            jobsAssigned: 0
           };
           setEmployees(prev => [mapped, ...prev]);
         }
@@ -100,8 +100,8 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
   const totalEmployees = employees.length;
   const activeEmployees = employees.length;
   const activePercentage = totalEmployees > 0 ? Math.round((activeEmployees / totalEmployees) * 100) : 0;
-  const avgRating = "N/A";
-  const avgWorkload = "N/A";
+  const totalJobsAssigned = employees.reduce((sum, emp) => sum + (emp.jobsAssigned || 0), 0);
+  const avgJobsPerEmployee = totalEmployees > 0 ? (totalJobsAssigned / totalEmployees).toFixed(1) : "0";
 
   const stats = [
     {
@@ -119,17 +119,17 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
       color: "var(--color-primary)",
     },
     {
-      label: "AVG. RATING",
-      value: `${avgRating}/5`,
-      change: "All time",
-      icon: Star,
+      label: "TOTAL JOBS",
+      value: totalJobsAssigned.toString(),
+      change: "Currently assigned",
+      icon: Briefcase,
       color: "#f59e0b",
     },
     {
-      label: "AVG. WORKLOAD",
-      value: avgWorkload,
-      change: "Projects per employee",
-      icon: Clock,
+      label: "AVG JOBS / EMP",
+      value: avgJobsPerEmployee,
+      change: "Workload distribution",
+      icon: BarChart2,
       color: "#06b6d4",
     },
   ];
@@ -137,7 +137,8 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
   const filteredEmployees = employees.filter(emp => 
     emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     emp.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.id.toLowerCase().includes(searchTerm.toLowerCase())
+    emp.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (emp.employeeId && emp.employeeId.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -153,31 +154,6 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
               Monitor team members, assigned workloads, and performance ratings
             </p>
           </div>
-          <button
-            style={{
-              padding: "10px 16px",
-              background: "var(--color-primary)",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontSize: "13px",
-              fontWeight: "600",
-              color: "white",
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--color-primary-container)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "var(--color-primary)";
-            }}
-            onClick={handleAddEmployee}
-          >
-            <Plus size={16} /> Add Employee
-          </button>
         </div>
 
         {/* Stats Cards */}
@@ -225,7 +201,7 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
       </div>
 
       {/* Table Section */}
-      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+      <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible" }}>
         {/* Search & Filter Bar */}
         <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
           <div style={{ flex: 1, position: "relative" }}>
@@ -271,23 +247,29 @@ export function EmployeesViewNew({ initialEmployees }: EmployeesViewNewProps) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead style={{ position: "sticky", top: 0, background: "#f8fafc", zIndex: 10 }}>
               <tr style={{ borderBottom: "1px solid #e2e8f0" }}>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>EMPLOYEE ID</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", borderTopLeftRadius: "12px" }}>EMPLOYEE ID</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>NAME</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ROLE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>PHONE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>EMAIL ID</th>
-                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIONS</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>JOBS ASSIGNED</th>
+                <th style={{ padding: "14px 20px", textAlign: "center", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", borderTopRightRadius: "12px" }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {filteredEmployees.map((emp) => {
                 return (
                   <tr key={emp.id} style={{ borderBottom: "1px solid #e2e8f0", transition: "background 0.2s" }} onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
-                    <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b", fontWeight: "600" }}>{emp.id}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>{emp.employeeId || emp.id.substring(0, 8)}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", fontWeight: "600", color: "#0f172a" }}>{emp.name}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#64748b" }}>{emp.role}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{emp.phone}</td>
                     <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>{emp.email}</td>
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a", fontWeight: "600" }}>
+                      <span style={{ background: "#e0e7ff", color: "#4f46e5", padding: "4px 8px", borderRadius: "12px", fontSize: "12px" }}>
+                        {emp.jobsAssigned || 0}
+                      </span>
+                    </td>
                     <td style={{ padding: "16px 20px", textAlign: "center", position: "relative" }}>
                       <button 
                         onClick={() => setActionDropdownId(actionDropdownId === emp.id ? null : emp.id)}

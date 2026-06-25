@@ -69,6 +69,7 @@ export function OrdersManagementDashboard({
   const [orders, setOrders] = useState(initialOrders);
   const [stageFilter, setStageFilter] = useState("ALL");
   const [healthFilter, setHealthFilter] = useState("ALL");
+  const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
   
   const currentUserRole = userRole;
   const employeeName = currentEmployeeName;
@@ -98,9 +99,9 @@ export function OrdersManagementDashboard({
 
   // Calculations for Admin
   const activeOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed").length;
-  const websiteLeads = enquiries ? enquiries.filter(e => e.source === "Website").length : 0;
+  const unassignedOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0)).length;
   const pendingCalls = enquiries ? enquiries.filter(e => e.status === "Pending" && e.source === "Phone Call").length : 0;
-  const convertedLeads = enquiries ? enquiries.filter(e => e.status === "Converted").length : 0;
+  const completedOrders = orders.filter(o => o.stage === "Completed" || o.stage === "Closed").length;
 
   // Calculations for Staff
   const myActiveOrders = orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees.includes(employeeName) || o.assignedEmployees.includes(currentEmployeeId))).length;
@@ -111,52 +112,70 @@ export function OrdersManagementDashboard({
       label: "ASSIGNED TO ME",
       value: myActiveOrders.toString(),
       change: "Active projects in your queue",
+      filterKey: "myactive",
       icon: Briefcase,
-      color: "var(--color-secondary)", // Indigo
+      color: "var(--color-secondary)",
     },
     {
       label: "MY COMPLETED",
       value: myCompletedOrders.toString(),
       change: "All-time completed orders",
+      filterKey: "mycompleted",
       icon: CheckCircle,
-      color: "#22c55e", // Green (success only)
+      color: "#22c55e",
     },
   ] : [
     {
       label: "TOTAL ACTIVE",
       value: activeOrders.toString(),
       change: "Current orders in pipeline",
+      filterKey: "active",
       icon: TrendingUp,
       color: "var(--color-primary)",
     },
     {
-      label: "WEBSITE LEADS",
-      value: websiteLeads.toString(),
-      change: "All time",
-      icon: TrendingUp,
-      color: "var(--color-secondary)", // Indigo
+      label: "UNASSIGNED",
+      value: unassignedOrders.toString(),
+      change: "Needs team assignment",
+      filterKey: "unassigned",
+      icon: AlertTriangle,
+      color: "#ef4444",
     },
     {
       label: "PENDING CALLS",
       value: pendingCalls.toString(),
       change: "Immediate action req.",
+      filterKey: "pendingcalls",
       icon: AlertCircle,
-      color: "#F97316", // Orange
+      color: "#F97316",
     },
     {
-      label: "CONVERTED",
-      value: convertedLeads.toString(),
-      change: "Total converted enquiries",
-      icon: Clock,
-      color: "#22c55e", // Green (success only)
+      label: "COMPLETED",
+      value: completedOrders.toString(),
+      change: "All-time completed orders",
+      filterKey: "completed",
+      icon: CheckCircle,
+      color: "#22c55e",
     },
   ];
 
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = 
+  const getKpiFilteredOrders = () => {
+    if (selectedKpi === "active")       return orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed");
+    if (selectedKpi === "unassigned")   return orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (!o.assignedEmployees || o.assignedEmployees.length === 0));
+    if (selectedKpi === "pendingcalls") return orders.filter(o => enquiries?.find((e: any) => e.orderId === o.id && e.status === "Pending" && e.source === "Phone Call"));
+    if (selectedKpi === "completed")    return orders.filter(o => o.stage === "Completed" || o.stage === "Closed");
+    if (selectedKpi === "myactive")     return orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed" && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
+    if (selectedKpi === "mycompleted")  return orders.filter(o => (o.stage === "Completed" || o.stage === "Closed") && (o.assignedEmployees?.includes(employeeName) || o.assignedEmployees?.includes(currentEmployeeId)));
+    return null;
+  };
+
+  const kpiFilteredOrders = getKpiFilteredOrders();
+
+  const filteredOrders = (kpiFilteredOrders ?? orders).filter(order => {
+    const matchesSearch =
       order.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (order.orderCode || order.id).toLowerCase().includes(searchTerm.toLowerCase());
-      
+
     if (!matchesSearch) return false;
 
     if (stageFilter !== "ALL") {
@@ -170,7 +189,7 @@ export function OrdersManagementDashboard({
     }
     if (healthFilter !== "ALL" && (order.health || "Active") !== healthFilter) return false;
 
-    if (currentUserRole === "Employee") {
+    if (currentUserRole === "Employee" && !kpiFilteredOrders) {
       return order.assignedEmployees?.includes(employeeName) || order.assignedEmployees?.includes(currentEmployeeId);
     }
 
@@ -194,22 +213,27 @@ export function OrdersManagementDashboard({
 
         {/* Stats Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-          {stats.map((stat, idx) => {
+          {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
+            const isActive = selectedKpi === stat.filterKey;
             return (
               <div
                 key={idx}
+                onClick={() => setSelectedKpi(isActive ? null : stat.filterKey)}
                 style={{
-                  background: "white",
-                  border: "1px solid #e2e8f0",
+                  background: isActive ? `${stat.color}12` : "white",
+                  border: isActive ? `2px solid ${stat.color}` : "1px solid #e2e8f0",
                   borderRadius: "12px",
-                  padding: "20px",
-                  transition: "all 0.3s",
+                  padding: isActive ? "19px" : "20px",
+                  transition: "all 0.2s",
                   cursor: "pointer",
+                  userSelect: "none",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
-                  e.currentTarget.style.transform = "translateY(-2px)";
+                  if (!isActive) {
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                  }
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.boxShadow = "none";
@@ -217,18 +241,18 @@ export function OrdersManagementDashboard({
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: isActive ? stat.color : "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     {stat.label}
                   </span>
                   <div style={{ width: "32px", height: "32px", background: `${stat.color}15`, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Icon size={16} style={{ color: stat.color }} />
                   </div>
                 </div>
-                <div style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", marginBottom: "8px" }}>
+                <div style={{ fontSize: "28px", fontWeight: "800", color: isActive ? stat.color : "#0f172a", marginBottom: "8px" }}>
                   {stat.value}
                 </div>
-                <div style={{ fontSize: "12px", color: "#64748b" }}>
-                  {stat.change}
+                <div style={{ fontSize: "12px", color: isActive ? stat.color : "#64748b", opacity: isActive ? 0.85 : 1 }}>
+                  {isActive ? `${filteredOrders.length} result${filteredOrders.length !== 1 ? "s" : ""}` : stat.change}
                 </div>
               </div>
             );

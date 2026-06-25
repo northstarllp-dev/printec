@@ -30,10 +30,15 @@ export async function getEmployees() {
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from("users")
-    .select("*")
+    .select("*, order_assignments(id)")
     .eq("role", "staff");
   if (error) throw new Error(error.message);
-  return data;
+  
+  return data.map(user => ({
+    ...user,
+    employeeId: user.employee_id,
+    jobsAssigned: user.order_assignments ? user.order_assignments.length : 0
+  }));
 }
 
 export async function createEmployee(employeeData: any) {

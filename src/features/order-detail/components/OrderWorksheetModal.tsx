@@ -776,49 +776,30 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
           {/* Module Header (if not 99, we can still show a clean title) */}
           <div style={{ padding: activeStepTab === 99 ? "24px 24px 0 24px" : "16px 24px 0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#0F172A" }}>
-                {activeModuleTitle}
-              </h2>
-              <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94A3B8" }}>
-                {activeStepTab === 2 && sv.sitePersonnel ? `Designer: ${sv.sitePersonnel}` : ""}{" "}
-                {order.versionHistory && order.versionHistory.length > 0 ? `• ${order.versionHistory.length} versions` : ""}
-              </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+              {activeStepTab === 99 && (
+                <button
+                  onClick={() => setActiveStepTab(stageToTabIndex(order.stage))}
+                  style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", cursor: "pointer", color: "#0F172A", fontSize: "12px", fontWeight: "700", padding: "6px 12px", transition: "all 0.15s" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
+                >
+                  <ArrowLeft size={14} /> Back to Worksheet
+                </button>
+              )}
+              <div>
+                <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#0F172A" }}>
+                  {activeModuleTitle}
+                </h2>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94A3B8" }}>
+                  {activeStepTab === 2 && sv.sitePersonnel ? `Designer: ${sv.sitePersonnel}` : ""}{" "}
+                  {order.versionHistory && order.versionHistory.length > 0 ? `• ${order.versionHistory.length} versions` : ""}
+                </p>
+              </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              {/* Manual stage selector for admin */}
-              {!isEmployee && activeStepTab !== 99 && (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#64748B" }}>Stage:</span>
-                  <select
-                    value={order.stage}
-                    onChange={async (e) => {
-                      try {
-                        await updateOrderStageAction(order.id, e.target.value);
-                        router.refresh();
-                        triggerLocalAlert(`Stage changed to ${e.target.value}`, "success");
-                      } catch (err) {
-                        console.error(err);
-                        triggerLocalAlert("Failed to change stage", "error");
-                      }
-                    }}
-                    style={{
-                      padding: "6px 10px",
-                      border: "1px solid #E2E8F0",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: "600",
-                      outline: "none",
-                      cursor: "pointer"
-                    }}
-                  >
-                    {Object.keys(STAGE_LABEL).map((stage) => (
-                      <option key={stage} value={stage}>{STAGE_LABEL[stage].label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+
 
               {/* Stage approval status */}
               {order.stageStatus && order.stageStatus !== "Normal" && (

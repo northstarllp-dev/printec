@@ -14,6 +14,7 @@ export interface Customer {
 
 export interface Employee {
   id: string;
+  employeeId?: string;
   name: string;
   role: string;
   phone: string;
@@ -21,6 +22,7 @@ export interface Employee {
   status?: string;
   rating?: number;
   workload?: number;
+  jobsAssigned?: number;
 }
 
 export type PipelineStage =

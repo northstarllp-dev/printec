@@ -131,7 +131,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-none">
       
       {/* ── APPROVALS AND STAGE OVERRIDE ── */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">

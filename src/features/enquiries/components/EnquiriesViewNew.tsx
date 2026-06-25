@@ -88,6 +88,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [sourceFilter, setSourceFilter] = useState("All");
+  const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -185,6 +186,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       label: "TOTAL ENQUIRIES",
       value: totalEnquiries.toString(),
       change: "All time",
+      filterKey: "total",
       icon: AlertCircle,
       color: "#3b82f6",
     },
@@ -192,6 +194,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       label: "PENDING RESPONSES",
       value: pendingResponses.toString(),
       change: "Requires action",
+      filterKey: "pending",
       icon: Clock,
       color: "#f59e0b",
     },
@@ -199,6 +202,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       label: "CONVERTED",
       value: convertedCount.toString(),
       change: "Total successful orders",
+      filterKey: "converted",
       icon: CheckCircle,
       color: "#06b6d4",
     },
@@ -206,6 +210,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       label: "CONVERSION RATE",
       value: `${conversionRate}%`,
       change: "Based on all enquiries",
+      filterKey: null,
       icon: CheckCircle,
       color: "var(--color-success)",
     },
@@ -253,22 +258,27 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
 
         {/* Stats Cards */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "16px" }}>
-          {stats.map((stat, idx) => {
+          {stats.map((stat: any, idx) => {
             const Icon = stat.icon;
+            const isActive = stat.filterKey && selectedKpi === stat.filterKey;
             return (
               <div
                 key={idx}
+                onClick={() => stat.filterKey && setSelectedKpi(isActive ? null : stat.filterKey)}
                 style={{
-                  background: "white",
-                  border: "1px solid #e2e8f0",
+                  background: isActive ? `${stat.color}12` : "white",
+                  border: isActive ? `2px solid ${stat.color}` : "1px solid #e2e8f0",
                   borderRadius: "12px",
-                  padding: "20px",
-                  transition: "all 0.3s",
-                  cursor: "pointer",
+                  padding: isActive ? "19px" : "20px",
+                  transition: "all 0.2s",
+                  cursor: stat.filterKey ? "pointer" : "default",
+                  userSelect: "none",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
-                  e.currentTarget.style.transform = "translateY(-2px)";
+                  if (stat.filterKey && !isActive) {
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                  }
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.boxShadow = "none";
@@ -276,17 +286,17 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "700", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "700", color: isActive ? stat.color : "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     {stat.label}
                   </span>
                   <div style={{ width: "32px", height: "32px", background: `${stat.color}15`, borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <Icon size={16} style={{ color: stat.color }} />
                   </div>
                 </div>
-                <div style={{ fontSize: "28px", fontWeight: "800", color: "#0f172a", marginBottom: "8px" }}>
+                <div style={{ fontSize: "28px", fontWeight: "800", color: isActive ? stat.color : "#0f172a", marginBottom: "8px" }}>
                   {stat.value}
                 </div>
-                <div style={{ fontSize: "12px", color: "#64748b" }}>
+                <div style={{ fontSize: "12px", color: isActive ? stat.color : "#64748b", opacity: isActive ? 0.85 : 1 }}>
                   {stat.change}
                 </div>
               </div>
@@ -389,7 +399,12 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               {enquiries.filter(e => {
                 const matchesSearch = e.leadName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || e.phone.includes(debouncedSearchTerm);
                 const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
-                
+
+                // KPI filter
+                if (selectedKpi === "pending" && e.status !== "Pending") return false;
+                if (selectedKpi === "converted" && e.status !== "Converted") return false;
+                // "total" shows all, so no extra condition needed
+
                 let matchesDate = true;
                 if (startDate || endDate) {
                   try {
@@ -405,7 +420,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     matchesDate = false;
                   }
                 }
-                
+
                 return matchesSearch && matchesSource && matchesDate;
               }).map((enq) => {
                 const statusColor = getStatusColor(enq.status);
