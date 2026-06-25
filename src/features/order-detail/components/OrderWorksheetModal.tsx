@@ -392,6 +392,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           break;
       }
       triggerLocalAlert("Draft saved successfully!", "success");
+      router.refresh();
     } catch (err) {
       triggerLocalAlert("Failed to save draft.", "error");
       console.error(err);

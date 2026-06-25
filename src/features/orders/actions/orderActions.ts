@@ -182,8 +182,13 @@ export async function updateOrder(id: string, updates: any) {
     const orderIdFriendly = data[0].order_id || id;
     revalidatePath("/admin/orders");
     revalidatePath(`/admin/orders/${orderIdFriendly}`);
+    revalidatePath(`/admin/orders/${orderUuid}`);
     revalidatePath("/staff/orders");
     revalidatePath(`/staff/orders/${orderIdFriendly}`);
+    revalidatePath(`/staff/orders/${orderUuid}`);
+    revalidatePath("/portal");
+    revalidatePath(`/portal/${orderIdFriendly}`);
+    revalidatePath(`/portal/${orderUuid}`);
   }
   return data;
 }
@@ -207,8 +212,8 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
   const supabase = await getSupabase();
   const orderUuid = await resolveOrderUuid(supabase, orderId);
 
-  // 1. Get company ID
-  const { data: order } = await supabase.from("orders").select("company_id").eq("id", orderUuid).single();
+  // 1. Get company ID and order_id
+  const { data: order } = await supabase.from("orders").select("company_id, order_id").eq("id", orderUuid).single();
   const companyId = order?.company_id || "11111111-1111-1111-1111-111111111111";
 
   // 2. Map payload to DB schema
@@ -245,11 +250,19 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
     }
   }
 
-  // To revalidate, we can reuse updateOrder on just the updated_at or something, but we just trigger revalidate directly.
+  // Revalidate cache for all possible URLs
+  const orderCode = order?.order_id;
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/staff/orders");
   revalidatePath(`/staff/orders/${orderId}`);
+  revalidatePath("/portal");
+  revalidatePath(`/portal/${orderId}`);
+  if (orderCode) {
+    revalidatePath(`/admin/orders/${orderCode}`);
+    revalidatePath(`/staff/orders/${orderCode}`);
+    revalidatePath(`/portal/${orderCode}`);
+  }
 
   return { success: true };
 }
@@ -734,7 +747,7 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
     .update({
-      stage: "Site Visit Pending", // Keep it pending until staff approves
+      stage: "Site Visit Scheduled",
       chat_history: updatedChat
     })
     .eq("id", orderId)
@@ -833,7 +846,7 @@ export async function approveSiteVisitAction(orderId: string) {
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
     .update({
-      stage: "Site Visit Pending", // Keep it pending until admin approves
+      stage: "Site Visit Scheduled", // Keep it scheduled until admin approves
       stage_status: "Pending Admin Approval: Site Visit Schedule",
       chat_history: updatedChat
     })

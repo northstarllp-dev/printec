@@ -96,10 +96,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
   const newEnquiries = enquiries.filter((e) => e.status === "Pending" || e.status === "New").length;
   
   const pendingApprovals = orders.filter((o) => o.stageStatus && o.stageStatus !== "Normal").length;
-  const siteVisitsPending = orders.filter((o) =>
-    (o.stage === "Site Visit Pending" || o.stage === "Site Visit Scheduled" || o.stage === "Site Visit Completed") &&
-    !o.siteVisitDetails?.auditDate
-  ).length;
+  const siteVisitsPending = orders.filter((o) => o.stage === "Site Visit Pending").length;
   const ordersOnHold = orders.filter((o) => o.health === "On Hold").length;
   const lostOrders = orders.filter((o) => o.health === "Lost").length;
 
@@ -153,7 +150,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
     {
       label: "Site Visits Pending",
       value: siteVisitsPending,
-      sub: "Customer has not scheduled site visit",
+      sub: "Site visit pending stage",
       filterKey: "sitevisit",
       icon: MapPin,
       iconBg: "#EEF2FF",
@@ -200,7 +197,7 @@ export function AdminDashboardClient({ orders, enquiries }: AdminDashboardClient
     if (selectedKpi === "active")     return { type: "orders" as const, data: orders.filter(o => o.stage !== "Completed" && o.stage !== "Closed") };
     if (selectedKpi === "enquiries")  return { type: "enquiries" as const, data: enquiries.filter(e => e.status === "Pending" || e.status === "New") };
     if (selectedKpi === "approvals")  return { type: "orders" as const, data: orders.filter(o => o.stageStatus && o.stageStatus !== "Normal") };
-    if (selectedKpi === "sitevisit")  return { type: "orders" as const, data: orders.filter(o => (o.stage === "Site Visit Pending" || o.stage === "Site Visit Scheduled" || o.stage === "Site Visit Completed") && !o.siteVisitDetails?.auditDate) };
+    if (selectedKpi === "sitevisit")  return { type: "orders" as const, data: orders.filter(o => o.stage === "Site Visit Pending") };
     if (selectedKpi === "onhold")     return { type: "orders" as const, data: orders.filter(o => o.health === "On Hold") };
     if (selectedKpi === "lost")       return { type: "orders" as const, data: orders.filter(o => o.health === "Lost") };
     return { type: "orders" as const, data: orders.slice(0, 5) };

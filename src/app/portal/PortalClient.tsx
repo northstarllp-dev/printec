@@ -5,9 +5,10 @@ import {
   Printer, MapPin, FileText, CheckSquare, CheckCircle2,
   MessageSquare, Send, ZoomIn, ZoomOut, Check, X, Info,
   AlertCircle, Calendar,
-  ChevronRight, Phone,
+  ChevronLeft, ChevronRight, Phone,
   Package, Wrench, Palette, BarChart3,
-  RefreshCw, AlertTriangle, Loader2, Maximize2, Minimize2, CheckCheck
+  RefreshCw, AlertTriangle, Loader2, Maximize2, Minimize2, CheckCheck,
+  Download
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
@@ -148,8 +149,25 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Photo viewer states for Customer Portal
+  const [viewerPhotos, setViewerPhotos] = useState<string[]>([]);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+  const openViewer = (photosArray: string[], index: number) => {
+    setViewerPhotos(photosArray);
+    setViewerIndex(index);
+  };
+
   const activeOrder = orders.find(o => o.id === activeOrderId) || orders[0];
   const currentStep = activeOrder ? getStepIndex(activeOrder.stage) : 0;
+  
+  const [viewedStep, setViewedStep] = useState<number | null>(null);
+  const activeStepToRender = viewedStep !== null ? viewedStep : currentStep;
+
+  // Reset viewed step when order changes
+  useEffect(() => {
+    setViewedStep(null);
+  }, [activeOrderId]);
 
   // Sync site visit details
   useEffect(() => {
@@ -362,6 +380,21 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
 
   const sv = activeOrder?.siteVisitDetails || {};
+
+  const uniquePhotos = useMemo(() => {
+    if (!sv) return [];
+    const allPhotos = [
+      ...(sv.photos || []),
+      ...(sv.electricalPhotos || []),
+      ...(sv.photoCategories?.additional || []),
+      ...(sv.photoCategories?.front || []),
+      ...(sv.photoCategories?.installationArea || []),
+      ...(sv.photoCategories?.powerSource || []),
+      ...(sv.photoCategories?.measurementReference || []),
+    ].filter(Boolean);
+    return Array.from(new Set(allPhotos)) as string[];
+  }, [sv]);
+
   const qd = activeOrder?.quoteDetails || {};
   const dd = activeOrder?.designDetails || {};
   const pd = activeOrder?.productionDetails || {};
@@ -461,14 +494,22 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
               const isLocked = idx > currentStep;
 
               return (
-                <div key={step.key} className="flex flex-col items-center text-center relative z-10 flex-1">
+                <div 
+                  key={step.key} 
+                  className={`flex flex-col items-center text-center relative z-10 flex-1 ${isCompleted || isActive ? 'cursor-pointer hover:opacity-80' : ''}`}
+                  onClick={() => {
+                    if (isCompleted || isActive) {
+                      setViewedStep(idx);
+                    }
+                  }}
+                >
                   <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${isActive
                     ? "bg-[#1E40AF] border-[#1E40AF] text-white shadow-[0_0_0_4px_rgba(30,64,175,0.12)]"
                     : isCompleted
                       ? "bg-emerald-500 border-emerald-500 text-white"
                       : "bg-white border-slate-200 text-slate-400"
                     }`}>
-                    {isCompleted ? <Check size={14} className="stroke-[3]" /> : <Icon size={14} />}
+                    {isCompleted && !isActive ? <Check size={14} className="stroke-[3]" /> : <Icon size={14} />}
                   </div>
                   <span className={`text-[11px] font-bold mt-2 block ${isActive ? "text-[#1E40AF]" : isCompleted ? "text-emerald-600" : "text-slate-400"
                     }`}>
@@ -491,17 +532,25 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
             {/* Current Stage Panel */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               {/* Stage label bar */}
-              <div className="px-6 pt-5 pb-3 border-b border-slate-100">
-                <span className="text-[10px] font-bold text-[#1E40AF] uppercase tracking-widest bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full">
-                  CURRENT STAGE: {STEPS[currentStep]?.label?.toUpperCase()}
+              <div className="px-6 pt-5 pb-3 border-b border-slate-100 flex items-center justify-between">
+                <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${viewedStep !== null && viewedStep !== currentStep ? 'bg-slate-100 border border-slate-200 text-slate-600' : 'bg-blue-50 border border-blue-100 text-[#1E40AF]'}`}>
+                  {viewedStep !== null && viewedStep !== currentStep ? "PAST STAGE" : "CURRENT STAGE"}: {STEPS[activeStepToRender]?.label?.toUpperCase()}
                 </span>
+                {viewedStep !== null && viewedStep !== currentStep && (
+                  <button 
+                    onClick={() => setViewedStep(null)}
+                    className="text-[10px] font-bold text-[#1E40AF] hover:underline"
+                  >
+                    Return to Current Stage &rarr;
+                  </button>
+                )}
               </div>
 
               <div className="p-6">
                 {/* ── SITE VISIT STAGE ── */}
-                {currentStep <= 1 && (
+                {activeStepToRender === 1 && (
                   <>
-                    {(!sv.auditDate || isRescheduling) ? (
+                    {currentStep <= 1 && (!sv.auditDate || isRescheduling) ? (
                       <div className="space-y-6">
                         <div>
                           <h2 className="text-xl font-black text-[#0b1c30] mb-1.5">Schedule Your Physical Site Audit</h2>
@@ -621,7 +670,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           </div>
                         </form>
                       </div>
-                    ) : sv.completed === false ? (
+                    ) : currentStep <= 1 && sv.completed === false ? (
                       // Scheduled confirmation
                       <div className="text-center space-y-5 py-4">
                         <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mx-auto">
@@ -642,21 +691,167 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       </div>
                     ) : (
                       // Completed or pending approval
-                      <div className="space-y-4">
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                          <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                      <div className="space-y-6">
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                          <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-sm font-bold text-amber-800">Site Survey Completed — Under Verification</p>
-                            <p className="text-xs text-amber-700 mt-0.5">Measurement data is being reviewed by our engineering team.</p>
+                            <p className="text-sm font-bold text-emerald-800">Site Survey Completed</p>
+                            <p className="text-xs text-emerald-700 mt-0.5">Measurements have been recorded by our engineering team.</p>
                           </div>
                         </div>
+
+                        {/* Recorded Measurements */}
+                        {sv.locations && sv.locations.length > 0 && (
+                          <div className="space-y-4">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                              <MapPin size={16} className="text-[#1E40AF]" />
+                              Recorded Measurements
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                              {sv.locations.map((loc: any, idx: number) => (
+                                <div key={idx} className="p-4 border border-slate-200 rounded-xl bg-slate-50 relative overflow-hidden">
+                                  <div className="absolute top-0 right-0 w-16 h-16 bg-[#1E40AF]/5 rounded-bl-full -mr-8 -mt-8" />
+                                  <h4 className="font-bold text-[#0b1c30] text-sm mb-3">
+                                    {loc.name || `Location ${idx + 1}`}
+                                  </h4>
+                                  <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-y-3 text-xs">
+                                      {loc.width && <div><span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Width</span><p className="font-bold font-mono text-slate-800">{loc.width}</p></div>}
+                                      {loc.height && <div><span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Height</span><p className="font-bold font-mono text-slate-800">{loc.height}</p></div>}
+                                      {loc.depth && <div><span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Depth</span><p className="font-bold font-mono text-slate-800">{loc.depth}</p></div>}
+                                      {loc.groundClearance && <div><span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Ground Clr.</span><p className="font-bold font-mono text-slate-800">{loc.groundClearance}</p></div>}
+                                    </div>
+                                    
+                                    {loc.notes && (
+                                      <div className="pt-3 border-t border-slate-200/60">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Notes</span>
+                                        <p className="text-xs text-slate-600 leading-relaxed">{loc.notes}</p>
+                                      </div>
+                                    )}
+
+                                    {loc.photos && loc.photos.length > 0 && (
+                                      <div className="pt-3 border-t border-slate-200/60">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase block mb-2">Location Photos</span>
+                                        <div className="flex flex-wrap gap-2">
+                                          {loc.photos.map((photo: string, pIdx: number) => (
+                                            <div 
+                                              key={pIdx} 
+                                              onClick={() => openViewer(loc.photos, pIdx)}
+                                              className="w-14 h-14 rounded-lg border border-slate-200 overflow-hidden hover:opacity-80 transition-opacity shadow-sm cursor-pointer"
+                                            >
+                                              <img src={photo} alt="Location ref" className="w-full h-full object-cover" />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Structural & Electrical Assessment */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* Structural Assessment Card */}
+                          <div className="p-5 border border-slate-200 rounded-xl bg-white space-y-4 shadow-2xs">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                              <span>🏗️</span> Structural Assessment
+                            </h3>
+                            <div className="space-y-3.5 text-xs">
+                              {sv.wallType ? (
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Wall / Surface Type</span>
+                                  <p className="font-semibold text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">{sv.wallType}</p>
+                                </div>
+                              ) : null}
+                              {sv.mountingMethod ? (
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Proposed Mounting Method</span>
+                                  <p className="font-semibold text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">{sv.mountingMethod}</p>
+                                </div>
+                              ) : null}
+                              {sv.surfaceCondition ? (
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Surface Condition</span>
+                                  <p className="font-medium text-slate-700 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">{sv.surfaceCondition}</p>
+                                </div>
+                              ) : null}
+                              {sv.obstacles && sv.obstacles.length > 0 ? (
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Physical Obstacles</span>
+                                  <p className="font-medium text-slate-700 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">{sv.obstacles.join(", ")}</p>
+                                </div>
+                              ) : null}
+                              {sv.structuralNotes ? (
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Structural Notes</span>
+                                  <p className="text-slate-600 leading-relaxed bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 whitespace-pre-line">{sv.structuralNotes}</p>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {/* Electrical Assessment Card */}
+                          <div className="p-5 border border-slate-200 rounded-xl bg-white space-y-4 shadow-2xs">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                              <span>⚡</span> Electrical Assessment
+                            </h3>
+                            <div className="space-y-3.5 text-xs">
+                              <div>
+                                <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Power Availability</span>
+                                <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold mt-1 ${sv.powerAvailable ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
+                                  {sv.powerAvailable ? '⚡ Power Available' : '❌ No Power Source Nearby'}
+                                </span>
+                              </div>
+                              {sv.distanceToPowerSource ? (
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Distance to Power Source</span>
+                                  <p className="font-bold text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 font-mono">
+                                    {sv.distanceToPowerSource} {sv.distanceToPowerSourceUnit || 'meters'}
+                                  </p>
+                                </div>
+                              ) : null}
+                              {sv.electricalNotes ? (
+                                <div>
+                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Electrical Notes</span>
+                                  <p className="text-slate-600 leading-relaxed bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 whitespace-pre-line">{sv.electricalNotes}</p>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reference Photos Gallery */}
+                        {uniquePhotos.length > 0 ? (
+                          <div className="p-5 border border-slate-200 rounded-xl bg-white space-y-4 shadow-2xs">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                              <span>📸</span> Reference Photos
+                            </h3>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                              {uniquePhotos.map((photo: string, pIdx: number) => (
+                                <div 
+                                  key={pIdx} 
+                                  className="relative aspect-square rounded-xl border border-slate-200 overflow-hidden hover:opacity-90 transition-opacity shadow-sm group cursor-pointer"
+                                  onClick={() => openViewer(uniquePhotos, pIdx)}
+                                >
+                                  <img src={photo} alt={`Site reference ${pIdx + 1}`} className="w-full h-full object-cover" />
+                                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <Maximize2 size={16} className="text-white" />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </>
                 )}
 
                 {/* ── QUOTATION STAGE ── */}
-                {currentStep === 2 && (
+                {activeStepToRender === 2 && (
                   <div className="space-y-6">
                     {/* Header */}
                     <div>
@@ -696,10 +891,13 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                           {qd.signageOptions.map((section: any, sIdx: number) => {
                             const itemTotal = (section.lines || []).reduce((sum: number, line: any) => {
                               const calcLineAmount = (item: any): number => {
+                                let base = 0;
                                 if (item.pricingType === "per_sqft" || item.pricingType === "per_running_ft") {
-                                  return item.quantity * item.totalSqFt * item.unitPrice;
+                                  base = item.quantity * item.totalSqFt * item.unitPrice;
+                                } else {
+                                  base = item.quantity * item.unitPrice;
                                 }
-                                return item.quantity * item.unitPrice;
+                                return base * (1 + (item.gstRate || 0) / 100);
                               };
                               return sum + calcLineAmount(line);
                             }, 0);
@@ -710,7 +908,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                 <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                                   <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{section.itemLabel}</span>
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-[10px] text-slate-400 font-black uppercase">Subtotal:</span>
+                                    <span className="text-[10px] text-slate-400 font-black uppercase">Total (incl. GST):</span>
                                     <span className="text-xs font-black text-blue-700 font-mono">
                                       ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                                     </span>
@@ -734,10 +932,13 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                     <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
                                       {(section.lines || []).map((line: any, lIdx: number) => {
                                         const lineAmt = (() => {
+                                          let base = 0;
                                           if (line.pricingType === "per_sqft" || line.pricingType === "per_running_ft") {
-                                            return line.quantity * line.totalSqFt * line.unitPrice;
+                                            base = line.quantity * line.totalSqFt * line.unitPrice;
+                                          } else {
+                                            base = line.quantity * line.unitPrice;
                                           }
-                                          return line.quantity * line.unitPrice;
+                                          return base * (1 + (line.gstRate || 0) / 100);
                                         })();
                                         const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
 
@@ -766,7 +967,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                                             <td className="text-center px-4 py-3 font-mono">{isSqft ? `${line.totalSqFt} ${line.unit || "ft"}` : "—"}</td>
                                             <td className="text-right px-4 py-3 font-mono">₹{line.unitPrice.toLocaleString("en-IN")}</td>
                                             <td className="text-center px-4 py-3 font-mono">{line.gstRate}%</td>
-                                            <td className="text-right px-4 py-3 font-mono text-slate-800 font-bold">₹{lineAmt.toLocaleString("en-IN")}</td>
+                                            <td className="text-right px-4 py-3 font-mono text-slate-800 font-bold">₹{lineAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                           </tr>
                                         );
                                       })}
@@ -910,7 +1111,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 )}
 
                 {/* ── DESIGN STAGE ── */}
-                {currentStep === 3 && (
+                {activeStepToRender === 3 && (
                   <div className="space-y-5">
                     <div>
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Design Concept Proof</h2>
@@ -957,8 +1158,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   </div>
                 )}
 
-                {/* ── PRODUCTION / FABRICATION STAGE ── */}
-                {currentStep === 4 && (
+                {/* ── PRODUCTION STAGE ── */}
+                {activeStepToRender === 4 && (
                   <div className="space-y-5">
                     <div>
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Workshop Fabrication Status</h2>
@@ -981,7 +1182,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                 )}
 
                 {/* ── INSTALLATION STAGE ── */}
-                {currentStep === 5 && (
+                {activeStepToRender === 5 && (
                   <div className="space-y-5">
                     <div>
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Field Installation</h2>
@@ -1044,6 +1245,70 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
           product={selectedProductInfo}
           onClose={() => setSelectedProductInfo(null)}
         />
+      )}
+
+      {/* ── PHOTO VIEWER MODAL ── */}
+      {viewerIndex !== null && viewerPhotos.length > 0 && (
+        <div 
+          className="fixed inset-0 z-[99999] bg-black/90 flex items-center justify-center backdrop-blur-sm"
+          onClick={() => setViewerIndex(null)}
+        >
+          {/* Close button */}
+          <button 
+            className="absolute top-6 right-6 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2.5 transition-all focus:outline-none"
+            onClick={() => setViewerIndex(null)}
+          >
+            <X size={24} />
+          </button>
+          
+          {/* Download button */}
+          <a 
+            href={viewerPhotos[viewerIndex]} 
+            download 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="absolute top-6 right-20 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-xl px-4 py-2.5 transition-all focus:outline-none flex items-center gap-2 text-xs font-bold"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Download size={16} />
+            <span>Download</span>
+          </a>
+          
+          {/* Main Image */}
+          <div className="relative max-w-4xl max-h-[80vh] w-full h-full flex items-center justify-center p-4">
+            <img 
+              src={viewerPhotos[viewerIndex]} 
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              alt="Viewed full size"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          
+          {/* Previous button */}
+          {viewerIndex > 0 && (
+            <button
+              className="absolute left-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all focus:outline-none"
+              onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex - 1); }}
+            >
+              <ChevronLeft size={32} />
+            </button>
+          )}
+          
+          {/* Next button */}
+          {viewerIndex < viewerPhotos.length - 1 && (
+            <button
+              className="absolute right-6 top-1/2 -translate-y-1/2 text-white/70 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-3 transition-all focus:outline-none"
+              onClick={(e) => { e.stopPropagation(); setViewerIndex(viewerIndex + 1); }}
+            >
+              <ChevronRight size={32} />
+            </button>
+          )}
+          
+          {/* Image Counter */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm font-medium px-4 py-1.5 rounded-full backdrop-blur-md">
+            {viewerIndex + 1} / {viewerPhotos.length}
+          </div>
+        </div>
       )}
     </div>
   );

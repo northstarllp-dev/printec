@@ -11,6 +11,7 @@ import {
   sendQuotationToCustomer
 } from "@/features/quotations/actions/quotationActions";
 import { createClient } from "@/utils/supabase/client";
+import { updateOrderStageAction } from "@/features/orders/actions/orderActions";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -75,6 +76,9 @@ interface Quotation {
   valid_until: string;
   advance_percent?: number;
   advance_amount?: number;
+  advance_paid?: boolean;
+  advance_paid_at?: string;
+  payment_status?: string;
 }
 
 interface QuotationModuleProps {
@@ -332,6 +336,24 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const [selectedProductInfo, setSelectedProductInfo] = useState<Product | null>(null);
 
+  const isPastQuotation = ![
+    "Site Visit Pending",
+    "Site Visit Scheduled",
+    "Site Visit Completed",
+    "Quotation In Progress",
+    "Quotation Sent",
+    "Quotation Negotiation",
+    "Quotation Approved",
+  ].includes(order.stage || "");
+
+  const [advanceReceived, setAdvanceReceived] = useState(
+    isPastQuotation || (initialQuotation?.advance_paid ?? false)
+  );
+  const [measurementsVerified, setMeasurementsVerified] = useState(
+    isPastQuotation
+  );
+  const [isMovingToDesign, setIsMovingToDesign] = useState(false);
+
   useEffect(() => {
     setIsMounted(true);
   }, []);
@@ -483,7 +505,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     return sum + sec.lines.reduce((s, line) => s + calcLineAmount(line), 0);
   }, 0);
 
-  const tax = Math.round((subtotal - discount) * (taxPercent / 100) * 100) / 100;
+  const totalGst = sections.reduce((sum, sec) => {
+    return sum + sec.lines.reduce((s, line) => s + (calcLineAmount(line) * ((line.gstRate || 0) / 100)), 0);
+  }, 0);
+
+  const tax = subtotal > 0 ? Math.round(totalGst * (1 - discount / subtotal) * 100) / 100 : 0;
   const grandTotal = Math.round((subtotal - discount + tax + shipping) * 100) / 100;
   const balanceDue = Math.round((grandTotal - amountPaid) * 100) / 100;
   const advanceAmount = Math.round(grandTotal * (advancePercent / 100) * 100) / 100;
@@ -679,6 +705,39 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     });
   };
 
+  const handleMoveToDesign = async () => {
+    setIsMovingToDesign(true);
+    try {
+      const supabase = createClient();
+      
+      const { error: quoteErr } = await supabase
+        .from("quotations")
+        .update({
+          advance_paid: true,
+          advance_paid_at: new Date().toISOString(),
+          amount_paid: amountPaid || advanceAmount,
+          payment_status: "Advance Received"
+        })
+        .eq("order_id", order.id);
+
+      if (quoteErr) throw new Error(quoteErr.message);
+
+      await updateOrderStageAction(order.id, "Design In Progress");
+
+      setSaveMsg({ text: "Moved to Design phase successfully!", ok: true });
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err: any) {
+      console.error("Error moving to design:", err);
+      setSaveMsg({ text: err.message || "Failed to move to design phase", ok: false });
+      setTimeout(() => setSaveMsg(null), 4000);
+    } finally {
+      setIsMovingToDesign(false);
+    }
+  };
+
   const addCustomSection = () => {
     const label = prompt("Enter custom signage item name:");
     if (!label?.trim()) return;
@@ -826,7 +885,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       {/* Signage Sections */}
       <div className="space-y-6">
         {sections.map((section, sIdx) => {
-          const itemTotal = section.lines.reduce((s, line) => s + calcLineAmount(line), 0);
+          const itemTotal = section.lines.reduce((s, line) => s + calcLineAmount(line) * (1 + (line.gstRate || 0) / 100), 0);
           // Check matching site visit measurements for details
           const svItem = siteVisitItems.find((sv) => sv.id === section.siteVisitItemId);
 
@@ -845,7 +904,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 font-black uppercase">Subtotal:</span>
+                    <span className="text-[10px] text-slate-400 font-black uppercase">Total (incl. GST):</span>
                     <span className="text-sm font-black text-[#1e40af] font-mono">
                       ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
@@ -883,7 +942,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               {/* Lines */}
               <div className="divide-y divide-slate-100 overflow-visible">
                 {section.lines.map((line) => {
-                  const lineAmt = calcLineAmount(line);
+                  const lineAmt = calcLineAmount(line) * (1 + (line.gstRate || 0) / 100);
                   const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
 
                   return (
@@ -1137,38 +1196,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             </span>
           </div>
 
-          {/* Tax% Input with swap icon */}
-          <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider py-1">
-            <span>Tax</span>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={taxPercent}
-                disabled={isLocked}
-                onChange={(e) => {
-                  const val = Math.min(100, Math.max(0, Number(e.target.value) || 0));
-                  setTaxPercent(val);
-                  syncGlobalTaxToLines(val);
-                }}
-                className={`${inputCls} w-16 px-2 py-1 text-center font-mono font-bold bg-white`}
-              />
-              <span className="text-slate-600">%</span>
-              <button
-                type="button"
-                title="Sync global tax to all lines"
-                onClick={() => syncGlobalTaxToLines(taxPercent)}
-                className="p-1 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                <ChevronDown size={14} className="transform rotate-180" />
-              </button>
-            </div>
-          </div>
-
           {/* Tax Amount Display */}
           <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
-            <span>Tax Amount ({taxPercent}%)</span>
+            <span>Tax Amount (GST)</span>
             <span className="font-mono text-slate-800">
               ₹{tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
             </span>
@@ -1317,6 +1347,88 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           )}
         </div>
       </div>
+
+      {/* Checklist & Move to Design Box */}
+      {status === "Approved" && (
+        <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <Sparkles size={14} className="text-blue-600 animate-pulse" />
+                Quotation Approved - Next Steps
+              </h4>
+              <p className="text-[11px] text-slate-500 font-bold">
+                Please verify the checklist below to transition this order to the Design phase.
+              </p>
+              
+              {/* Checklist */}
+              <div className="space-y-2 pt-2">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={advanceReceived}
+                    disabled={isPastQuotation}
+                    onChange={(e) => {
+                      setAdvanceReceived(e.target.checked);
+                      if (e.target.checked && amountPaid === 0) {
+                        setAmountPaid(advanceAmount);
+                      }
+                    }}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <span className="text-xs font-bold text-slate-700">
+                    Advance payment received (Expected: ₹{advanceAmount.toLocaleString("en-IN")})
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={measurementsVerified}
+                    disabled={isPastQuotation}
+                    onChange={(e) => setMeasurementsVerified(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <span className="text-xs font-bold text-slate-700">
+                    Site measurements and requirements verified
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-stretch md:items-end gap-3 justify-center">
+              {isPastQuotation ? (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl px-4 py-3 flex items-center gap-2 text-xs font-bold shadow-sm">
+                  <ShieldCheck size={16} className="text-emerald-600" />
+                  <div>
+                    <div className="font-black uppercase tracking-wider text-[10px]">Moved to Design</div>
+                    <div className="text-[10px] text-emerald-600 font-bold">Advance paid & verified</div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!advanceReceived || !measurementsVerified || isMovingToDesign}
+                  onClick={handleMoveToDesign}
+                  className="py-2 px-5 bg-[#1e40af] hover:bg-[#153186] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isMovingToDesign ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      Moving to Design...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={13} />
+                      Move to Design
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Save Msg Notification */}
       {saveMsg && (

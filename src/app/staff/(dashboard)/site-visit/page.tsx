@@ -27,13 +27,15 @@ export default async function StaffSiteVisitPage() {
     projectName: o.project_name,
     customerId: o.customer_id,
     stage: o.stage,
+    health: o.health,
     productType: o.product_type,
     requirements: o.requirements,
     assignedEmployees: o.assigned_employees || [],
     dateCreated: o.date_created,
     customerName: o.customer_name || "",
     orderCode: o.order_id || o.id,
-    orderId: o.order_id || o.id
+    orderId: o.order_id || o.id,
+    siteVisitDetails: o.siteVisitDetails ?? null,
   }));
 
   const mappedCustomers = customers?.map(c => ({

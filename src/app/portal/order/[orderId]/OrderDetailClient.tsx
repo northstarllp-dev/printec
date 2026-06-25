@@ -733,15 +733,17 @@ function QuotationTab({
               </div>
             </div>
 
-            {/* Signage Sections */}
             <div className="space-y-5">
               {qd.signageOptions.map((section: any, sIdx: number) => {
                 const itemTotal = (section.lines || []).reduce((sum: number, line: any) => {
                   const calcLineAmount = (item: any): number => {
+                    let base = 0;
                     if (item.pricingType === "per_sqft" || item.pricingType === "per_running_ft") {
-                      return item.quantity * item.totalSqFt * item.unitPrice;
+                      base = item.quantity * item.totalSqFt * item.unitPrice;
+                    } else {
+                      base = item.quantity * item.unitPrice;
                     }
-                    return item.quantity * item.unitPrice;
+                    return base * (1 + (item.gstRate || 0) / 100);
                   };
                   return sum + calcLineAmount(line);
                 }, 0);
@@ -752,7 +754,7 @@ function QuotationTab({
                     <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                       <span className="text-xs font-black text-slate-800 uppercase tracking-wider">{section.itemLabel}</span>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-slate-400 font-black uppercase">Subtotal:</span>
+                        <span className="text-[10px] text-slate-400 font-black uppercase">Total (incl. GST):</span>
                         <span className="text-xs font-black text-blue-700 font-mono">
                           ₹{itemTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                         </span>
@@ -776,10 +778,13 @@ function QuotationTab({
                         <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
                           {(section.lines || []).map((line: any, lIdx: number) => {
                             const lineAmt = (() => {
+                              let base = 0;
                               if (line.pricingType === "per_sqft" || line.pricingType === "per_running_ft") {
-                                return line.quantity * line.totalSqFt * line.unitPrice;
+                                base = line.quantity * line.totalSqFt * line.unitPrice;
+                              } else {
+                                base = line.quantity * line.unitPrice;
                               }
-                              return line.quantity * line.unitPrice;
+                              return base * (1 + (line.gstRate || 0) / 100);
                             })();
                             const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
 
@@ -808,7 +813,7 @@ function QuotationTab({
                                 <td className="text-center px-4 py-3 font-mono">{isSqft ? `${line.totalSqFt} ${line.unit || "ft"}` : "—"}</td>
                                 <td className="text-right px-4 py-3 font-mono">₹{line.unitPrice.toLocaleString("en-IN")}</td>
                                 <td className="text-center px-4 py-3 font-mono">{line.gstRate}%</td>
-                                <td className="text-right px-4 py-3 font-mono text-slate-800 font-bold">₹{lineAmt.toLocaleString("en-IN")}</td>
+                                <td className="text-right px-4 py-3 font-mono text-slate-800 font-bold">₹{lineAmt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                               </tr>
                             );
                           })}

@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check, ArrowRight } from "lucide-react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { Search, Filter, Plus, AlertCircle, CheckCircle, Clock, Phone, Copy, MessageSquare, Mail, X, Check, ArrowRight, Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { AddEnquiryModal, EnquiryFormData } from "./AddEnquiryModal";
 import { ConvertEnquiryModal } from "./ConvertEnquiryModal";
 import { AssignTeamModal } from "./AssignTeamModal";
@@ -89,6 +89,11 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [sourceFilter, setSourceFilter] = useState("All");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
+  // Multi-date filter
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const datePickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -96,8 +101,39 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
     }, 300);
     return () => clearTimeout(handler);
   }, [searchTerm]);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+
+  // Close date picker on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
+        setDatePickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const toggleDate = useCallback((ds: string) => {
+    setSelectedDates(prev => {
+      const next = new Set(prev);
+      next.has(ds) ? next.delete(ds) : next.add(ds);
+      return next;
+    });
+  }, []);
+
+  const calDays = useMemo(() => {
+    const year = calMonth.getFullYear();
+    const month = calMonth.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: (string | null)[] = Array(firstDay).fill(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+      const mm = String(month + 1).padStart(2, "0");
+      const dd = String(d).padStart(2, "0");
+      cells.push(`${year}-${mm}-${dd}`);
+    }
+    return cells;
+  }, [calMonth]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
@@ -308,66 +344,77 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       {/* Table Section */}
       <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible" }}>
         {/* Search & Filter Bar */}
-        <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", gap: "12px", alignItems: "center" }}>
-          <div style={{ flex: 1, position: "relative" }}>
-            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
-            <input
-              type="text"
-              placeholder="Search by lead name or phone..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px 12px 10px 36px",
-                border: "1px solid #e2e8f0",
-                borderRadius: "8px",
-                fontSize: "13px",
-                fontFamily: "inherit",
-                transition: "all 0.2s",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#94a3b8";
-                e.currentTarget.style.boxShadow = "0 0 0 3px rgba(148, 163, 184, 0.1)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "#e2e8f0";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f1f5f9", padding: "8px 12px", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            {/* Search */}
+            <div style={{ flex: 1, position: "relative" }}>
+              <Search size={15} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
               <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                style={{ border: "none", background: "transparent", fontSize: "13px", fontWeight: "600", color: startDate ? "#0f172a" : "#94a3b8", outline: "none", cursor: "pointer", fontFamily: "inherit" }}
-                title="Start Date"
+                type="text"
+                placeholder="Search by lead name or phone…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ width: "100%", padding: "9px 32px 9px 34px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontFamily: "inherit", transition: "all 0.2s", outline: "none", boxSizing: "border-box" }}
+                onFocus={(e) => { e.currentTarget.style.borderColor = "var(--color-primary)"; e.currentTarget.style.boxShadow = "0 0 0 3px rgba(30,64,175,0.1)"; }}
+                onBlur={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "none"; }}
               />
-              <span style={{ color: "#94a3b8", fontSize: "12px", fontWeight: "600" }}>-</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                style={{ border: "none", background: "transparent", fontSize: "13px", fontWeight: "600", color: endDate ? "#0f172a" : "#94a3b8", outline: "none", cursor: "pointer", fontFamily: "inherit" }}
-                title="End Date"
-              />
+              {searchTerm && (
+                <button onClick={() => setSearchTerm("")} style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", padding: 0, display: "flex" }}>
+                  <X size={14} />
+                </button>
+              )}
             </div>
+
+            {/* Date picker */}
+            <div style={{ position: "relative" }} ref={datePickerRef}>
+              <button
+                onClick={() => setDatePickerOpen(o => !o)}
+                style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 12px", border: selectedDates.size > 0 ? "1px solid var(--color-primary)" : "1px solid #e2e8f0", borderRadius: "8px", background: selectedDates.size > 0 ? "rgba(30,64,175,0.06)" : "white", fontSize: "13px", fontWeight: "500", color: selectedDates.size > 0 ? "var(--color-primary)" : "#475569", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <Calendar size={14} />
+                {selectedDates.size > 0 ? `${selectedDates.size} date${selectedDates.size > 1 ? "s" : ""}` : "Filter by date"}
+              </button>
+
+              {datePickerOpen && (
+                <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "white", border: "1px solid #e2e8f0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, padding: "16px", width: "280px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                    <button onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", borderRadius: "6px", display: "flex" }}><ChevronLeft size={16} /></button>
+                    <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>{calMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</span>
+                    <button onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", borderRadius: "6px", display: "flex" }}><ChevronRight size={16} /></button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: "4px" }}>
+                    {["S","M","T","W","T","F","S"].map((d,i) => (
+                      <div key={i} style={{ textAlign: "center", fontSize: "10px", fontWeight: "700", color: "#94a3b8", padding: "4px 0" }}>{d}</div>
+                    ))}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
+                    {calDays.map((ds, i) => {
+                      if (!ds) return <div key={i} />;
+                      const sel = selectedDates.has(ds);
+                      const day = parseInt(ds.split("-")[2]);
+                      return (
+                        <button
+                          key={ds}
+                          onClick={() => toggleDate(ds)}
+                          style={{ padding: "6px 0", borderRadius: "6px", border: "none", background: sel ? "var(--color-primary)" : "transparent", color: sel ? "white" : "#0f172a", fontSize: "12px", fontWeight: sel ? "700" : "500", cursor: "pointer", transition: "all 0.1s" }}
+                          onMouseEnter={e => { if (!sel) e.currentTarget.style.background = "#f1f5f9"; }}
+                          onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "transparent"; }}
+                        >{day}</button>
+                      );
+                    })}
+                  </div>
+                  {selectedDates.size > 0 && (
+                    <button onClick={() => setSelectedDates(new Set())} style={{ marginTop: "12px", width: "100%", padding: "7px", background: "#f1f5f9", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#64748b", cursor: "pointer" }}>Clear dates</button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Source filter */}
             <select
               value={sourceFilter}
               onChange={(e) => setSourceFilter(e.target.value)}
-              style={{
-                padding: "10px 16px",
-                background: "#f1f5f9",
-                border: "1px solid #cbd5e1",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontSize: "13px",
-                fontWeight: "600",
-                color: "#475569",
-                transition: "all 0.2s",
-                outline: "none"
-              }}
+              style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#475569", outline: "none" }}
             >
               <option value="All">All Sources</option>
               <option value="Meta Ads">Meta Ads</option>
@@ -377,6 +424,18 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               <option value="Website">Website</option>
             </select>
           </div>
+
+          {/* Active date chips */}
+          {selectedDates.size > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {Array.from(selectedDates).sort().map(ds => (
+                <span key={ds} style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 8px", background: "rgba(30,64,175,0.08)", border: "1px solid rgba(30,64,175,0.2)", borderRadius: "20px", fontSize: "11px", fontWeight: "600", color: "var(--color-primary)" }}>
+                  {new Date(ds + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  <button onClick={() => toggleDate(ds)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)", padding: 0, display: "flex", opacity: 0.7 }}><X size={11} /></button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Table with Scrollbar */}
@@ -406,17 +465,11 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                 // "total" shows all, so no extra condition needed
 
                 let matchesDate = true;
-                if (startDate || endDate) {
+                if (selectedDates.size > 0) {
                   try {
                     const enqDateStr = new Date(e.dateReceived).toISOString().split('T')[0];
-                    if (startDate && endDate) {
-                      matchesDate = enqDateStr >= startDate && enqDateStr <= endDate;
-                    } else if (startDate) {
-                      matchesDate = enqDateStr >= startDate;
-                    } else if (endDate) {
-                      matchesDate = enqDateStr <= endDate;
-                    }
-                  } catch (err) {
+                    matchesDate = selectedDates.has(enqDateStr);
+                  } catch {
                     matchesDate = false;
                   }
                 }
