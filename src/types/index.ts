@@ -227,6 +227,8 @@ export interface DesignComment {
   content: string;
   author: string;
   createdAt: string;
+  isGeneral?: boolean;
+  isDraft?: boolean;
 }
 
 export interface DesignVersion {

@@ -8,7 +8,8 @@ import {
   Layout,
   ZoomOut,
   ZoomIn,
-  Loader2
+  Loader2,
+  Trash
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
@@ -45,9 +46,13 @@ export function DesignTab({ order, customer }: DesignTabProps) {
   const [uploading, setUploading] = useState(false);
   const [commentingOn, setCommentingOn] = useState<{x: number, y: number} | null>(null);
   const [commentText, setCommentText] = useState("");
+  const [draftComments, setDraftComments] = useState<any[]>([]);
+  const [showGeneralFeedback, setShowGeneralFeedback] = useState(false);
+  const [generalFeedbackText, setGeneralFeedbackText] = useState("");
   const supabase = createClient();
 
   const activeVersion = (dd.versions || []).find((v: any) => v.id === selectedVersionId) || (dd.versions || [])[(dd.versions || []).length - 1];
+  const allComments = [...(activeVersion?.comments || []), ...draftComments];
 
   const handleResourceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -87,7 +92,7 @@ export function DesignTab({ order, customer }: DesignTabProps) {
     setCommentingOn({ x, y });
   };
 
-  const handleAddComment = async () => {
+  const handleAddComment = () => {
     if (!commentingOn || !commentText.trim() || !activeVersion) return;
     const newComment = {
       id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
@@ -95,18 +100,53 @@ export function DesignTab({ order, customer }: DesignTabProps) {
       y: commentingOn.y,
       content: commentText,
       author: customer.name,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      isGeneral: false,
+      isDraft: true
     };
     
+    setDraftComments([...draftComments, newComment]);
+    setCommentingOn(null);
+    setCommentText("");
+  };
+
+  const handleDeleteComment = async (commentId: string, isDraft?: boolean) => {
+    if (isDraft) {
+      setDraftComments(draftComments.filter(c => c.id !== commentId));
+    } else {
+      const updatedVersions = dd.versions.map((v: any) => 
+        v.id === activeVersion.id ? { ...v, comments: (v.comments || []).filter((c: any) => c.id !== commentId) } : v
+      );
+      const updatedDetails = { ...dd, versions: updatedVersions };
+      await supabase.from("orders").update({ design_details: updatedDetails }).eq("id", order.id);
+    }
+  };
+
+  const handleGeneralFeedbackSubmit = async () => {
+    if (!generalFeedbackText.trim() && draftComments.length === 0) return;
+    if (!activeVersion) return;
+    
+    const finalComments = draftComments.map(c => ({ ...c, isDraft: undefined }));
+    
+    if (generalFeedbackText.trim()) {
+      finalComments.push({
+        id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
+        content: generalFeedbackText,
+        author: customer.name,
+        createdAt: new Date().toISOString(),
+        isGeneral: true
+      });
+    }
+    
     const updatedVersions = dd.versions.map((v: any) => 
-      v.id === activeVersion.id ? { ...v, comments: [...(v.comments || []), newComment], status: "Changes Requested" } : v
+      v.id === activeVersion.id ? { ...v, comments: [...(v.comments || []), ...finalComments], status: "Changes Requested" } : v
     );
     const updatedDetails = { ...dd, versions: updatedVersions };
     await supabase.from("orders").update({ design_details: updatedDetails, stage: "Design In Progress" }).eq("id", order.id);
-    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Added feedback on design proof. Notes: ${commentText}` });
     
-    setCommentingOn(null);
-    setCommentText("");
+    setDraftComments([]);
+    setShowGeneralFeedback(false);
+    setGeneralFeedbackText("");
   };
 
   const handleApproveDesign = async () => {
@@ -189,21 +229,36 @@ export function DesignTab({ order, customer }: DesignTabProps) {
                 />
                 
                 {/* Render Existing Comments */}
-                {activeVersion.comments?.map((comment: any) => (
-                  <div key={comment.id} className="absolute flex flex-col items-center group/pin z-10" style={{ left: `${comment.x}%`, top: `${comment.y}%`, transform: 'translate(-50%, -50%)' }}>
-                    <div className="w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold cursor-pointer">!</div>
-                    <div className="mt-2 hidden group-hover/pin:block w-48 p-2 bg-white rounded-lg shadow-xl border border-gray-200 text-xs text-gray-800 z-20">
-                      <span className="font-bold block mb-1 text-[10px] text-gray-400">{comment.author}</span>
-                      {comment.content}
+                {allComments.map((comment: any) => (
+                  !comment.isGeneral && (
+                    <div key={comment.id} className="absolute z-10 hover:z-50 w-0 h-0 group/pin" style={{ left: `${comment.x}%`, top: `${comment.y}%` }}>
+                      <div className={`absolute w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold cursor-pointer transition-colors -translate-x-1/2 -translate-y-1/2 ${comment.isDraft ? 'bg-amber-500' : 'bg-red-500'}`}>!</div>
+                      <div className={`hidden group-hover/pin:block absolute w-48 p-2 bg-white rounded-lg shadow-xl border border-gray-200 text-xs text-gray-800 z-20 
+                        ${comment.x < 20 ? 'left-0 ml-3' : comment.x > 80 ? 'right-0 mr-3' : '-translate-x-1/2'}
+                        ${comment.y > 50 ? 'bottom-full mb-3' : 'top-full mt-3'}
+                      `}>
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-bold text-[10px] text-gray-400">
+                            {comment.author} {comment.isDraft && <span className="text-amber-500">(Draft)</span>}
+                          </span>
+                          <button onClick={(e) => { e.stopPropagation(); handleDeleteComment(comment.id, comment.isDraft); }} className="text-red-500 hover:text-red-700 p-0.5" title="Delete comment">
+                            <Trash size={12} />
+                          </button>
+                        </div>
+                        {comment.content}
+                      </div>
                     </div>
-                  </div>
+                  )
                 ))}
                 
                 {/* New Comment Input Box */}
                 {commentingOn && (
-                  <div className="absolute z-30" style={{ left: `${commentingOn.x}%`, top: `${commentingOn.y}%`, transform: 'translate(-50%, -50%)' }}>
-                    <div className="w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold mb-2 mx-auto animate-bounce">+</div>
-                    <div className="bg-white p-3 rounded-lg shadow-2xl border border-gray-200 w-56 transform -translate-x-1/2">
+                  <div className="absolute z-30 w-0 h-0" style={{ left: `${commentingOn.x}%`, top: `${commentingOn.y}%` }}>
+                    <div className="absolute w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold animate-bounce -translate-x-1/2 -translate-y-1/2">+</div>
+                    <div className={`absolute bg-white p-3 rounded-lg shadow-2xl border border-gray-200 w-56 z-40
+                      ${commentingOn.x < 20 ? 'left-0 ml-3' : commentingOn.x > 80 ? 'right-0 mr-3' : '-translate-x-1/2'}
+                      ${commentingOn.y > 50 ? 'bottom-full mb-4' : 'top-full mt-4'}
+                    `}>
                       <textarea
                         autoFocus
                         value={commentText}
@@ -228,19 +283,71 @@ export function DesignTab({ order, customer }: DesignTabProps) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200">
+            {draftComments.length > 0 && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm animate-pulse">
+                <span>⚠️</span> You have {draftComments.length} unsaved pinpoint comment{draftComments.length > 1 ? 's' : ''}. Click "Request Changes" below to submit {draftComments.length > 1 ? 'them' : 'it'} to the designer.
+              </div>
+            )}
+
+            <div className="flex flex-col md:flex-row items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200 gap-4">
               <span className="text-xs text-gray-500">
                 {activeVersion.status === "Approved" ? "Design approved for production." : "Click anywhere on the design to leave pinpoint feedback."}
               </span>
               {activeVersion.status !== "Approved" && (
-                <button
-                  onClick={handleApproveDesign}
-                  className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 flex items-center gap-2 shadow-sm"
-                >
-                  <CheckCircle size={16} /> Approve Design
-                </button>
+                <div className="flex gap-2 w-full md:w-auto">
+                  <button
+                    onClick={() => setShowGeneralFeedback(!showGeneralFeedback)}
+                    className="px-4 py-2 border border-slate-300 bg-white text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 flex-1 md:flex-none transition-colors"
+                  >
+                    Request Changes
+                  </button>
+                  <button
+                    onClick={handleApproveDesign}
+                    className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 flex items-center justify-center gap-2 shadow-sm flex-1 md:flex-none transition-colors"
+                  >
+                    <CheckCircle size={16} /> Approve Design
+                  </button>
+                </div>
               )}
             </div>
+
+            {/* General Feedback Textarea */}
+            {showGeneralFeedback && activeVersion.status !== "Approved" && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-4 space-y-3">
+                <textarea 
+                  rows={3} 
+                  value={generalFeedbackText} 
+                  onChange={e => setGeneralFeedbackText(e.target.value)} 
+                  placeholder="Describe the overall changes you need..." 
+                  className="w-full p-3 border border-blue-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50" 
+                />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setShowGeneralFeedback(false)} className="px-4 py-2 border border-slate-300 text-slate-600 bg-white rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors">Cancel</button>
+                  <button onClick={handleGeneralFeedbackSubmit} disabled={!generalFeedbackText.trim() && draftComments.length === 0} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-blue-700 shadow-sm transition-colors">
+                    {draftComments.length > 0 ? "Submit Feedback & Request Changes" : "Submit Feedback"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Display General Feedback History */}
+            {allComments.some((c: any) => c.isGeneral) && (
+              <div className="mt-4 space-y-3">
+                <h4 className="text-sm font-bold text-gray-800">General Feedback</h4>
+                {allComments.filter((c: any) => c.isGeneral).map((comment: any) => (
+                  <div key={comment.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm relative group">
+                    <button onClick={() => handleDeleteComment(comment.id, comment.isDraft)} className="absolute top-3 right-3 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                      <Trash size={12} />
+                    </button>
+                    <div className="flex items-center justify-between mb-1 pr-6">
+                      <span className="text-xs font-bold text-gray-800">{comment.author}</span>
+                      <span className="text-[10px] text-gray-500">{new Date(comment.createdAt).toLocaleString()}</span>
+                    </div>
+                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{comment.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <div className="text-center bg-gray-50 rounded-xl border border-dashed border-gray-300 p-12 flex flex-col items-center">

@@ -161,15 +161,20 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                   
                   {/* Render Comments/Pins */}
                   {activeVersion.comments?.map((comment) => (
-                    <div key={comment.id} className="absolute flex flex-col items-center group z-10" style={{ left: `${comment.x}%`, top: `${comment.y}%`, transform: 'translate(-50%, -50%)' }}>
-                      <div className="w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold cursor-pointer">
-                        !
+                    !comment.isGeneral && (
+                      <div key={comment.id} className="absolute z-10 hover:z-50 w-0 h-0 group" style={{ left: `${comment.x}%`, top: `${comment.y}%` }}>
+                        <div className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold cursor-pointer -translate-x-1/2 -translate-y-1/2">
+                          !
+                        </div>
+                        <div className={`hidden group-hover:block absolute w-48 p-2 bg-white rounded-lg shadow-xl border border-slate-200 text-xs text-slate-800 z-20 
+                          ${comment.x < 20 ? 'left-0 ml-3' : comment.x > 80 ? 'right-0 mr-3' : '-translate-x-1/2'}
+                          ${comment.y > 50 ? 'bottom-full mb-3' : 'top-full mt-3'}
+                        `}>
+                          <span className="font-bold block mb-1 text-[10px] text-slate-400">{comment.author}</span>
+                          {comment.content}
+                        </div>
                       </div>
-                      <div className="mt-2 hidden group-hover:block w-48 p-2 bg-white rounded-lg shadow-xl border border-slate-200 text-xs text-slate-800 z-20">
-                        <span className="font-bold block mb-1 text-[10px] text-slate-400">{comment.author}</span>
-                        {comment.content}
-                      </div>
-                    </div>
+                    )
                   ))}
                 </div>
 
@@ -200,8 +205,23 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                   )}
                 </div>
               </div>
-            </div>
-          )}
+                {/* Display General Feedback History */}
+                {activeVersion.comments?.some((c: any) => c.isGeneral) && (
+                  <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <h4 className="text-xs font-bold text-slate-800 uppercase">General Feedback</h4>
+                    {activeVersion.comments.filter((c: any) => c.isGeneral).map((comment: any) => (
+                      <div key={comment.id} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-slate-800">{comment.author}</span>
+                          <span className="text-[10px] text-slate-500">{new Date(comment.createdAt).toLocaleString()}</span>
+                        </div>
+                        <p className="text-xs text-slate-600 whitespace-pre-wrap">{comment.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
         </div>
       )}
 
