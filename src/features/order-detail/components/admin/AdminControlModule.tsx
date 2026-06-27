@@ -140,18 +140,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
             <Settings size={18} className="text-slate-500" />
             <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">Workflow Stage & Approvals</h3>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Manual Override:</span>
-            <select
-              value={order.stage}
-              onChange={(e) => updateOrderStage(order.id, e.target.value)}
-              className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold bg-white text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              {Object.keys(STAGE_LABEL).map(stage => (
-                <option key={stage} value={stage}>{STAGE_LABEL[stage].label}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
         <div className="p-5">

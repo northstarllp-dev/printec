@@ -781,11 +781,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               {activeStepTab === 99 && (
                 <button
                   onClick={() => setActiveStepTab(stageToTabIndex(order.stage))}
-                  style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", cursor: "pointer", color: "#0F172A", fontSize: "12px", fontWeight: "700", padding: "6px 12px", transition: "all 0.15s" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--color-primary)", border: "none", borderRadius: "8px", cursor: "pointer", color: "white", fontSize: "13px", fontWeight: "700", padding: "10px 16px", transition: "all 0.2s" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-primary-container)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-primary)"; }}
                 >
-                  <ArrowLeft size={14} /> Back to Worksheet
+                  <ArrowLeft size={16} /> Back to Worksheet
                 </button>
               )}
               <div>
@@ -793,8 +793,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   {activeModuleTitle}
                 </h2>
                 <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94A3B8" }}>
-                  {activeStepTab === 2 && sv.sitePersonnel ? `Designer: ${sv.sitePersonnel}` : ""}{" "}
-                  {order.versionHistory && order.versionHistory.length > 0 ? `• ${order.versionHistory.length} versions` : ""}
+                  {activeStepTab === 2 && sv.sitePersonnel ? `Designer: ${sv.sitePersonnel}` : ""}
                 </p>
               </div>
             </div>
