@@ -23,10 +23,10 @@ interface OrderCommunicationCenterProps {
 interface DBMessage {
   id: string;
   order_id: string;
-  tab: "internal" | "customer" | "timeline";
-  sender_name: string;
-  sender_role: string;
-  sender_id: string | null;
+  activity_type: "internal" | "customer" | "timeline";
+  actor_name: string;
+  actor_role: string;
+  actor_id: string | null;
   content: string;
   attachments: any[];
   is_read: boolean;
@@ -89,7 +89,7 @@ export function OrderCommunicationCenter({
     async function loadMessages() {
       try {
         const { data, error } = await supabase
-          .from("order_messages")
+          .from("order_activity")
           .select("*")
           .eq("order_id", orderId)
           .order("created_at", { ascending: true });
@@ -115,7 +115,7 @@ export function OrderCommunicationCenter({
         {
           event: "*",
           schema: "public",
-          table: "order_messages",
+          table: "order_activity",
           filter: `order_id=eq.${orderId}`
         },
         (payload) => {
@@ -124,7 +124,7 @@ export function OrderCommunicationCenter({
             setMessages((prev) => {
               if (prev.some((m) => m.id === newMessage.id)) return prev;
               // Mark as read immediately if it's visible in our active window
-              if (newMessage.tab === activeTab) {
+              if (newMessage.activity_type === activeTab) {
                 markAsRead(newMessage.id);
               }
               return [...prev, newMessage];
@@ -172,7 +172,7 @@ export function OrderCommunicationCenter({
 
   const markAsRead = async (messageId: string) => {
     await supabase
-      .from("order_messages")
+      .from("order_activity")
       .update({ is_read: true })
       .eq("id", messageId);
   };
@@ -269,12 +269,12 @@ export function OrderCommunicationCenter({
         file_size: file.size
       };
 
-      await supabase.from("order_messages").insert({
+      await supabase.from("order_activity").insert({
         order_id: orderId,
-        tab: activeTab,
-        sender_name: currentUserName,
-        sender_role: currentUserRole,
-        sender_id: currentUserId || null,
+        activity_type: activeTab,
+        actor_name: currentUserName,
+        actor_role: currentUserRole,
+        actor_id: currentUserId || null,
         content: `Uploaded attachment: ${file.name}`,
         attachments: [attachment]
       });
@@ -341,12 +341,12 @@ export function OrderCommunicationCenter({
     if (!inputValue.trim()) return;
 
     try {
-      const { error } = await supabase.from("order_messages").insert({
+      const { error } = await supabase.from("order_activity").insert({
         order_id: orderId,
-        tab: activeTab,
-        sender_name: currentUserName,
-        sender_role: currentUserRole,
-        sender_id: currentUserId || null,
+        activity_type: activeTab,
+        actor_name: currentUserName,
+        actor_role: currentUserRole,
+        actor_id: currentUserId || null,
         content: inputValue.trim(),
         attachments: []
       });
@@ -363,12 +363,12 @@ export function OrderCommunicationCenter({
 
   // Filter messages
   const filteredMessages = messages.filter((msg) => {
-    if (msg.tab !== activeTab) return false;
+    if (msg.activity_type !== activeTab) return false;
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const contentMatch = msg.content.toLowerCase().includes(q);
-      const senderMatch = msg.sender_name.toLowerCase().includes(q);
+      const senderMatch = msg.actor_name.toLowerCase().includes(q);
       if (!contentMatch && !senderMatch) return false;
     }
 
@@ -385,7 +385,7 @@ export function OrderCommunicationCenter({
       } else if (filterType === "mentions") {
         if (!msg.content.includes("@")) return false;
       } else if (filterType === "system") {
-        if (msg.sender_role !== "System") return false;
+        if (msg.actor_role !== "System") return false;
       }
     }
 
@@ -405,8 +405,8 @@ export function OrderCommunicationCenter({
     const counts = { internal: 0, customer: 0 };
     messages.forEach(m => {
       if (!m.is_read) {
-        if (m.tab === "internal") counts.internal++;
-        if (m.tab === "customer") counts.customer++;
+        if (m.activity_type === "internal") counts.internal++;
+        if (m.activity_type === "customer") counts.customer++;
       }
     });
     return counts;
@@ -574,8 +574,8 @@ export function OrderCommunicationCenter({
       {/* Messages Feed */}
       <div className="flex-1 overflow-y-auto px-4 py-5 space-y-4 bg-[#FCFCFD]">
         {filteredMessages.map((msg, idx) => {
-          const isSystem = msg.sender_role === "System";
-          const isMe = msg.sender_id === currentUserId || (currentUserRole === "Customer" && msg.sender_role === "Customer") || (currentUserRole !== "Customer" && msg.sender_role !== "Customer" && !isSystem && msg.sender_name === currentUserName);
+          const isSystem = msg.actor_role === "System";
+          const isMe = msg.actor_id === currentUserId || (currentUserRole === "Customer" && msg.actor_role === "Customer") || (currentUserRole !== "Customer" && msg.actor_role !== "Customer" && !isSystem && msg.actor_name === currentUserName);
           
           if (isSystem) {
             return (
@@ -593,7 +593,7 @@ export function OrderCommunicationCenter({
             );
           }
 
-          const initials = msg.sender_name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+          const initials = msg.actor_name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 
           return (
             <div 
@@ -604,7 +604,7 @@ export function OrderCommunicationCenter({
               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-extrabold shrink-0 border shadow-3xs select-none ${
                 isMe 
                   ? "bg-[#0F172A] text-white border-[#0F172A]" 
-                  : msg.sender_role === "Customer" 
+                  : msg.actor_role === "Customer" 
                     ? "bg-[#EFF6FF] text-[#2563EB] border-[#BFDBFE]"
                     : "bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]"
               }`}>
@@ -615,15 +615,15 @@ export function OrderCommunicationCenter({
               <div className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                 {/* Sender Title */}
                 <span className="text-[9px] font-bold text-slate-400 mb-0.5 px-1 flex items-center gap-1 uppercase tracking-wider">
-                  {msg.sender_name}
+                  {msg.actor_name}
                   <span className={`text-[8px] px-1 py-0.2 rounded font-extrabold ${
-                    msg.sender_role === "Admin" 
+                    msg.actor_role === "Admin" 
                       ? "bg-red-50 text-red-600 border border-red-100" 
-                      : msg.sender_role === "Customer" 
+                      : msg.actor_role === "Customer" 
                         ? "bg-blue-50 text-blue-600 border border-blue-100" 
                         : "bg-emerald-50 text-emerald-600 border border-emerald-100"
                   }`}>
-                    {msg.sender_role}
+                    {msg.actor_role}
                   </span>
                 </span>
 

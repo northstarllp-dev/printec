@@ -207,12 +207,13 @@ export async function sendQuotationToCustomer(quotationId: string, adminName: st
   if (error) throw new Error(error.message);
 
   await supabase.from("orders").update({ stage: "Quotation Sent" }).eq("id", qt.order_id);
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: qt.order_id,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: `Quotation ${qt.quotation_id} has been approved by ${adminName} and sent to the customer.`,
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Quotation ${qt.quotation_id} approved by ${adminName} and sent to the customer.`,
+    metadata: { action: "quotation_sent", quotation_id: qt.quotation_id }
   });
 
   revalidatePath("/admin/orders");
@@ -258,12 +259,13 @@ export async function saveQuotationMaterialPreferences(
   }
 
   // Notify via timeline
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: uuid,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
     content: "Customer has updated their material preferences.",
+    metadata: { action: "material_preferences_updated" }
   });
 }
 // ─────────────────────────────────────────────────────────────────────────────
@@ -277,12 +279,13 @@ export async function customerApproveQuotation(orderId: string, customerName: st
 
   await supabase.from("quotations").update({ status: "Approved", customer_response: "Yes" }).eq("order_id", uuid);
   await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", uuid);
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: uuid,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
     content: `${customerName} has approved the quotation. Order is ready for advance payment.`,
+    metadata: { action: "quotation_approved_by_customer" }
   });
 
   revalidatePath(`/admin/orders/${friendly}`);
@@ -295,12 +298,13 @@ export async function customerRequestRevision(orderId: string, customerName: str
 
   await supabase.from("quotations").update({ status: "Rejected", customer_response: "Revision" }).eq("order_id", uuid);
   await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", uuid);
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: uuid,
-    tab: "customer",
-    sender_name: customerName,
-    sender_role: "Customer",
+    activity_type: "customer",
+    actor_name: customerName,
+    actor_role: "Customer",
     content: `Revision Requested: ${notes}`,
+    metadata: { action: "quotation_revision_requested" }
   });
 
   revalidatePath(`/admin/orders/${friendly}`);

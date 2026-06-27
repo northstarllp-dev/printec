@@ -112,7 +112,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
     const supabase = createClient();
     const updatedQuote = { ...order.quoteDetails, status: "Approved" };
     setOrder(prev => ({ ...prev, stage: "Quotation Approved", quoteDetails: updatedQuote }));
-    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the quotation details." });
+    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the quotation details.", metadata: { action: "quotation_approved_by_customer" } });
     await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", order.id);
     await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", order.id);
     setUpdatingStatus(null);
@@ -124,7 +124,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
     const supabase = createClient();
     const updatedQuote = { ...order.quoteDetails, status: "Negotiation" };
     setOrder(prev => ({ ...prev, stage: "Quotation Negotiation", quoteDetails: updatedQuote }));
-    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}` });
+    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}`, metadata: { action: "quotation_declined" } });
     await supabase.from("quotations").update({ status: "Rejected" }).eq("order_id", order.id);
     await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", order.id);
     setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
@@ -136,7 +136,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
     const supabase = createClient();
     const updatedDesign = { ...order.designDetails, status: "Approved" };
     setOrder(prev => ({ ...prev, stage: "Design Approved", designDetails: updatedDesign }));
-    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the design proof layout." });
+    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the design proof layout.", metadata: { action: "design_approved_by_customer" } });
     await supabase.from("orders").update({ stage: "Design Approved", design_details: updatedDesign }).eq("id", order.id);
     setUpdatingStatus(null);
   };
@@ -147,7 +147,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
     const supabase = createClient();
     const updatedDesign = { ...order.designDetails, status: "Draft" };
     setOrder(prev => ({ ...prev, stage: "Design In Progress", designDetails: updatedDesign }));
-    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}` });
+    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}`, metadata: { action: "design_revision_requested" } });
     await supabase.from("orders").update({ stage: "Design In Progress", design_details: updatedDesign }).eq("id", order.id);
     setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
   };

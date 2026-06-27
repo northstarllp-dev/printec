@@ -170,7 +170,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     const supabase = createClient();
     async function loadMessages() {
       const { data } = await supabase
-        .from("order_messages")
+        .from("order_activity")
         .select("*")
         .eq("order_id", order.orderId || order.id);
       if (data) setMessages(data);
@@ -182,7 +182,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       .on("postgres_changes", {
         event: "*",
         schema: "public",
-        table: "order_messages",
+        table: "order_activity",
         filter: `order_id=eq.${order.orderId || order.id}`
       }, (payload) => {
         if (payload.eventType === "INSERT") {
