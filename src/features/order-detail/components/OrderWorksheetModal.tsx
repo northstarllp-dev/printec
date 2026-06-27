@@ -541,7 +541,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <div style={{ width: "1px", height: "20px", background: "#E2E8F0" }} />
         <span style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Order Management</span>
 
-        <div style={{ display: "flex", gap: "8px", marginLeft: "auto", alignItems: "center" }}>
+        <div className="hidden md:flex" style={{ gap: "8px", marginLeft: "auto", alignItems: "center" }}>
           <span style={{ display: "flex", alignItems: "center", gap: "4px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", fontWeight: "700", color: "#2563EB" }}>
             ↑ {activeCount} Active
           </span>
@@ -712,7 +712,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
             {/* Horizontal Timeline */}
             {activeStepTab !== 99 && (
-              <div style={{ position: "relative", paddingTop: "24px", paddingBottom: "0px", display: "flex", justifyContent: "space-between" }}>
+              <div className="hidden md:flex" style={{ position: "relative", paddingTop: "24px", paddingBottom: "0px", justifyContent: "space-between" }}>
                 {/* Background Connecting Line */}
                 <div style={{ position: "absolute", top: "36px", left: "40px", right: "40px", height: "2px", background: "#E2E8F0", zIndex: 0 }} />
 
