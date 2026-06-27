@@ -406,7 +406,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
 
   const actionButtonsNode = (
-    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
       {order.health && order.health !== "Active" ? (
         <>
           <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "600", display: "none" }}>
@@ -669,7 +669,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           <div style={{ background: "white", flexShrink: 0, padding: "0 24px" }}>
 
             {/* Top row: Order Info & Customer */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderBottom: "1px solid #F1F5F9" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "16px 0", borderBottom: "1px solid #F1F5F9" }}>
               <div>
                 <div style={{ fontSize: "11px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>
                   {order.orderCode}
@@ -681,7 +681,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
               {/* Customer Info Mini-Bar */}
               {client && (
-                <div style={{ display: "flex", alignItems: "center", gap: "16px", background: "#F8FAFC", padding: "6px 16px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", background: "#F8FAFC", padding: "6px 16px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
                   <div style={{ fontSize: "12px", fontWeight: "700", color: "#0F172A" }}>{client.name}</div>
                   {client.phone && (
                     <div style={{ fontSize: "12px", color: "#64748B" }}>

@@ -121,14 +121,9 @@ export interface SiteVisitDetails {
   suggestedProductType?: string;
   additionalObservations?: string;
 
+
   // New Visit Information Section
-  visitDate?: string;
-  visitTime?: string;
-  siteAddress?: string;
-  siteType?: string;
   contactPerson?: string;
-  contactNumber?: string;
-  specialInstructions?: string;
 
   // Electrical Assessment
   powerAvailable?: boolean;
@@ -152,28 +147,6 @@ export interface SiteVisitDetails {
   // Photo Categories
   photoCategories?: SitePhotoCategories;
 
-  // Legacy Fields for backward compatibility
-  width: number;
-  height: number;
-  depth: number;
-  installationHeight?: number;
-  powerAvailableLegacy?: string;
-  existingSignage?: string;
-  complexity?: string;
-  photos: string[]; // Front, Side, Area, Electrical, Competitor
-  legacyPhotoCategories?: {
-    front?: string;
-    side?: string;
-    area?: string;
-    electrical?: string;
-    competitor?: string;
-  };
-  notes?: string; // General notes
-  customerNotes?: {
-    budget?: string;
-    preferences?: string;
-    urgency?: string;
-  };
 
   // Stage 5: Review & Statuses
   reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending" | "Pending Admin Approval" | "Draft" | "Needs Revision" | "Rejected" | "Staff Approved";

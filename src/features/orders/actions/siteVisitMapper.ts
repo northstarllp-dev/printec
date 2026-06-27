@@ -46,13 +46,7 @@ export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
     suggestedProductType: sv.suggested_product_type,
     additionalObservations: sv.additional_observations,
 
-    visitDate: sv.visit_date,
-    visitTime: sv.visit_time,
-    siteAddress: sv.site_address,
-    siteType: sv.site_type,
     contactPerson: sv.contact_person,
-    contactNumber: sv.contact_number,
-    specialInstructions: sv.special_instructions,
 
     powerAvailable: sv.power_available,
     electricalPhotos: sv.electrical_photos || [],
@@ -68,17 +62,6 @@ export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
     reviewNotes: sv.review_notes,
     auditTrail: sv.audit_trail || [],
 
-    width: sv.width || 0,
-    height: sv.height || 0,
-    depth: sv.depth || 0,
-    installationHeight: sv.installation_height,
-    powerAvailableLegacy: sv.power_available_legacy,
-    existingSignage: sv.existing_signage,
-    complexity: sv.complexity,
-    photos: sv.photos || [],
-    legacyPhotoCategories: sv.legacy_photo_categories || {},
-    notes: sv.notes,
-    customerNotes: sv.customer_notes || {},
 
     // Locations
     locations: (sv.site_visit_measurements || []).map((m: any) => ({
@@ -136,13 +119,7 @@ export function mapSiteVisitToDb(orderId: string, companyId: string, details: Pa
     suggested_product_type: details.suggestedProductType,
     additional_observations: details.additionalObservations,
 
-    visit_date: details.visitDate,
-    visit_time: details.visitTime,
-    site_address: details.siteAddress,
-    site_type: details.siteType,
     contact_person: details.contactPerson,
-    contact_number: details.contactNumber,
-    special_instructions: details.specialInstructions,
 
     power_available: details.powerAvailable,
     electrical_photos: details.electricalPhotos,
@@ -158,16 +135,5 @@ export function mapSiteVisitToDb(orderId: string, companyId: string, details: Pa
     review_notes: details.reviewNotes,
     audit_trail: details.auditTrail,
 
-    width: details.width,
-    height: details.height,
-    depth: details.depth,
-    installation_height: details.installationHeight,
-    power_available_legacy: details.powerAvailableLegacy,
-    existing_signage: details.existingSignage,
-    complexity: details.complexity,
-    photos: details.photos,
-    legacy_photo_categories: details.legacyPhotoCategories,
-    notes: details.notes,
-    customer_notes: details.customerNotes
   };
 }

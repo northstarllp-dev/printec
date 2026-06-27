@@ -112,12 +112,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   
   // State for collapsed sections
   const [collapsed, setCollapsed] = useState({
-    visitInfo: false,
-    measurements: false,
-    sitePhotos: false,
-    electrical: false,
-    structural: false,
-    internalNotes: false
+    visitInfo: true,
+    measurements: true,
+    sitePhotos: true,
+    electrical: true,
+    structural: true,
+    internalNotes: true
   });
   
   // State for expanded sign locations
@@ -228,10 +228,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     const baseDetails = (order.siteVisitDetails || {}) as Partial<SiteVisitDetails>;
     setSiteVisit({
       completed: false,
-      width: 0,
-      height: 0,
-      depth: 0,
-      photos: [],
       ...baseDetails,
       locations: (baseDetails.locations || []).map(loc => ({
         ...loc,
@@ -365,9 +361,9 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     onUpdate(updatedDetails);
   };
 
-  const scheduledDate = siteVisit.auditDate || siteVisit.preferredDate || siteVisit.visitDate;
-  const scheduledTime = siteVisit.auditTime || siteVisit.preferredTime || siteVisit.visitTime;
-  const scheduledAddress = siteVisit.customerAddress || siteVisit.siteAddress;
+  const scheduledDate = siteVisit.auditDate || siteVisit.preferredDate;
+  const scheduledTime = siteVisit.auditTime || siteVisit.preferredTime;
+  const scheduledAddress = siteVisit.customerAddress;
 
   return (
     <div className="space-y-6 text-slate-800">
@@ -375,7 +371,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       {/* ── SCHEDULED VISIT DETAILS (from customer portal) ── */}
       {scheduledDate || scheduledAddress ? (
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">
-          <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-2">
               <Calendar size={18} className="text-indigo-600" />
               <h3 className="text-sm font-extrabold text-indigo-900 uppercase tracking-wider">
@@ -479,26 +475,17 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </div>
             )}
 
-            {/* Site Type & Instructions */}
-            {(siteVisit.siteType || siteVisit.notes) && (
+            {/* Site Instructions */}
+            {siteVisit.additionalObservations && (
               <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm md:col-span-2">
-                {siteVisit.siteType && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
-                      Site Type: {siteVisit.siteType}
-                    </span>
-                  </div>
-                )}
-                {siteVisit.notes && (
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                      Special Instructions
-                    </span>
-                    <p className="text-xs text-slate-600">
-                      {siteVisit.notes}
-                    </p>
-                  </div>
-                )}
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Special Instructions
+                  </span>
+                  <p className="text-xs text-slate-600">
+                    {siteVisit.additionalObservations}
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -558,43 +545,44 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300">
         
-        {/* Horizontal scrollable tab list */}
-        <div 
-          className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent flex-1"
-          style={{ WebkitOverflowScrolling: "touch" }}
-        >
-          {(siteVisit.locations || []).map((loc, idx) => {
-            const isSelected = loc.id === selectedLocationId;
-            return (
-              <div key={loc.id} className={`flex items-center flex-shrink-0 border rounded-full pl-3 pr-1 py-1 transition-all ${isSelected ? "bg-[var(--color-secondary)]/10 border-[var(--color-secondary)]" : "bg-white border-slate-200 hover:bg-slate-50"}`}>
-                <button
-                  onClick={() => setSelectedLocationId(loc.id)}
-                  className={`text-xs font-bold transition-all focus:outline-none ${isSelected ? "text-[var(--color-secondary)] font-extrabold" : "text-slate-500"}`}
-                >
-                  {loc.name || `Item-${idx + 1}`}
-                </button>
-                <button
-                  onClick={() => removeSignLocation(loc.id)}
-                  className={`ml-2 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors focus:outline-none ${isSelected ? "text-[var(--color-secondary)] hover:text-red-650 hover:bg-red-50" : "text-slate-400 hover:text-red-550 hover:bg-red-50"}`}
-                  title="Remove item"
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-          
-          {/* New Item Button */}
-          <button
-            onClick={addSignLocation}
-            className="flex items-center gap-1 px-3.5 py-1.5 bg-white border border-dashed border-[var(--color-secondary)] text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/5 rounded-full text-xs font-bold transition-all flex-shrink-0 focus:outline-none"
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/60 pb-3 w-full">
+          <div 
+            className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent w-full"
+            style={{ WebkitOverflowScrolling: "touch" }}
           >
-            <Plus size={12} /> New Item
-          </button>
+            {(siteVisit.locations || []).map((loc, idx) => {
+              const isSelected = loc.id === selectedLocationId;
+              return (
+                <div key={loc.id} className={`flex items-center flex-shrink-0 border rounded-full pl-3 pr-1 py-1 transition-all ${isSelected ? "bg-[var(--color-secondary)]/10 border-[var(--color-secondary)]" : "bg-white border-slate-200 hover:bg-slate-50"}`}>
+                  <button
+                    onClick={() => setSelectedLocationId(loc.id)}
+                    className={`text-xs font-bold transition-all focus:outline-none ${isSelected ? "text-[var(--color-secondary)] font-extrabold" : "text-slate-500"}`}
+                  >
+                    {loc.name || `Item-${idx + 1}`}
+                  </button>
+                  <button
+                    onClick={() => removeSignLocation(loc.id)}
+                    className={`ml-2 w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors focus:outline-none ${isSelected ? "text-[var(--color-secondary)] hover:text-red-650 hover:bg-red-50" : "text-slate-400 hover:text-red-550 hover:bg-red-50"}`}
+                    title="Remove item"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            
+            {/* New Item Button */}
+            <button
+              onClick={addSignLocation}
+              className="flex items-center gap-1 px-3.5 py-1.5 bg-white border border-dashed border-[var(--color-secondary)] text-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/5 rounded-full text-xs font-bold transition-all flex-shrink-0 focus:outline-none"
+            >
+              <Plus size={12} /> New Item
+            </button>
+          </div>
         </div>
 
         {actionsNode && (
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex items-center gap-3 flex-shrink-0 w-full sm:w-auto overflow-x-auto">
             {actionsNode}
           </div>
         )}
@@ -611,16 +599,17 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       ) : (
         <>
           {/* ── MEASUREMENT ITEMS SECTION ── */}
-          <div className="bg-white border border-slate-200/70 rounded-2xl shadow-xs overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-secondary)]" />
-                Measurement Details
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">Specify sizes, ground clearance, and upload reference photos for {activeLoc.name}</p>
+          <SectionCard
+            title="Measurement Details"
+            icon={<span className="w-2.5 h-2.5 rounded-full bg-[var(--color-secondary)]" />}
+            isCollapsed={collapsed.measurements}
+            onToggle={() => toggleSection("measurements")}
+          >
+            <div className="mb-4 text-xs text-slate-500">
+              Specify sizes, ground clearance, and upload reference photos for {activeLoc.name}
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Item Label / Name</label>
                 <input
@@ -686,7 +675,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 />
               </div>
             </div>
-          </div>
+          </SectionCard>
 
           {/* ── SITE PHOTOS ── */}
           <SectionCard
@@ -714,7 +703,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Power Source Available?</label>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   {[true, false].map(option => (
                     <label
                       key={String(option)}
@@ -908,7 +897,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 // ── SECTION CARD WRAPPER COMPONENT ──
 const SectionCard: React.FC<{
   title: string;
-  icon?: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
   isCollapsed: boolean;
   onToggle: () => void;
@@ -1024,13 +1013,13 @@ const SelectedLocationForm: React.FC<{
       <div className="border-t border-slate-100 pt-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
           <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Location Reference Photos</label>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-1.5">
             <input
               type="text"
               placeholder="Paste photo URL..."
               value={tempPhotoUrl}
               onChange={(e) => setTempPhotoUrl(e.target.value)}
-              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] w-48 bg-white"
+              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] w-full sm:w-48 bg-white"
             />
             <button
               onClick={() => {
