@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { FileText, ZoomIn, ZoomOut, UploadCloud, MessageSquare, CheckCircle, Upload, X, Trash, RefreshCw } from "lucide-react";
+import { FileText, ZoomIn, ZoomOut, UploadCloud, MessageSquare, CheckCircle, Upload, X, Trash, RefreshCw, Download } from "lucide-react";
 import { Order, DesignDetails, DesignVersion, DesignComment, DesignResource } from "@/types";
 import { createClient } from "@/utils/supabase/client";
 import { updateOrderStageAction } from "@/features/orders/actions/orderActions";
@@ -84,6 +84,29 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     await updateDesignDetails(order.id, { versions: newVersions });
   };
 
+  const handleDeleteVersion = async (versionId: string) => {
+    if (!confirm("Are you sure you want to delete this design proof?")) return;
+    try {
+      const versionToDelete = localVersions.find(v => v.id === versionId);
+      const newVersions = localVersions.filter(v => v.id !== versionId);
+      setLocalVersions(newVersions);
+      if (selectedVersionId === versionId) {
+        setSelectedVersionId(newVersions.length > 0 ? newVersions[newVersions.length - 1].id : null);
+      }
+      await updateDesignDetails(order.id, { versions: newVersions, currentVersion: newVersions.length > 0 ? newVersions[newVersions.length - 1].versionNumber : 0 });
+      
+      if (versionToDelete?.proofUrl) {
+        const pathPart = versionToDelete.proofUrl.split("/public/site-visit-photos/")[1];
+        if (pathPart) {
+          await supabase.storage.from("site-visit-photos").remove([pathPart]);
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to delete design version.");
+    }
+  };
+
   const handlePaymentReceived = async () => {
     setMovingToProduction(true);
     try {
@@ -97,6 +120,25 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
       setMovingToProduction(false);
     }
   };
+
+  const handleDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Failed to download file");
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -116,10 +158,20 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         ) : (
           <div className="flex flex-wrap gap-3">
             {dd.resources.map(res => (
-              <a key={res.id} href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-blue-400">
-                {res.type === 'file' ? <FileText size={16} className="text-blue-500" /> : <UploadCloud size={16} className="text-slate-500" />}
-                <span className="text-xs text-slate-700 font-medium truncate max-w-[150px]">{res.name}</span>
-              </a>
+              <div key={res.id} className="flex items-center p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-blue-400 group">
+                <a href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-1.5">
+                  {res.type === 'file' ? <FileText size={16} className="text-blue-500" /> : <UploadCloud size={16} className="text-slate-500" />}
+                  <span className="text-xs text-slate-700 font-medium truncate max-w-[140px] group-hover:underline">{res.name}</span>
+                </a>
+                <div className="w-px h-4 bg-slate-200 mx-1.5"></div>
+                <button 
+                  onClick={(e) => { e.preventDefault(); handleDownload(res.url, res.name); }} 
+                  className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                  title="Download file"
+                >
+                  <Download size={14} />
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -190,14 +242,15 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
               <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <span className="text-xs text-slate-500 font-mono flex items-center gap-2">
                   <FileText size={14} /> {activeVersion.fileName}
+                  {isEmployee && (
+                    <button onClick={() => handleDeleteVersion(activeVersion.id)} className="ml-1 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors" title="Delete this version">
+                      <Trash size={14} />
+                    </button>
+                  )}
                 </span>
 
                 <div className="flex gap-2">
-                  {isEmployee && activeVersion.status === "Draft" && (
-                    <button type="button" onClick={() => handleUpdateVersionStatus(activeVersion.id, "Pending Admin")} className="px-3 py-1.5 bg-slate-950 text-white rounded-lg text-xs font-bold hover:bg-slate-800">
-                      Send to Admin
-                    </button>
-                  )}
+
                   {!isEmployee && activeVersion.status === "Pending Admin" && (
                     <button type="button" onClick={() => handleUpdateVersionStatus(activeVersion.id, "Sent to Customer")} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700">
                       Approve & Publish to Customer

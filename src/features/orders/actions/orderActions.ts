@@ -203,6 +203,7 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
 
   // 2. Map payload to DB schema
   const dbPayload = mapSiteVisitToDb(orderUuid, companyId, details);
+  console.log("Saving site visit details payload photo_categories:", JSON.stringify(dbPayload.photo_categories));
 
   // 3. Upsert into site_visits
   const { data: siteVisit, error: svError } = await supabase

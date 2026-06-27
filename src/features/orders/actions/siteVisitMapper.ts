@@ -56,7 +56,13 @@ export function mapSiteVisitFromDb(sv: any): SiteVisitDetails | null {
     structuralNotes: sv.structural_notes,
 
     internalNotes: sv.internal_notes || {},
-    photoCategories: sv.photo_categories || {},
+    photoCategories: {
+      front: sv.photo_categories?.front || [],
+      installationArea: sv.photo_categories?.installationArea || [],
+      powerSource: sv.photo_categories?.powerSource || [],
+      measurementReference: sv.photo_categories?.measurementReference || [],
+      additional: sv.photo_categories?.additional || []
+    },
 
     reviewStatus: sv.review_status,
     reviewNotes: sv.review_notes,

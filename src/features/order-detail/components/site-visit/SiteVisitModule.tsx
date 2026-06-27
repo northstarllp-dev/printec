@@ -150,9 +150,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   // Site photo upload state
-  const [sitePhotoUrls, setSitePhotoUrls] = useState<string[]>(
-    () => (order.siteVisitDetails as any)?.photoCategories?.additional || []
-  );
+  const sitePhotoUrls = siteVisit.photoCategories?.additional || [];
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   // Photo viewer state
@@ -186,7 +184,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
         urls.push(url);
       }
       const newUrls = [...sitePhotoUrls, ...urls];
-      setSitePhotoUrls(newUrls);
       
       // Update local state AND notify parent
       const updatedDetails = {
@@ -211,7 +208,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     const path = url.split("/site-visit-photos/").pop();
     if (path) await supabase.storage.from("site-visit-photos").remove([path]);
     const newUrls = sitePhotoUrls.filter(u => u !== url);
-    setSitePhotoUrls(newUrls);
     
     const updatedDetails = {
       ...siteVisit,

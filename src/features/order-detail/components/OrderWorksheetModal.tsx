@@ -17,6 +17,7 @@ import {
 import { SiteVisitModule } from "./site-visit/SiteVisitModule";
 import { QuotationModule } from "./quotation/QuotationModule";
 import { DesignModule } from "./design/DesignModule";
+import LoadingLines from "@/components/ui/loading-lines";
 import { ProductionModule } from "./production/ProductionModule";
 import { AdminControlModule } from "./admin/AdminControlModule";
 import { InstallationModule } from "./installation/InstallationModule";
@@ -61,6 +62,7 @@ const WORKFLOW_STEPS = [
   { label: "Site Visit", tab: 0, icon: "📍" },
   { label: "Quote", tab: 1, icon: "📄" },
   { label: "Design", tab: 2, icon: "🎨" },
+  { label: "Production", tab: 3, icon: "🏭" },
   { label: "Installation", tab: 4, icon: "🔧" },
 ];
 
@@ -162,6 +164,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
 
   const [messages, setMessages] = useState<any[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
   useEffect(() => { setActiveStepTab(stageToTabIndex(order.stage)); }, [order.stage]);
@@ -284,6 +287,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
 
   const handleAdminApprove = async () => {
+    setIsProcessing(true);
     try {
       // Save any pending drafts before advancing
       await handleSaveDraft();
@@ -294,9 +298,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       triggerLocalAlert("Stage approved and advanced.", "success");
       setShowRejectInput(false);
     } catch (err) { triggerLocalAlert("Failed to approve stage.", "error"); }
+    finally { setIsProcessing(false); }
   };
   const handleAdminRequestChanges = async (notes: string) => {
     if (!notes.trim()) { triggerLocalAlert("Please provide rejection feedback.", "warning"); return; }
+    setIsProcessing(true);
     try {
       await adminRejectStageAction(order.id, notes);
       setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
@@ -304,8 +310,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       setRejectNotes(""); setShowRejectInput(false);
       triggerLocalAlert("Feedback sent back.", "info");
     } catch (err) { triggerLocalAlert("Failed to submit rejection.", "error"); }
+    finally { setIsProcessing(false); }
   };
   const handleUpdateOrderStage = async (orderId: string, stage: string) => {
+    setIsProcessing(true);
     try {
       await updateOrderStageAction(orderId, stage);
       setOrder(prev => ({ ...prev, stage: stage as PipelineStage }));
@@ -314,9 +322,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     } catch (err) {
       console.error(err);
       triggerLocalAlert("Failed to change stage", "error");
-    }
+    } finally { setIsProcessing(false); }
   };
   const handleRequestAdvancement = async () => {
+    setIsProcessing(true);
     try {
       // Save any pending drafts before pushing
       await handleSaveDraft();
@@ -326,8 +335,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       router.refresh();
       triggerLocalAlert("Stage advancement requested.", "success");
     } catch (err) { triggerLocalAlert("Failed to request advancement.", "error"); }
+    finally { setIsProcessing(false); }
   };
   const handleUpdateHealth = async (health: string, reason?: string) => {
+    setIsProcessing(true);
     try {
       const res = await updateOrderHealthAction(order.id, health, reason);
       if (res && res.length > 0) {
@@ -336,8 +347,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         router.refresh();
       }
     } catch (err) { triggerLocalAlert("Failed to update health.", "error"); }
+    finally { setIsProcessing(false); }
   };
   const handleReopen = async () => {
+    setIsProcessing(true);
     try {
       const res = await reopenOrderAction(order.id);
       if (res && res.length > 0) {
@@ -346,6 +359,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         router.refresh();
       }
     } catch (err) { triggerLocalAlert("Failed to reopen.", "error"); }
+    finally { setIsProcessing(false); }
   };
 
 
@@ -365,6 +379,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
 
   const handleSaveDraft = async () => {
+    setIsProcessing(true);
     try {
       // Save based on active tab
       switch (activeStepTab) {
@@ -396,6 +411,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     } catch (err) {
       triggerLocalAlert("Failed to save draft.", "error");
       console.error(err);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -517,6 +534,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     { label: "Site Visit", tabIndex: 0, done: currentStageIndex > 0 },
     { label: "Quote", tabIndex: 1, done: currentStageIndex > 1 },
     { label: "Design", tabIndex: 2, done: currentStageIndex > 2 },
+    { label: "Production", tabIndex: 3, done: currentStageIndex > 3 },
     { label: "Installation", tabIndex: 4, done: currentStageIndex > 4 },
   ];
 
@@ -529,6 +547,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, height: "100%", maxHeight: "100%", overflow: "hidden", background: "#F8FAFC" }}>
+      {isProcessing && (
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-white/80 backdrop-blur-sm">
+          <LoadingLines />
+        </div>
+      )}
 
       {/* ── TOP BAR ── */}
       <header style={{ height: "52px", background: "white", borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", paddingLeft: "16px", paddingRight: "20px", gap: "12px", flexShrink: 0, zIndex: 30 }}>
@@ -808,12 +831,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 </span>
               )}
 
-              {/* Action Buttons (moved to module for Site Visit, kept here for others) */}
-              {activeStepTab !== 99 && activeStepTab !== 0 && activeStepTab !== 1 && (
-                <div style={{ marginLeft: "12px", paddingLeft: "12px", borderLeft: "1px solid #E2E8F0" }}>
-                  {actionButtonsNode}
-                </div>
-              )}
+              {/* Action Buttons removed from header as per request */}
             </div>
           </div>
 

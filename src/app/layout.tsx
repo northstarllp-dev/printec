@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { GlobalNavigationLoader } from "@/components/ui/GlobalNavigationLoader";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -27,6 +28,7 @@ export default function RootLayout({
         `}</style>
       </head>
       <body suppressHydrationWarning className={`${inter.variable} font-sans min-h-full bg-[var(--color-background)] antialiased`}>
+        <GlobalNavigationLoader />
         {children}
       </body>
     </html>

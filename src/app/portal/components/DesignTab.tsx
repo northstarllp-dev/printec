@@ -84,6 +84,25 @@ export function DesignTab({ order, customer }: DesignTabProps) {
     }
   };
 
+  const handleDeleteResource = async (resourceId: string, resourceUrl: string) => {
+    if (!confirm("Are you sure you want to delete this file?")) return;
+    try {
+      const updatedResources = (dd.resources || []).filter((r: any) => r.id !== resourceId);
+      const updatedDetails = { ...dd, resources: updatedResources };
+      
+      const { error: updateError } = await supabase.from("orders").update({ design_details: updatedDetails }).eq("id", order.id);
+      if (updateError) throw updateError;
+      
+      const pathPart = resourceUrl.split("/public/site-visit-photos/")[1];
+      if (pathPart) {
+        await supabase.storage.from("site-visit-photos").remove([pathPart]);
+      }
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      alert("Failed to delete file.");
+    }
+  };
+
   const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
     if (!activeVersion || activeVersion.status === "Approved") return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -182,10 +201,15 @@ export function DesignTab({ order, customer }: DesignTabProps) {
         {dd.resources && dd.resources.length > 0 && (
           <div className="mb-6 flex gap-3 flex-wrap">
             {dd.resources.map((res: any) => (
-              <a key={res.id} href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700 hover:underline">
-                <FileCheck size={14} />
-                <span className="text-xs font-medium truncate max-w-[150px]">{res.name}</span>
-              </a>
+              <div key={res.id} className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-100 rounded-lg text-blue-700">
+                <a href={res.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:underline">
+                  <FileCheck size={14} />
+                  <span className="text-xs font-medium truncate max-w-[150px]">{res.name}</span>
+                </a>
+                <button onClick={() => handleDeleteResource(res.id, res.url)} className="p-1 hover:bg-blue-200 rounded text-red-500 ml-1 transition-colors" title="Delete file">
+                  <Trash size={12} />
+                </button>
+              </div>
             ))}
           </div>
         )}

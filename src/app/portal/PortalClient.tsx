@@ -859,7 +859,17 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Quotation</h2>
                       <p className="text-sm text-slate-500">Review pricing options, set material preferences, and approve to proceed.</p>
                     </div>
-                    {qd.signageOptions && qd.signageOptions.length > 0 ? (
+                    {(!qd.status || qd.status === "Draft") ? (
+                      <div className="flex flex-col items-center justify-center py-16 px-4 bg-slate-50 border border-slate-200 border-dashed rounded-2xl text-center">
+                        <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4">
+                          <BarChart3 size={24} />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-800 mb-2">Quotation is being prepared</h3>
+                        <p className="text-sm text-slate-500 max-w-sm">
+                          Our team is currently working on your quotation based on the site visit and requirements. You will be notified once it is ready for your review.
+                        </p>
+                      </div>
+                    ) : qd.signageOptions && qd.signageOptions.length > 0 ? (
                       <div className="space-y-6">
                         {/* Invoice Header Details */}
                         <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
