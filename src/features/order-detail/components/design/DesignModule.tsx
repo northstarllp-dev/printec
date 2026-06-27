@@ -213,7 +213,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                       <div key={comment.id} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs font-bold text-slate-800">{comment.author}</span>
-                          <span className="text-[10px] text-slate-500">{new Date(comment.createdAt).toLocaleString()}</span>
+                          <span className="text-[10px] text-slate-500" suppressHydrationWarning>{new Date(comment.createdAt).toLocaleString()}</span>
                         </div>
                         <p className="text-xs text-slate-600 whitespace-pre-wrap">{comment.content}</p>
                       </div>

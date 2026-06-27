@@ -224,7 +224,7 @@ export function ProductQuoteDashboard() {
                   }}
                 >
                   <div>Quantity: {product.quantity}</div>
-                  <div>Price: ₹{product.price.toLocaleString()}</div>
+                  <div>Price: ₹{product.price.toLocaleString("en-IN")}</div>
                   <div>Lead Time: {product.leadTime}</div>
                 </div>
 
@@ -325,7 +325,7 @@ export function ProductQuoteDashboard() {
                         {product.name}
                       </div>
                       <div style={{ color: "#64748b", fontSize: "11px" }}>
-                        ₹{product.price.toLocaleString()} x {product.quantity}
+                        ₹{product.price.toLocaleString("en-IN")} x {product.quantity}
                       </div>
                     </div>
                     <button
@@ -414,7 +414,7 @@ export function ProductQuoteDashboard() {
               Grand Total
             </div>
             <div style={{ fontSize: "24px", fontWeight: "800" }}>
-              ₹{totalAmount.toLocaleString()}
+              ₹{totalAmount.toLocaleString("en-IN")}
             </div>
           </div>
 

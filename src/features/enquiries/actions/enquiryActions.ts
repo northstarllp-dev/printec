@@ -1,7 +1,7 @@
 "use server";
 
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { generateAndStorePortalToken } from "@/utils/portal-tokens";
 import { createAuditLogAction } from "@/features/audit/actions/auditActions";
@@ -188,12 +188,17 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
     console.error("Failed to update enquiry status:", updateEnqErr.message);
   }
 
+  const headersList = await headers();
+  const host = headersList.get("host") || "localhost:3000";
+  const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+  const requestBaseUrl = `${protocol}://${host}`;
+
   // 6. Generate secure HMAC-signed portal token and store for revocation tracking
   const { url: portalLink } = await generateAndStorePortalToken(
     supabase,
     friendlyCustomerId,
     friendlyOrderId,
-    { expiresInDays: 30, createdBy: "enquiry_conversion" }
+    { expiresInDays: 30, createdBy: "enquiry_conversion", baseUrl: requestBaseUrl }
   );
 
   // 7. Trigger customer notification workflow (Simulated send)

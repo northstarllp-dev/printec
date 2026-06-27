@@ -20,7 +20,8 @@ export default async function EnquirePage() {
     location: e.location,
     customerId: e.customers?.customer_id || e.customer_id,
     orderId: e.orders?.order_id || e.order_id,
-    enquireId: e.enquire_id || e.id
+    enquireId: e.enquire_id || e.id,
+    addedBy: e.added_by
   })) || [];
 
   const mappedCustomers = customers?.map(c => ({

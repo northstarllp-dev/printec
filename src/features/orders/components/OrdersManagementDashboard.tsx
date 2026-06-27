@@ -74,51 +74,17 @@ export function OrdersManagementDashboard({
   const [stageFilter, setStageFilter] = useState("ALL");
   const [healthFilter, setHealthFilter] = useState("ALL");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
-  // Multi-date filter
-  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
-  const datePickerRef = useRef<HTMLDivElement>(null);
+  
+  // Custom Date Range Filter
+  const [dateFilterType, setDateFilterType] = useState<"all" | "range">("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   // Debounce search — 220 ms
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim().toLowerCase()), 220);
     return () => clearTimeout(t);
   }, [searchTerm]);
-
-  // Close date picker on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
-        setDatePickerOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const toggleDate = useCallback((ds: string) => {
-    setSelectedDates(prev => {
-      const next = new Set(prev);
-      next.has(ds) ? next.delete(ds) : next.add(ds);
-      return next;
-    });
-  }, []);
-
-  // Build calendar days for current calMonth
-  const calDays = useMemo(() => {
-    const year = calMonth.getFullYear();
-    const month = calMonth.getMonth();
-    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const cells: (string | null)[] = Array(firstDay).fill(null);
-    for (let d = 1; d <= daysInMonth; d++) {
-      const mm = String(month + 1).padStart(2, "0");
-      const dd = String(d).padStart(2, "0");
-      cells.push(`${year}-${mm}-${dd}`);
-    }
-    return cells;
-  }, [calMonth]);
   
   const currentUserRole = userRole;
   const employeeName = currentEmployeeName;
@@ -233,11 +199,13 @@ export function OrdersManagementDashboard({
       if (!matches) return false;
     }
 
-    if (selectedDates.size > 0) {
+    if (dateFilterType === "range") {
       const orderDate = order.dateCreated
         ? new Date(order.dateCreated).toISOString().split("T")[0]
         : null;
-      if (!orderDate || !selectedDates.has(orderDate)) return false;
+      if (!orderDate) return false;
+      if (startDate && orderDate < startDate) return false;
+      if (endDate && orderDate > endDate) return false;
     }
 
     if (stageFilter !== "ALL") {
@@ -348,54 +316,34 @@ export function OrdersManagementDashboard({
               )}
             </div>
 
-            {/* Date picker trigger */}
-            <div style={{ position: "relative" }} ref={datePickerRef}>
-              <button
-                onClick={() => setDatePickerOpen(o => !o)}
-                style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 12px", border: selectedDates.size > 0 ? "1px solid var(--color-primary)" : "1px solid #e2e8f0", borderRadius: "8px", background: selectedDates.size > 0 ? "rgba(30,64,175,0.06)" : "white", fontSize: "13px", fontWeight: "500", color: selectedDates.size > 0 ? "var(--color-primary)" : "#475569", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                <Calendar size={14} />
-                {selectedDates.size > 0 ? `${selectedDates.size} date${selectedDates.size > 1 ? "s" : ""}` : "Filter by date"}
-              </button>
+            {/* Date Filter Type */}
+            <select
+              value={dateFilterType}
+              onChange={(e) => setDateFilterType(e.target.value as any)}
+              style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#475569", outline: "none" }}
+            >
+              <option value="all">All Dates</option>
+              <option value="range">Custom Range</option>
+            </select>
 
-              {/* Calendar dropdown */}
-              {datePickerOpen && (
-                <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "white", border: "1px solid #e2e8f0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, padding: "16px", width: "280px" }}>
-                  {/* Month nav */}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                    <button onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", borderRadius: "6px", display: "flex" }}><ChevronLeft size={16} /></button>
-                    <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>{calMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</span>
-                    <button onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", borderRadius: "6px", display: "flex" }}><ChevronRight size={16} /></button>
-                  </div>
-                  {/* Day headers */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: "4px" }}>
-                    {["S","M","T","W","T","F","S"].map((d,i) => (
-                      <div key={i} style={{ textAlign: "center", fontSize: "10px", fontWeight: "700", color: "#94a3b8", padding: "4px 0" }}>{d}</div>
-                    ))}
-                  </div>
-                  {/* Day cells */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
-                    {calDays.map((ds, i) => {
-                      if (!ds) return <div key={i} />;
-                      const sel = selectedDates.has(ds);
-                      const day = parseInt(ds.split("-")[2]);
-                      return (
-                        <button
-                          key={ds}
-                          onClick={() => toggleDate(ds)}
-                          style={{ padding: "6px 0", borderRadius: "6px", border: "none", background: sel ? "var(--color-primary)" : "transparent", color: sel ? "white" : "#0f172a", fontSize: "12px", fontWeight: sel ? "700" : "500", cursor: "pointer", transition: "all 0.1s" }}
-                          onMouseEnter={e => { if (!sel) e.currentTarget.style.background = "#f1f5f9"; }}
-                          onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "transparent"; }}
-                        >{day}</button>
-                      );
-                    })}
-                  </div>
-                  {selectedDates.size > 0 && (
-                    <button onClick={() => setSelectedDates(new Set())} style={{ marginTop: "12px", width: "100%", padding: "7px", background: "#f1f5f9", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#64748b", cursor: "pointer" }}>Clear dates</button>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* Conditional Date inputs */}
+            {dateFilterType === "range" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+                />
+                <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+                />
+              </div>
+            )}
 
             {/* Stage filter */}
             <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", fontWeight: "500", color: "#475569", cursor: "pointer", outline: "none" }}>
@@ -419,15 +367,23 @@ export function OrdersManagementDashboard({
             </select>
           </div>
 
-          {/* Active date chips */}
-          {selectedDates.size > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {Array.from(selectedDates).sort().map(ds => (
-                <span key={ds} style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 8px", background: "rgba(30,64,175,0.08)", border: "1px solid rgba(30,64,175,0.2)", borderRadius: "20px", fontSize: "11px", fontWeight: "600", color: "var(--color-primary)" }}>
-                  {new Date(ds + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                  <button onClick={() => toggleDate(ds)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)", padding: 0, display: "flex", opacity: 0.7 }}><X size={11} /></button>
-                </span>
-              ))}
+          {/* Reset Button */}
+          {(dateFilterType !== "all" || stageFilter !== "ALL" || healthFilter !== "ALL" || searchTerm !== "" || selectedKpi !== null) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "10px" }}>
+              <button
+                onClick={() => {
+                  setDateFilterType("all");
+                  setStartDate("");
+                  setEndDate("");
+                  setStageFilter("ALL");
+                  setHealthFilter("ALL");
+                  setSearchTerm("");
+                  setSelectedKpi(null);
+                }}
+                style={{ padding: "9px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "600", color: "#475569", outline: "none" }}
+              >
+                Reset Filters
+              </button>
             </div>
           )}
         </div>

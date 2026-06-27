@@ -89,11 +89,20 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [sourceFilter, setSourceFilter] = useState("All");
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
-  // Multi-date filter
-  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [calMonth, setCalMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
-  const datePickerRef = useRef<HTMLDivElement>(null);
+  
+  // Custom Date Range Filter States
+  const [dateFilterType, setDateFilterType] = useState<"all" | "range">("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [addedByFilter, setAddedByFilter] = useState("All");
+
+  const availableAddedBy = useMemo(() => {
+    const creatorsSet = new Set<string>();
+    enquiries.forEach(e => {
+      creatorsSet.add(e.addedBy || "Admin");
+    });
+    return Array.from(creatorsSet).sort();
+  }, [enquiries]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -102,38 +111,6 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  // Close date picker on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(e.target as Node)) {
-        setDatePickerOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const toggleDate = useCallback((ds: string) => {
-    setSelectedDates(prev => {
-      const next = new Set(prev);
-      next.has(ds) ? next.delete(ds) : next.add(ds);
-      return next;
-    });
-  }, []);
-
-  const calDays = useMemo(() => {
-    const year = calMonth.getFullYear();
-    const month = calMonth.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const cells: (string | null)[] = Array(firstDay).fill(null);
-    for (let d = 1; d <= daysInMonth; d++) {
-      const mm = String(month + 1).padStart(2, "0");
-      const dd = String(d).padStart(2, "0");
-      cells.push(`${year}-${mm}-${dd}`);
-    }
-    return cells;
-  }, [calMonth]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
@@ -344,10 +321,10 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
       {/* Table Section */}
       <div style={{ background: "white", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "visible" }}>
         {/* Search & Filter Bar */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "10px" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "12px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             {/* Search */}
-            <div style={{ flex: 1, position: "relative" }}>
+            <div style={{ flex: 1, minWidth: "200px", position: "relative" }}>
               <Search size={15} style={{ position: "absolute", left: "11px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
               <input
                 type="text"
@@ -365,50 +342,48 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               )}
             </div>
 
-            {/* Date picker */}
-            <div style={{ position: "relative" }} ref={datePickerRef}>
-              <button
-                onClick={() => setDatePickerOpen(o => !o)}
-                style={{ display: "flex", alignItems: "center", gap: "6px", padding: "9px 12px", border: selectedDates.size > 0 ? "1px solid var(--color-primary)" : "1px solid #e2e8f0", borderRadius: "8px", background: selectedDates.size > 0 ? "rgba(30,64,175,0.06)" : "white", fontSize: "13px", fontWeight: "500", color: selectedDates.size > 0 ? "var(--color-primary)" : "#475569", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                <Calendar size={14} />
-                {selectedDates.size > 0 ? `${selectedDates.size} date${selectedDates.size > 1 ? "s" : ""}` : "Filter by date"}
-              </button>
+            {/* Date Filter Type */}
+            <select
+              value={dateFilterType}
+              onChange={(e) => setDateFilterType(e.target.value as any)}
+              style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#475569", outline: "none" }}
+            >
+              <option value="all">All Dates</option>
+              <option value="range">Custom Range</option>
+            </select>
 
-              {datePickerOpen && (
-                <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "white", border: "1px solid #e2e8f0", borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, padding: "16px", width: "280px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                    <button onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", borderRadius: "6px", display: "flex" }}><ChevronLeft size={16} /></button>
-                    <span style={{ fontSize: "13px", fontWeight: "700", color: "#0f172a" }}>{calMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</span>
-                    <button onClick={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b", padding: "4px", borderRadius: "6px", display: "flex" }}><ChevronRight size={16} /></button>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: "4px" }}>
-                    {["S","M","T","W","T","F","S"].map((d,i) => (
-                      <div key={i} style={{ textAlign: "center", fontSize: "10px", fontWeight: "700", color: "#94a3b8", padding: "4px 0" }}>{d}</div>
-                    ))}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "2px" }}>
-                    {calDays.map((ds, i) => {
-                      if (!ds) return <div key={i} />;
-                      const sel = selectedDates.has(ds);
-                      const day = parseInt(ds.split("-")[2]);
-                      return (
-                        <button
-                          key={ds}
-                          onClick={() => toggleDate(ds)}
-                          style={{ padding: "6px 0", borderRadius: "6px", border: "none", background: sel ? "var(--color-primary)" : "transparent", color: sel ? "white" : "#0f172a", fontSize: "12px", fontWeight: sel ? "700" : "500", cursor: "pointer", transition: "all 0.1s" }}
-                          onMouseEnter={e => { if (!sel) e.currentTarget.style.background = "#f1f5f9"; }}
-                          onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "transparent"; }}
-                        >{day}</button>
-                      );
-                    })}
-                  </div>
-                  {selectedDates.size > 0 && (
-                    <button onClick={() => setSelectedDates(new Set())} style={{ marginTop: "12px", width: "100%", padding: "7px", background: "#f1f5f9", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: "600", color: "#64748b", cursor: "pointer" }}>Clear dates</button>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* Conditional Date inputs */}
+            {dateFilterType === "range" && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+                />
+                <span style={{ fontSize: "12px", color: "#64748b" }}>to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{ padding: "8px 12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569", outline: "none" }}
+                />
+              </div>
+            )}
+
+            {/* Added By filter */}
+            <select
+              value={addedByFilter}
+              onChange={(e) => setAddedByFilter(e.target.value)}
+              style={{ padding: "9px 12px", background: "white", border: "1px solid #e2e8f0", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "500", color: "#475569", outline: "none" }}
+            >
+              <option value="All">All Added By</option>
+              {availableAddedBy.map((creator) => (
+                <option key={creator} value={creator}>
+                  {creator}
+                </option>
+              ))}
+            </select>
 
             {/* Source filter */}
             <select
@@ -423,19 +398,25 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               <option value="Google Enquiry (Ph Call)">Google Enquiry (Ph Call)</option>
               <option value="Website">Website</option>
             </select>
-          </div>
 
-          {/* Active date chips */}
-          {selectedDates.size > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
-              {Array.from(selectedDates).sort().map(ds => (
-                <span key={ds} style={{ display: "inline-flex", alignItems: "center", gap: "4px", padding: "3px 8px", background: "rgba(30,64,175,0.08)", border: "1px solid rgba(30,64,175,0.2)", borderRadius: "20px", fontSize: "11px", fontWeight: "600", color: "var(--color-primary)" }}>
-                  {new Date(ds + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                  <button onClick={() => toggleDate(ds)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-primary)", padding: 0, display: "flex", opacity: 0.7 }}><X size={11} /></button>
-                </span>
-              ))}
-            </div>
-          )}
+            {/* Reset Button */}
+            {(dateFilterType !== "all" || addedByFilter !== "All" || sourceFilter !== "All" || searchTerm !== "" || selectedKpi !== null) && (
+              <button
+                onClick={() => {
+                  setDateFilterType("all");
+                  setStartDate("");
+                  setEndDate("");
+                  setAddedByFilter("All");
+                  setSourceFilter("All");
+                  setSearchTerm("");
+                  setSelectedKpi(null);
+                }}
+                style={{ padding: "9px 12px", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: "8px", cursor: "pointer", fontSize: "13px", fontWeight: "600", color: "#475569", outline: "none" }}
+              >
+                Reset Filters
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Table with Scrollbar */}
@@ -450,7 +431,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>SOURCE</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>REQ NOTES</th>
                 <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ADDED BY</th>
-                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>CUST / ORDER</th>
+                <th style={{ padding: "14px 20px", textAlign: "left", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ORDER ID</th>
                 <th style={{ padding: "14px 20px", textAlign: "right", fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>ACTIONS</th>
               </tr>
             </thead>
@@ -458,23 +439,30 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
               {enquiries.filter(e => {
                 const matchesSearch = e.leadName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) || e.phone.includes(debouncedSearchTerm);
                 const matchesSource = sourceFilter === "All" || e.source === sourceFilter;
+                const matchesAddedBy = addedByFilter === "All" || (e.addedBy || "Admin") === addedByFilter;
 
                 // KPI filter
                 if (selectedKpi === "pending" && e.status !== "Pending") return false;
                 if (selectedKpi === "converted" && e.status !== "Converted") return false;
-                // "total" shows all, so no extra condition needed
 
                 let matchesDate = true;
-                if (selectedDates.size > 0) {
+                if (e.dateReceived) {
                   try {
-                    const enqDateStr = new Date(e.dateReceived).toISOString().split('T')[0];
-                    matchesDate = selectedDates.has(enqDateStr);
+                    const enqDate = new Date(e.dateReceived);
+                    const enqDateStr = enqDate.toISOString().split('T')[0];
+                    
+                    if (dateFilterType === "range") {
+                      if (startDate && enqDateStr < startDate) matchesDate = false;
+                      if (endDate && enqDateStr > endDate) matchesDate = false;
+                    }
                   } catch {
                     matchesDate = false;
                   }
+                } else if (dateFilterType !== "all") {
+                  matchesDate = false;
                 }
 
-                return matchesSearch && matchesSource && matchesDate;
+                return matchesSearch && matchesSource && matchesAddedBy && matchesDate;
               }).map((enq) => {
                 const statusColor = getStatusColor(enq.status);
                 return (
@@ -490,11 +478,38 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                     <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b", fontWeight: "600" }}>
                       {enq.addedBy || "Admin"}
                     </td>
-                    <td style={{ padding: "16px 20px", fontSize: "12px", color: "#64748b" }}>
-                      {enq.customerId ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                          <a href={`/admin/customers`} style={{ color: "var(--color-secondary)", fontWeight: 600, textDecoration: "none" }}>{enq.customerId}</a>
-                          {enq.orderId && <a href={`/admin/orders/${enq.orderId}`} style={{ color: "var(--color-primary)", fontWeight: 600, textDecoration: "none" }}>{enq.orderId}</a>}
+                    <td style={{ padding: "16px 20px", fontSize: "13px", color: "#0f172a" }}>
+                      {enq.orderId ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontWeight: "700", color: "#0f172a" }}>{enq.orderId}</span>
+                          <a
+                            href={`/admin/orders/${enq.orderId}`}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "4px 8px",
+                              background: "#f1f5f9",
+                              border: "1px solid #cbd5e1",
+                              borderRadius: "6px",
+                              fontSize: "11px",
+                              fontWeight: "600",
+                              color: "#475569",
+                              textDecoration: "none",
+                              cursor: "pointer",
+                              transition: "all 0.15s"
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.background = "#e2e8f0";
+                              e.currentTarget.style.color = "#0f172a";
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = "#f1f5f9";
+                              e.currentTarget.style.color = "#475569";
+                            }}
+                          >
+                            View Order
+                          </a>
                         </div>
                       ) : (
                         <span style={{ color: "#cbd5e1" }}>-</span>

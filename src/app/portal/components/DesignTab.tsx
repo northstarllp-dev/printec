@@ -341,7 +341,7 @@ export function DesignTab({ order, customer }: DesignTabProps) {
                     </button>
                     <div className="flex items-center justify-between mb-1 pr-6">
                       <span className="text-xs font-bold text-gray-800">{comment.author}</span>
-                      <span className="text-[10px] text-gray-500">{new Date(comment.createdAt).toLocaleString()}</span>
+                      <span className="text-[10px] text-gray-500" suppressHydrationWarning>{new Date(comment.createdAt).toLocaleString()}</span>
                     </div>
                     <p className="text-sm text-gray-600 whitespace-pre-wrap">{comment.content}</p>
                   </div>

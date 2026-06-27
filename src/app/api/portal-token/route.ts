@@ -42,20 +42,51 @@ export async function GET(request: NextRequest) {
   // Authenticate caller (must be staff/admin)
   const supabase = await getSupabase();
   const {
-    data: { session },
-    error: sessionErr,
-  } = await supabase.auth.getSession();
-  if (sessionErr || !session) {
+    data: { user },
+    error: userErr,
+  } = await supabase.auth.getUser();
+  if (userErr || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const host = request.headers.get("host") || "localhost:3000";
+  const protocol = request.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+  const requestBaseUrl = `${protocol}://${host}`;
+
+  let resolvedCustomerId = customerId;
+  let resolvedOrderId = orderId;
+
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (customerId && UUID_REGEX.test(customerId)) {
+    const { data: custData } = await supabase
+      .from("customers")
+      .select("customer_id")
+      .eq("id", customerId)
+      .single();
+    if (custData?.customer_id) {
+      resolvedCustomerId = custData.customer_id;
+    }
+  }
+
+  if (orderId && UUID_REGEX.test(orderId)) {
+    const { data: ordData } = await supabase
+      .from("orders")
+      .select("order_id")
+      .eq("id", orderId)
+      .single();
+    if (ordData?.order_id) {
+      resolvedOrderId = ordData.order_id;
+    }
   }
 
   // Generate a new HMAC-signed portal token and store it for revocation tracking
   try {
     const { token, url } = await generateAndStorePortalToken(
       supabase,
-      customerId,
-      orderId || undefined,
-      { expiresInDays: 30, createdBy: "api" }
+      resolvedCustomerId,
+      resolvedOrderId || undefined,
+      { expiresInDays: 30, createdBy: "api", baseUrl: requestBaseUrl }
     );
     return NextResponse.json({ token, url });
   } catch (err: any) {

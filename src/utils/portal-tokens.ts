@@ -132,22 +132,21 @@ export function generatePortalTokenSync(
   return { token, jti, expiresAt: new Date(exp * 1000) };
 }
 
-export function buildPortalUrl(token: string, orderId?: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  if (!baseUrl) {
+export function buildPortalUrl(token: string, baseUrl?: string): string {
+  const envBaseUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!baseUrl && !envBaseUrl) {
     console.warn(
       "[portal-tokens] NEXT_PUBLIC_SITE_URL is not set. Falling back to http://localhost:3000. " +
         "Set NEXT_PUBLIC_SITE_URL in .env.local (e.g., http://localhost:3001 for dev) to generate correct portal links."
     );
   }
-  const resolvedBase = baseUrl || "http://localhost:3000";
+  const resolvedBase = baseUrl || envBaseUrl || "http://localhost:3000";
   const params = new URLSearchParams({ token });
-  if (orderId) params.append("order_id", orderId);
   return `${resolvedBase}/portal?${params.toString()}`;
 }
 
 // ============================================================
-// DB Storage (async, requires Supabase client)
+// Database & Flow Integration Functions
 // ============================================================
 export async function storePortalToken(
   supabase: any,
@@ -187,11 +186,12 @@ export async function isTokenRevoked(
       .from("portal_access_tokens")
       .select("revoked_at")
       .eq("jti", jti)
-      .maybeSingle();
+      .single();
 
     if (error) {
-      console.error("[isTokenRevoked] Query failed:", error.message);
-      return true; // treat as revoked on db error
+      if (error.code === "PGRST116") return false; // not found
+      console.error("[isTokenRevoked] DB Error:", error.message);
+      return true; // treat DB error as revoked/unsafe
     }
 
     return !!data?.revoked_at;
@@ -228,9 +228,9 @@ export async function generateAndStorePortalToken(
   supabase: any,
   customerId: string,
   orderId?: string,
-  options: GenerateOptions = {}
+  options: GenerateOptions & { baseUrl?: string } = {}
 ): Promise<GenerationResult> {
-  const { expiresInDays = 30, createdBy = "system", metadata = {} } = options;
+  const { expiresInDays = 30, createdBy = "system", metadata = {}, baseUrl } = options;
 
   const { token, jti, expiresAt } = generatePortalTokenSync(
     customerId,
@@ -248,7 +248,7 @@ export async function generateAndStorePortalToken(
     metadata
   );
 
-  const url = buildPortalUrl(token, orderId);
+  const url = buildPortalUrl(token, baseUrl);
 
   return { token, jti, url, expiresAt };
 }
