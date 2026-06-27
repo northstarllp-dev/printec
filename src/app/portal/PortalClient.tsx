@@ -187,10 +187,10 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     const supabase = createClient();
     async function loadUnread() {
       const { count } = await supabase
-        .from("order_messages")
+        .from("order_activity")
         .select("*", { count: "exact", head: true })
         .eq("order_id", activeOrder!.orderId || activeOrder!.id)
-        .eq("tab", "customer")
+        .eq("activity_type", "customer")
         .eq("is_read", false);
       if (count !== null) setUnreadCount(count);
     }
@@ -199,9 +199,9 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     const channelName = `unread-${activeOrder.id}-${Date.now()}`;
     const ch = supabase
       .channel(channelName)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_messages", filter: `order_id=eq.${activeOrder.orderId || activeOrder.id}` }, (p) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_activity", filter: `order_id=eq.${activeOrder.orderId || activeOrder.id}` }, (p) => {
         const msg = p.new as any;
-        if (msg.tab === "customer" && msg.sender_role !== "Customer") {
+        if (msg.activity_type === "customer" && msg.actor_role !== "Customer") {
           setUnreadCount(prev => prev + 1);
         }
       })
@@ -338,7 +338,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     const supabase = createClient();
     const updatedQuote = { ...activeOrder.quoteDetails, status: "Approved" };
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Approved", quoteDetails: updatedQuote } : o));
-    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the quotation details." });
+    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the quotation details.", metadata: { action: "quotation_approved_by_customer" } });
     await supabase.from("quotations").update({ status: "Approved" }).eq("order_id", activeOrder.id);
     await supabase.from("orders").update({ stage: "Quotation Approved" }).eq("id", activeOrder.id);
     setUpdatingStatus(null);
@@ -350,7 +350,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     const supabase = createClient();
     const updatedQuote = { ...activeOrder.quoteDetails, status: "Negotiation" };
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Negotiation", quoteDetails: updatedQuote } : o));
-    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}` });
+    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}`, metadata: { action: "quotation_declined" } });
     await supabase.from("quotations").update({ status: "Rejected" }).eq("order_id", activeOrder.id);
     await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", activeOrder.id);
     setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
@@ -362,7 +362,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     const supabase = createClient();
     const updatedDesign = { ...activeOrder.designDetails, status: "Approved" };
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design Approved", designDetails: updatedDesign } : o));
-    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the design proof layout." });
+    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the design proof layout.", metadata: { action: "design_approved_by_customer" } });
     await supabase.from("orders").update({ stage: "Design Approved", design_details: updatedDesign }).eq("id", activeOrder.id);
     setUpdatingStatus(null);
   };
@@ -373,7 +373,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     const supabase = createClient();
     const updatedDesign = { ...activeOrder.designDetails, status: "Draft" };
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Design In Progress", designDetails: updatedDesign } : o));
-    await supabase.from("order_messages").insert({ order_id: activeOrder.orderId || activeOrder.id, tab: "customer", sender_name: customer.name, sender_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}` });
+    await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Design Revision Requested. Notes: ${designFeedback}`, metadata: { action: "design_revision_requested" } });
     await supabase.from("orders").update({ stage: "Design In Progress", design_details: updatedDesign }).eq("id", activeOrder.id);
     setDesignFeedback(""); setShowDesignDeclineInput(false); setUpdatingStatus(null);
   };
@@ -1285,9 +1285,9 @@ interface ChatProps {
 interface ChatMsg {
   id: string;
   order_id: string;
-  tab: string;
-  sender_name: string;
-  sender_role: string;
+  activity_type: string;
+  actor_name: string;
+  actor_role: string;
   content: string;
   created_at: string;
   is_read: boolean;
@@ -1337,17 +1337,17 @@ function useOrderMessages(
         {
           event: "INSERT",
           schema: "public",
-          table: "order_messages",
+          table: "order_activity",
           filter: `order_id=eq.${orderId}`,
         },
         (payload) => {
           const newMsg = payload.new as ChatMsg;
-          if (newMsg.tab !== "customer") return; // Only show customer-tab messages in portal
+          if (newMsg.activity_type !== "customer") return; // Only show customer-tab messages in portal
           setMessages((prev) => {
             // Prevent duplicates
             if (prev.some((m) => m.id === newMsg.id || (m.id.startsWith("opt-") && m.content === newMsg.content))) {
               // Replace optimistic message with real one
-              if (newMsg.sender_role === "Customer") {
+              if (newMsg.actor_role === "Customer") {
                 return prev.map((m) => (m.id.startsWith("opt-") && m.content === newMsg.content ? newMsg : m));
               }
               return prev;
@@ -1369,7 +1369,7 @@ function useOrderMessages(
   const unreadCount = useMemo(() => {
     let count = 0;
     messages.forEach((m) => {
-      if (m.sender_role !== "Customer" && m.sender_role !== "System" && !m.is_read) {
+      if (m.actor_role !== "Customer" && m.actor_role !== "System" && !m.is_read) {
         count++;
       }
     });
@@ -1415,9 +1415,9 @@ function useOrderMessages(
       const optimistic: ChatMsg = {
         id: optimisticId,
         order_id: orderId,
-        tab: "customer",
-        sender_name: customerName,
-        sender_role: "Customer",
+        activity_type: "customer",
+        actor_name: customerName,
+        actor_role: "Customer",
         content: trimmed,
         created_at: new Date().toISOString(),
         is_read: false,
@@ -1492,10 +1492,10 @@ function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
           </div>
         )}
         {messages.map((msg) => {
-          const isMe = msg.sender_role === "Customer";
-          const initials = msg.sender_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+          const isMe = msg.actor_role === "Customer";
+          const initials = msg.actor_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
           const time = new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-          if (msg.sender_role === "System") {
+          if (msg.actor_role === "System") {
             return (
               <div key={msg.id} className="flex justify-center">
                 <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full font-medium">{msg.content}</span>
@@ -1507,7 +1507,7 @@ function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${isMe ? "bg-[#1E40AF] text-white" : "bg-slate-200 text-slate-600"
                 }`}>{initials}</div>
               <div className={`flex flex-col max-w-[78%] ${isMe ? "items-end" : "items-start"}`}>
-                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.sender_name}</span>
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.actor_name}</span>
                 <div className={`px-3 py-2 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${isMe
                   ? "bg-[#1E40AF] text-white rounded-br-sm"
                   : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm"
@@ -1644,10 +1644,10 @@ function MobileChatButton({ orderId, customerId, token, customerName }: ChatProp
                 </div>
               )}
               {messages.map((msg) => {
-                const isMe = msg.sender_role === "Customer";
-                const initials = msg.sender_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+                const isMe = msg.actor_role === "Customer";
+                const initials = msg.actor_name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
                 const time = new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                if (msg.sender_role === "System") {
+                if (msg.actor_role === "System") {
                   return (
                     <div key={msg.id} className="flex justify-center">
                       <span className="text-[10px] text-slate-400 bg-slate-100 border border-slate-200 px-3 py-1 rounded-full font-medium">{msg.content}</span>
@@ -1659,7 +1659,7 @@ function MobileChatButton({ orderId, customerId, token, customerName }: ChatProp
                     <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${isMe ? "bg-[#1E40AF] text-white" : "bg-slate-200 text-slate-600"
                       }`}>{initials}</div>
                     <div className={`flex flex-col max-w-[75%] ${isMe ? "items-end" : "items-start"}`}>
-                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.sender_name}</span>
+                      <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wide mb-0.5 px-1">{msg.actor_name}</span>
                       <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed break-words ${isMe
                         ? "bg-[#1E40AF] text-white rounded-br-sm"
                         : "bg-white text-slate-800 border border-slate-200 rounded-bl-sm shadow-sm"

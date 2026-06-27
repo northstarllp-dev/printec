@@ -156,7 +156,7 @@ export function DesignTab({ order, customer }: DesignTabProps) {
     );
     const updatedDetails = { ...dd, versions: updatedVersions };
     await supabase.from("orders").update({ design_details: updatedDetails, stage: "Design Approved" }).eq("id", order.id);
-    await supabase.from("order_messages").insert({ order_id: order.orderId || order.id, tab: "timeline", sender_name: "System", sender_role: "System", content: "Client approved the design proof layout." });
+    await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the design proof layout.", metadata: { action: "design_approved_by_customer" } });
   };
 
   return (

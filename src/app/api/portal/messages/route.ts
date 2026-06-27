@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
   }
 
   const res = await supabaseFetch(
-    `order_messages?order_id=eq.${encodeURIComponent(orderId)}&tab=eq.customer&order=created_at.asc&select=*`
+    `order_activity?order_id=eq.${encodeURIComponent(orderId)}&activity_type=eq.customer&order=created_at.asc&select=*`
   );
 
   if (!res.ok) {
@@ -184,15 +184,15 @@ export async function POST(req: NextRequest) {
 
   const payloadData = {
     order_id,
-    tab: "customer",
-    sender_name: sender_name || "Customer",
-    sender_role: "Customer",
-    sender_id: null,
+    activity_type: "customer",
+    actor_name: sender_name || "Customer",
+    actor_role: "Customer",
+    actor_id: null,
     content: content.trim(),
     attachments: [],
   };
 
-  const res = await supabaseFetch("order_messages", {
+  const res = await supabaseFetch("order_activity", {
     method: "POST",
     body: JSON.stringify(payloadData),
   });

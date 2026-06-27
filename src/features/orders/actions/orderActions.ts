@@ -3,7 +3,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createAuditLogAction } from "@/features/audit/actions/auditActions";
+
 import { mapSiteVisitFromDb, mapSiteVisitToDb } from "./siteVisitMapper";
 
 async function getSupabase() {
@@ -113,38 +113,23 @@ export async function getOrderById(id: string) {
 export async function createOrder(formData: any) {
   const supabase = await getSupabase();
   
-  // Set defaults for history
   const orderWithDefaults = {
     company_id: "11111111-1111-1111-1111-111111111111",
     ...formData,
     health: formData.health || "Active",
-    version_history: [
-      { version: "v1.0", date: new Date().toLocaleDateString(), notes: "Order initialized." }
-    ],
-    chat_history: [
-      { id: "1", sender: "System", time: "Just now", message: "Order created successfully." }
-    ]
   };
 
   const { data, error } = await supabase.from("orders").insert([orderWithDefaults]).select();
   if (error) throw new Error(error.message);
   
   const createdOrder = data[0];
-  await createAuditLogAction(
-    "Admin",
-    "Order Created",
-    createdOrder.id,
-    createdOrder.customer_id || null,
-    `Order "${createdOrder.project_name}" (${createdOrder.id}) created manually.`
-  );
-
-  // Sync to order_messages timeline
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: createdOrder.order_id || createdOrder.id,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: "Order created successfully."
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Order "${createdOrder.project_name}" created manually by Admin.`,
+    metadata: { action: "order_created", method: "manual" }
   });
 
   revalidatePath("/admin/orders");
@@ -337,7 +322,7 @@ export async function adminApproveStageAction(orderId: string) {
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, version_history, chat_history, customer_id, order_id")
+    .select("stage, order_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
@@ -361,49 +346,20 @@ export async function adminApproveStageAction(orderId: string) {
   const nextStage = nextStageMap[o.stage] || o.stage;
   const logMsg = `Admin approved stage progression from "${o.stage}" to "${nextStage}".`;
 
-  const updatedHistory = [...(o.version_history || [])];
-  const lastVersion = o.version_history?.[0]?.version || "v1.0";
-  const vNum = (parseFloat(lastVersion.replace("v", "")) + 0.5).toFixed(1);
-  
-  updatedHistory.unshift({
-    version: `v${vNum}`,
-    date: new Date().toLocaleDateString(),
-    notes: logMsg
-  });
-
-  const updatedChat = [
-    ...(o.chat_history || []),
-    {
-      id: Date.now().toString(),
-      sender: "System",
-      time: "Just now",
-      message: logMsg
-    }
-  ];
-
   const result = await updateOrder(orderId, {
     stage: nextStage,
     stage_status: "Normal",
     stage_admin_notes: "",
-    version_history: updatedHistory,
-    chat_history: updatedChat
   });
 
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: o.order_id || orderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: logMsg
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: logMsg,
+    metadata: { action: "stage_approved", old: o.stage, new: nextStage }
   });
-
-  await createAuditLogAction(
-    "Admin",
-    "Stage Changed",
-    orderId,
-    o.customer_id || null,
-    `Order stage advanced from "${o.stage}" to "${nextStage}".`
-  );
 
   return result;
 }
@@ -412,34 +368,25 @@ export async function adminRejectStageAction(orderId: string, notes: string) {
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("chat_history, order_id")
+    .select("order_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
   const logMsg = `Admin sent back stage progression request: ${notes}`;
-  const updatedChat = [
-    ...(o.chat_history || []),
-    {
-      id: Date.now().toString(),
-      sender: "System",
-      time: "Just now",
-      message: logMsg
-    }
-  ];
 
   const result = await updateOrder(orderId, {
     stage_status: "Normal",
     stage_admin_notes: notes,
-    chat_history: updatedChat
   });
 
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: o.order_id || orderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: logMsg
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: logMsg,
+    metadata: { action: "stage_rejected", reason: notes }
   });
 
   return result;
@@ -449,44 +396,23 @@ export async function updateOrderStageAction(id: string, stage: string) {
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, version_history, customer_id, order_id")
+    .select("stage, order_id")
     .eq("id", id)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const updatedHistory = [...(o.version_history || [])];
   const isChanged = stage !== o.stage;
-  if (isChanged) {
-    const lastVersion = o.version_history?.[0]?.version || "v1.0";
-    const vNum = (parseFloat(lastVersion.replace("v", "")) + 0.5).toFixed(1);
-    updatedHistory.unshift({
-      version: `v${vNum}`,
-      date: new Date().toLocaleDateString(),
-      notes: `Project status shifted from ${o.stage} to ${stage}.`
-    });
-  }
-
-  const result = await updateOrder(id, {
-    stage,
-    version_history: updatedHistory
-  });
+  const result = await updateOrder(id, { stage });
 
   if (isChanged) {
-    await supabase.from("order_messages").insert({
+    await supabase.from("order_activity").insert({
       order_id: o.order_id || id,
-      tab: "timeline",
-      sender_name: "System",
-      sender_role: "System",
-      content: `Order stage manual change from "${o.stage}" to "${stage}".`
+      activity_type: "timeline",
+      actor_name: "System",
+      actor_role: "System",
+      content: `Order stage manually changed from "${o.stage}" to "${stage}".`,
+      metadata: { action: "stage_changed", old: o.stage, new: stage }
     });
-
-    await createAuditLogAction(
-      "Admin",
-      "Stage Changed",
-      id,
-      o.customer_id || null,
-      `Order stage manual change from "${o.stage}" to "${stage}".`
-    );
   }
 
   return result;
@@ -496,31 +422,19 @@ export async function addChatMessageAction(orderId: string, sender: string, mess
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("chat_history, order_id")
+    .select("order_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const updatedChat = [
-    ...(o.chat_history || []),
-    {
-      id: Date.now().toString(),
-      sender,
-      time: "Just now",
-      message
-    }
-  ];
-
   const isSystem = sender === "System";
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: o.order_id || orderId,
-    tab: isSystem ? "timeline" : "internal",
-    sender_name: sender,
-    sender_role: isSystem ? "System" : sender === "Admin" ? "Admin" : "Employee",
+    activity_type: isSystem ? "timeline" : "internal",
+    actor_name: sender,
+    actor_role: isSystem ? "System" : sender === "Admin" ? "Admin" : "Employee",
     content: message
   });
-
-  return await updateOrder(orderId, { chat_history: updatedChat });
 }
 
 export async function assignEmployeesToOrderAction(orderId: string, employeeIds: string[]) {
@@ -578,21 +492,14 @@ export async function assignTeamToOrder(orderId: string, employeeIds: string[]) 
 
   const msg = `Team assigned: ${employeeIds.length} employee(s) allocated to this order.`;
 
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: o?.order_id || orderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: msg
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Team assigned: ${employeeIds.length} employee(s) allocated to this order.`,
+    metadata: { action: "team_assigned", count: employeeIds.length }
   });
-
-  await createAuditLogAction(
-    "Admin",
-    "Team Assigned",
-    orderUuid,
-    null,
-    msg
-  );
 
   revalidatePath("/admin/orders");
   revalidatePath("/staff/orders");
@@ -603,42 +510,24 @@ export async function updateOrderHealthAction(orderId: string, health: string, l
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("health, lost_reason, customer_id, chat_history, order_id")
+    .select("order_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const updatedChat = [
-    ...(o.chat_history || []),
-    {
-      id: Date.now().toString(),
-      sender: "System",
-      time: "Just now",
-      message: `Order health status updated to "${health}"${lostReason ? ` with reason: "${lostReason}"` : ""}.`
-    }
-  ];
-
   const result = await updateOrder(orderId, {
     health,
     lost_reason: lostReason || null,
-    chat_history: updatedChat
   });
 
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: o.order_id || orderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: `Order health status updated to "${health}"${lostReason ? ` with reason: "${lostReason}"` : ""}.`
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Order health status updated to "${health}"${lostReason ? ` with reason: "${lostReason}"` : ""}.`,
+    metadata: { action: "health_changed", health, lost_reason: lostReason || null }
   });
-
-  await createAuditLogAction(
-    "Admin",
-    "Health Changed",
-    orderId,
-    o.customer_id || null,
-    `Order health updated to "${health}"${lostReason ? ` (Reason: ${lostReason})` : ""}.`
-  );
 
   return result;
 }
@@ -647,42 +536,21 @@ export async function reopenOrderAction(orderId: string) {
   const supabase = await getSupabase();
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("health, customer_id, chat_history, order_id")
+    .select("order_id")
     .eq("id", orderId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const updatedChat = [
-    ...(o.chat_history || []),
-    {
-      id: Date.now().toString(),
-      sender: "System",
-      time: "Just now",
-      message: `Order reopened. Health status set to "Active".`
-    }
-  ];
+  const result = await updateOrder(orderId, { health: "Active", lost_reason: null });
 
-  const result = await updateOrder(orderId, {
-    health: "Active",
-    lost_reason: null,
-    chat_history: updatedChat
-  });
-
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: o.order_id || orderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: `Order reopened. Health status set to "Active".`
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Order reopened. Health status set to "Active".`,
+    metadata: { action: "order_reopened" }
   });
-
-  await createAuditLogAction(
-    "Admin",
-    "Order Reopened",
-    orderId,
-    o.customer_id || null,
-    `Order reopened and set to "Active".`
-  );
 
   return result;
 }
@@ -690,107 +558,49 @@ export async function reopenOrderAction(orderId: string) {
 export async function scheduleSiteVisitAction(orderId: string, scheduleData: any) {
   const supabase = await getSupabase();
   
-  // 1. Get current order (excluding site_visit_details)
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("company_id, chat_history, order_id, customer_id, customer_name")
+    .select("company_id, order_id, customer_id, customer_name")
     .eq("id", orderId)
     .single();
     
-  if (fetchError || !order) {
-    throw new Error(fetchError?.message || "Order not found");
-  }
+  if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
 
-  // Fetch existing site visit if any
-  const { data: existingSv } = await supabase
-    .from("site_visits")
-    .select("*")
-    .eq("order_id", orderId)
-    .maybeSingle();
-
+  const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderId).maybeSingle();
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
-
-  // 2. Build the updated site_visit_details
-  const updatedSiteVisit = {
-    ...mappedExisting,
-    ...scheduleData,
-    completed: false, // Scheduling state
-    reviewStatus: "Pending" as const // Reset/set review status to pending
-  };
-
+  const updatedSiteVisit = { ...mappedExisting, ...scheduleData, completed: false, reviewStatus: "Pending" as const };
   const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
   const dbPayload = mapSiteVisitToDb(orderId, companyId, updatedSiteVisit);
 
-  const { data: siteVisit, error: svError } = await supabase
-    .from("site_visits")
-    .upsert(dbPayload, { onConflict: "order_id" })
-    .select()
-    .single();
+  const { data: siteVisit, error: svError } = await supabase.from("site_visits").upsert(dbPayload, { onConflict: "order_id" }).select().single();
+  if (svError) throw new Error(svError.message);
 
-  if (svError) {
-    throw new Error(svError.message);
-  }
-
-  // 3. Construct system notification message in chat history
   const date = scheduleData.auditDate || scheduleData.preferredDate;
   const time = scheduleData.preferredTime || scheduleData.auditTime;
-  const systemMsg = {
-    id: `sys-${Date.now()}`,
-    sender: "System",
-    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    message: `📅 Site visit scheduled for ${date} at ${time} by client.`
-  };
-  
-  const updatedChat = [...(order.chat_history || []), systemMsg];
 
-  // 4. Update order stage and chat_history
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
-    .update({
-      stage: "Site Visit Scheduled",
-      chat_history: updatedChat
-    })
+    .update({ stage: "Site Visit Scheduled" })
     .eq("id", orderId)
     .select()
     .single();
+  if (updateError) throw new Error(updateError.message);
 
-  if (updateError) {
-    throw new Error(updateError.message);
-  }
-
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: order.order_id || orderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: `📅 Site visit scheduled for ${date} at ${time} by client.`
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `📅 Site visit scheduled for ${date} at ${time} by client.`,
+    metadata: { action: "site_visit_scheduled", date, time, address: scheduleData.customerAddress }
   });
 
-  // 5. Log audit
-  const address = scheduleData.customerAddress;
-  await createAuditLogAction(
-    "Client",
-    "Site Visit Scheduled",
-    orderId,
-    order.customer_id,
-    `Site visit scheduled for ${date} at ${time} (Address: ${address}).`
-  );
-
-  // 6. Revalidate cache
   revalidatePath("/admin/orders");
   revalidatePath("/staff/orders");
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
   
-  const fullOrder = {
-    ...updatedOrderRow,
-    siteVisitDetails: mapSiteVisitFromDb(siteVisit)
-  };
-
-  return {
-    success: true,
-    order: fullOrder
-  };
+  return { success: true, order: { ...updatedOrderRow, siteVisitDetails: mapSiteVisitFromDb(siteVisit) } };
 }
 
 export async function approveSiteVisitAction(orderId: string) {
@@ -798,79 +608,36 @@ export async function approveSiteVisitAction(orderId: string) {
   
   const { data: order, error: fetchError } = await supabase
     .from("orders")
-    .select("company_id, chat_history, order_id, customer_id")
+    .select("company_id, order_id, customer_id")
     .eq("id", orderId)
     .single();
     
-  if (fetchError || !order) {
-    throw new Error(fetchError?.message || "Order not found");
-  }
+  if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
 
-  // Fetch existing site visit if any
-  const { data: existingSv } = await supabase
-    .from("site_visits")
-    .select("*")
-    .eq("order_id", orderId)
-    .maybeSingle();
-
+  const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderId).maybeSingle();
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
-
-  const updatedSiteVisit = {
-    ...mappedExisting,
-    reviewStatus: "Staff Approved" as const
-  };
-
   const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
-  const dbPayload = mapSiteVisitToDb(orderId, companyId, updatedSiteVisit);
+  const dbPayload = mapSiteVisitToDb(orderId, companyId, { ...mappedExisting, reviewStatus: "Staff Approved" as const });
 
-  const { data: siteVisit, error: svError } = await supabase
-    .from("site_visits")
-    .upsert(dbPayload, { onConflict: "order_id" })
-    .select()
-    .single();
-
-  if (svError) {
-    throw new Error(svError.message);
-  }
-
-  const logMsg = `Site visit time approved by assigned staff. Pending Admin Approval.`;
-  const systemMsg = {
-    id: `sys-${Date.now()}`,
-    sender: "System",
-    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    message: logMsg
-  };
-  
-  const updatedChat = [...(order.chat_history || []), systemMsg];
+  const { data: siteVisit, error: svError } = await supabase.from("site_visits").upsert(dbPayload, { onConflict: "order_id" }).select().single();
+  if (svError) throw new Error(svError.message);
 
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
-    .update({
-      stage: "Site Visit Scheduled", // Keep it scheduled until admin approves
-      stage_status: "Pending Admin Approval: Site Visit Schedule",
-      chat_history: updatedChat
-    })
+    .update({ stage: "Site Visit Scheduled", stage_status: "Pending Admin Approval: Site Visit Schedule" })
     .eq("id", orderId)
     .select()
     .single();
-
   if (updateError) throw new Error(updateError.message);
 
-  await supabase.from("order_messages").insert({
+  await supabase.from("order_activity").insert({
     order_id: order.order_id || orderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: logMsg
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Site visit time approved by assigned staff. Pending Admin Approval.`,
+    metadata: { action: "site_visit_staff_approved" }
   });
-
-  await createAuditLogAction(
-    "Staff",
-    "Site Visit Schedule Approved",
-    orderId,
-    order.customer_id,
-    logMsg
-  );
 
   revalidatePath("/admin/orders");
   revalidatePath("/staff/orders");
@@ -878,12 +645,7 @@ export async function approveSiteVisitAction(orderId: string) {
   revalidatePath(`/admin/orders/${order.order_id || orderId}`);
   revalidatePath(`/staff/orders/${order.order_id || orderId}`);
   
-  const fullOrder = {
-    ...updatedOrderRow,
-    siteVisitDetails: mapSiteVisitFromDb(siteVisit)
-  };
-
-  return { success: true, order: fullOrder };
+  return { success: true, order: { ...updatedOrderRow, siteVisitDetails: mapSiteVisitFromDb(siteVisit) } };
 }
 
 

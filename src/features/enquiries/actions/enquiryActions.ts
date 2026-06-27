@@ -4,7 +4,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { generateAndStorePortalToken } from "@/utils/portal-tokens";
-import { createAuditLogAction } from "@/features/audit/actions/auditActions";
+
 
 async function getSupabase() {
   const cookieStore = await cookies();
@@ -126,15 +126,6 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
     customerName = newCust[0].name;
     friendlyCustomerId = newCust[0].customer_id;
     isNewCustomer = true;
-    
-    // Log customer creation audit
-    await createAuditLogAction(
-      "Admin",
-      "Customer Created",
-      null,
-      customerId,
-      `Customer profile "${customerName}" (${customerId}) created via Enquiry conversion.`
-    );
   }
 
   // 4. Create new order
@@ -149,12 +140,6 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
       health: "Active",
       product_type: productType || "",
       requirements: requirements || "",
-      version_history: [
-        { version: "v1.0", date: new Date().toLocaleDateString(), notes: "Order initialized via Enquiry conversion." }
-      ],
-      chat_history: [
-        { id: "1", sender: "System", time: "Just now", message: "Order created successfully from Enquiry." }
-      ]
     }])
     .select();
 
@@ -165,80 +150,43 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
   const orderId = newOrder[0].id;
   const friendlyOrderId = newOrder[0].order_id;
 
-  // 4b. Sync to order_messages timeline
-  await supabase.from("order_messages").insert({
-    order_id: friendlyOrderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: "Order created successfully from Enquiry."
-  });
+  // 4b. Log order creation to activity timeline
+  await supabase.from("order_activity").insert([
+    {
+      order_id: friendlyOrderId,
+      activity_type: "timeline",
+      actor_name: "System",
+      actor_role: "System",
+      content: `Order created from Enquiry ${enq.enquire_id || enquiryId}. Customer: ${customerName}.`,
+      metadata: { action: "order_created", method: "enquiry_conversion", enquiry_id: enq.enquire_id }
+    },
+    {
+      order_id: friendlyOrderId,
+      activity_type: "timeline",
+      actor_name: "System",
+      actor_role: "System",
+      content: `Secure portal link generated for client. Order ID: ${friendlyOrderId}.`,
+      metadata: { action: "portal_link_generated" }
+    }
+  ]);
 
   // 5. Update enquiry record
   const { error: updateEnqErr } = await supabase
     .from("enquiries")
-    .update({
-      status: "Converted",
-      customer_id: customerId,
-      order_id: orderId
-    })
+    .update({ status: "Converted", customer_id: customerId, order_id: orderId })
     .eq("id", enquiryId);
-
-  if (updateEnqErr) {
-    console.error("Failed to update enquiry status:", updateEnqErr.message);
-  }
+  if (updateEnqErr) console.error("Failed to update enquiry status:", updateEnqErr.message);
 
   const headersList = await headers();
   const host = headersList.get("host") || "localhost:3000";
   const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-  const requestBaseUrl = `${protocol}://${host}`;
-
-  // 6. Generate secure HMAC-signed portal token and store for revocation tracking
   const { url: portalLink } = await generateAndStorePortalToken(
-    supabase,
-    friendlyCustomerId,
-    friendlyOrderId,
-    { expiresInDays: 30, createdBy: "enquiry_conversion", baseUrl: requestBaseUrl }
+    supabase, friendlyCustomerId, friendlyOrderId,
+    { expiresInDays: 30, createdBy: "enquiry_conversion", baseUrl: `${protocol}://${host}` }
   );
+  console.log(`[Notification System] WhatsApp & Email notification sent. Portal: ${portalLink}`);
 
-  // 7. Trigger customer notification workflow (Simulated send)
-  const notificationMsg = `WhatsApp & Email notification sent to client. Order ID: ${friendlyOrderId}. Portal Link: ${portalLink}`;
-  console.log(`[Notification System] ${notificationMsg}`);
-
-  // Append system message to chat log with portal info
-  const systemChatMsg = {
-    id: Date.now().toString(),
-    sender: "System",
-    time: "Just now",
-    message: `Secure portal link generated for client. Order ID: ${friendlyOrderId}. Portal Link: ${portalLink}`,
-    verified: true
-  };
-
-  const updatedChat = [...(newOrder[0].chat_history || []), systemChatMsg];
-  await supabase
-    .from("orders")
-    .update({ chat_history: updatedChat })
-    .eq("id", orderId);
-
-  // Sync portal link notification to order_messages
-  await supabase.from("order_messages").insert({
-    order_id: friendlyOrderId,
-    tab: "timeline",
-    sender_name: "System",
-    sender_role: "System",
-    content: `Secure portal link generated for client. Order ID: ${friendlyOrderId}.`
-  });
-
-  // 8. Log order creation audit
-  await createAuditLogAction(
-    "Admin",
-    "Order Created",
-    orderId,
-    customerId,
-    `Order "${projectName}" (${friendlyOrderId}) created and linked to Enquiry "${enq.enquire_id || enquiryId}" for Customer "${customerName}".`
-  );
-
-  // 9. Revalidate cache
+  // 6. Revalidate cache
   revalidatePath("/admin/enquire");
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${friendlyOrderId}`);
