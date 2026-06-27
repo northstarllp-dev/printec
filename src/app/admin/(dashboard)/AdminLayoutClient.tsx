@@ -151,12 +151,11 @@ export function AdminLayoutClient({
       <aside
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        className="hidden md:flex flex-col"
         style={{
           width: sidebarW,
           minHeight: "100vh",
           background: "var(--sidebar-bg)",
-          display: "flex",
-          flexDirection: "column",
           flexShrink: 0,
           transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
           position: "sticky",
