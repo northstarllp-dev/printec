@@ -7,15 +7,9 @@ import {
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import {
-  createProduct, updateProduct, deleteProduct, type Product, type CreateProductPayload,
+  createProduct, updateProduct, deleteProduct, deleteImagesFromStorage, 
+  createProductCategory, deleteProductCategory, type Product, type CreateProductPayload, type ProductCategory,
 } from "../actions/productActions";
-
-const CATEGORIES = [
-  "ACP Sheets", "Acrylic Sheets", "SS Letters", "MS Frames", "LED Modules",
-  "Vinyl", "Flex", "Powder Coating", "Electrical Components",
-  "Flex Banner", "ACP Board", "LED Signage", "Acrylic Letters",
-  "Vinyl Wrap", "Glow Sign", "Metal Sign", "Wooden Sign", "Other",
-];
 
 const PRICING_TYPES = ["Per Sq.Ft", "Per Unit", "Per Running Ft", "Multiple"];
 
@@ -42,9 +36,13 @@ const labelStyle: React.CSSProperties = {
 function ProductImageUpload({
   images,
   onChange,
+  onUpload,
+  onRemove,
 }: {
   images: string[];
   onChange: (imgs: string[]) => void;
+  onUpload?: (urls: string[]) => void;
+  onRemove?: (url: string) => void;
 }) {
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,11 +68,13 @@ function ProductImageUpload({
       }
     }
     onChange([...images, ...newUrls]);
+    if (onUpload) onUpload(newUrls);
     setUploading(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const removeImage = (idx: number) => {
+    if (onRemove) onRemove(images[idx]);
     onChange(images.filter((_, i) => i !== idx));
   };
 
@@ -195,16 +195,20 @@ function PricingSection({
 
 // ── Product Form Modal ───────────────────────────────────────────────────────
 function ProductFormModal({
-  product, allProducts, onClose, onSaved,
+  product, allProducts, categories, onClose, onSaved,
 }: {
   product: Product | null;
   allProducts: Product[];
+  categories: ProductCategory[];
   onClose: () => void;
   onSaved: (p: Product) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const isEdit = !!product;
+
+  const [uploadedImagesThisSession, setUploadedImagesThisSession] = useState<string[]>([]);
+  const [imagesToDeleteOnSave, setImagesToDeleteOnSave] = useState<string[]>([]);
 
   const [form, setForm] = useState<Partial<CreateProductPayload>>(() => ({
     product_id: product?.product_id ?? generateProductId(allProducts),
@@ -229,18 +233,34 @@ function ProductFormModal({
     if (!form.name?.trim()) { setError("Product name is required."); return; }
     startTransition(async () => {
       try {
+        const payloadToSave = { ...form };
+        if (payloadToSave.pricing_type === "Per Unit") payloadToSave.pricing_type = "per_unit";
+        else if (payloadToSave.pricing_type === "Per Sq.Ft") payloadToSave.pricing_type = "per_sqft";
+        else if (payloadToSave.pricing_type === "Per Running Ft") payloadToSave.pricing_type = "per_running_ft";
+
         if (isEdit) {
-          const res = await updateProduct(product!.id, form);
-          onSaved({ ...product!, ...form, ...(res?.[0] || {}) } as Product);
+          const res = await updateProduct(product!.id, payloadToSave);
+          onSaved({ ...product!, ...payloadToSave, ...(res?.[0] || {}) } as Product);
         } else {
-          const res = await createProduct(form as CreateProductPayload);
-          onSaved({ ...form, ...(res?.[0] || {}), id: res?.[0]?.id || "" } as Product);
+          const res = await createProduct(payloadToSave as CreateProductPayload);
+          onSaved({ ...payloadToSave, ...(res?.[0] || {}), id: res?.[0]?.id || "" } as Product);
+        }
+        
+        if (imagesToDeleteOnSave.length > 0) {
+          deleteImagesFromStorage(imagesToDeleteOnSave).catch(console.error);
         }
         onClose();
       } catch (err: any) {
         setError(err.message || "Failed to save product.");
       }
     });
+  };
+
+  const handleClose = () => {
+    if (uploadedImagesThisSession.length > 0) {
+      deleteImagesFromStorage(uploadedImagesThisSession).catch(console.error);
+    }
+    onClose();
   };
 
   return (
@@ -257,7 +277,7 @@ function ProductFormModal({
               <p style={{ fontSize: 11, color: "#64748b", margin: 0 }}>Product Master — Quotation Catalogue</p>
             </div>
           </div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "#f1f5f9", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <button onClick={handleClose} style={{ width: 32, height: 32, borderRadius: 8, background: "#f1f5f9", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <X size={14} style={{ color: "#64748b" }} />
           </button>
         </div>
@@ -287,7 +307,7 @@ function ProductFormModal({
               <label style={labelStyle}>Category</label>
               <select value={form.category ?? ""} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} style={{ ...inputStyle, appearance: "none" }}>
                 <option value="">Select category...</option>
-                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
             </div>
             <div>
@@ -341,6 +361,15 @@ function ProductFormModal({
           <ProductImageUpload
             images={form.images ?? []}
             onChange={imgs => setForm(f => ({ ...f, images: imgs }))}
+            onUpload={newUrls => setUploadedImagesThisSession(prev => [...prev, ...newUrls])}
+            onRemove={url => {
+              if (uploadedImagesThisSession.includes(url)) {
+                deleteImagesFromStorage([url]).catch(console.error);
+                setUploadedImagesThisSession(prev => prev.filter(u => u !== url));
+              } else {
+                setImagesToDeleteOnSave(prev => [...prev, url]);
+              }
+            }}
           />
 
           {/* Status */}
@@ -362,7 +391,7 @@ function ProductFormModal({
 
           {/* Actions */}
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: "10px 16px", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 13, fontWeight: 700, color: "#64748b", cursor: "pointer" }}>
+            <button type="button" onClick={handleClose} style={{ flex: 1, padding: "10px 16px", background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 13, fontWeight: 700, color: "#64748b", cursor: "pointer" }}>
               Cancel
             </button>
             <button
@@ -523,17 +552,26 @@ function ProductCard({
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-export function ProductsView({ initialProducts }: { initialProducts: Product[] }) {
+export function ProductsView({ 
+  initialProducts, 
+  initialCategories = [] 
+}: { 
+  initialProducts: Product[]; 
+  initialCategories?: ProductCategory[]; 
+}) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [categories, setCategories] = useState<ProductCategory[]>(initialCategories);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<"All" | "Active" | "Inactive">("All");
   const [showForm, setShowForm] = useState(false);
+  const [showManageCategories, setShowManageCategories] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isPending, startTransition] = useTransition();
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [pageError, setPageError] = useState("");
 
-  const uniqueCategories = ["All", ...Array.from(new Set(products.map(p => p.category).filter(Boolean) as string[]))];
+  const uniqueCategories = ["All", ...categories.map(c => c.name)];
 
   const filtered = products.filter(p => {
     const matchSearch = !search.trim() || p.name.toLowerCase().includes(search.toLowerCase()) || p.product_id?.toLowerCase().includes(search.toLowerCase()) || (p.category || "").toLowerCase().includes(search.toLowerCase());
@@ -542,21 +580,32 @@ export function ProductsView({ initialProducts }: { initialProducts: Product[] }
     return matchSearch && matchCategory && matchStatus;
   });
 
-  const handleOpenAdd = () => { setEditingProduct(null); setShowForm(true); };
-  const handleOpenEdit = (p: Product) => { setEditingProduct(p); setShowForm(true); };
+  const handleOpenAdd = () => { setEditingProduct(null); setShowForm(true); setPageError(""); };
+  const handleOpenEdit = (p: Product) => { setEditingProduct(p); setShowForm(true); setPageError(""); };
 
   const handleDelete = (id: string) => {
+    setPageError("");
     startTransition(async () => {
-      await deleteProduct(id);
-      setProducts(prev => prev.filter(p => p.id !== id));
-      setDeleteConfirm(null);
+      try {
+        await deleteProduct(id);
+        setProducts(prev => prev.filter(p => p.id !== id));
+        setDeleteConfirm(null);
+      } catch (err: any) {
+        setPageError(err.message || "Failed to delete product. It might be in use.");
+        setDeleteConfirm(null);
+      }
     });
   };
 
   const handleToggle = (product: Product) => {
+    setPageError("");
     startTransition(async () => {
-      await updateProduct(product.id, { is_active: !product.is_active });
-      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_active: !p.is_active } : p));
+      try {
+        await updateProduct(product.id, { is_active: !product.is_active });
+        setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_active: !p.is_active } : p));
+      } catch (err: any) {
+        setPageError(err.message || "Failed to update status.");
+      }
     });
   };
 
@@ -581,17 +630,30 @@ export function ProductsView({ initialProducts }: { initialProducts: Product[] }
             <span style={{ marginLeft: 8, fontWeight: 700, color: "#1e40af" }}>{activeCount} active</span>
           </p>
         </div>
-        <button
-          onClick={handleOpenAdd}
-          style={{
-            display: "flex", alignItems: "center", gap: 8,
-            padding: "10px 20px", background: "#1e40af", color: "white",
-            border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800,
-            cursor: "pointer", boxShadow: "0 2px 8px rgba(30,64,175,0.3)", transition: "all 0.15s",
-          }}
-        >
-          <Plus size={16} /> Add Product
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={() => setShowManageCategories(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 20px", background: "white", color: "#1e40af",
+              border: "1px solid #1e40af", borderRadius: 10, fontSize: 13, fontWeight: 800,
+              cursor: "pointer", boxShadow: "0 2px 8px rgba(30,64,175,0.05)", transition: "all 0.15s",
+            }}
+          >
+            <Tag size={16} /> Manage Categories
+          </button>
+          <button
+            onClick={handleOpenAdd}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "10px 20px", background: "#1e40af", color: "white",
+              border: "none", borderRadius: 10, fontSize: 13, fontWeight: 800,
+              cursor: "pointer", boxShadow: "0 2px 8px rgba(30,64,175,0.3)", transition: "all 0.15s",
+            }}
+          >
+            <Plus size={16} /> Add Product
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -607,6 +669,13 @@ export function ProductsView({ initialProducts }: { initialProducts: Product[] }
           </div>
         ))}
       </div>
+
+      {pageError && (
+        <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, fontSize: 13, color: "#b91c1c", fontWeight: 600, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {pageError}
+          <button onClick={() => setPageError("")} style={{ background: "none", border: "none", color: "#b91c1c", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+      )}
 
       {/* Search + Filters */}
       <div style={{ display: "flex", gap: 12, marginBottom: 22, alignItems: "center", flexWrap: "wrap" }}>
@@ -672,10 +741,121 @@ export function ProductsView({ initialProducts }: { initialProducts: Product[] }
         <ProductFormModal
           product={editingProduct}
           allProducts={products}
+          categories={categories}
           onClose={() => { setShowForm(false); setEditingProduct(null); }}
           onSaved={handleSaved}
         />
       )}
+
+      {/* Manage Categories Modal */}
+      {showManageCategories && (
+        <ManageCategoriesModal
+          categories={categories}
+          onClose={() => setShowManageCategories(false)}
+          onAdded={(newCat) => {
+            setCategories(prev => [...prev, newCat].sort((a, b) => a.name.localeCompare(b.name)));
+          }}
+          onDeleted={(id) => {
+            setCategories(prev => prev.filter(c => c.id !== id));
+            // Update products that had this category? (Optional, just clear it locally or let it be)
+            setProducts(prev => prev.map(p => {
+              const catName = categories.find(c => c.id === id)?.name;
+              if (p.category === catName) return { ...p, category: "" };
+              return p;
+            }));
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Manage Categories Modal Component ─────────────────────────────────────────
+function ManageCategoriesModal({
+  categories,
+  onClose,
+  onAdded,
+  onDeleted,
+}: {
+  categories: ProductCategory[];
+  onClose: () => void;
+  onAdded: (cat: ProductCategory) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) return;
+    startTransition(async () => {
+      try {
+        const res = await createProductCategory(name);
+        onAdded(res);
+        setName("");
+      } catch (err: any) {
+        setError(err.message || "Failed to create category.");
+      }
+    });
+  };
+
+  const handleDelete = (id: string) => {
+    startTransition(async () => {
+      try {
+        await deleteProductCategory(id);
+        onDeleted(id);
+      } catch (err: any) {
+        setError(err.message || "Failed to delete category.");
+      }
+    });
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 110, padding: 16 }}>
+      <div style={{ background: "white", borderRadius: 14, padding: 24, maxWidth: 360, width: "100%", maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 40px rgba(0,0,0,0.15)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: "0 0 4px" }}>Manage Categories</h3>
+            <p style={{ fontSize: 11, color: "#64748b", margin: 0 }}>Create or remove custom categories.</p>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748b" }}><X size={16} /></button>
+        </div>
+        
+        {error && <div style={{ padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, color: "#b91c1c", fontWeight: 600, marginBottom: 12 }}>{error}</div>}
+        
+        <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <input
+            type="text" required placeholder="New category name..."
+            value={name} onChange={e => setName(e.target.value)}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button type="submit" disabled={isPending} style={{ padding: "0 14px", borderRadius: 8, border: "none", background: "#1e40af", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            {isPending ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : "Add"}
+          </button>
+        </form>
+
+        <div style={{ flex: 1, overflowY: "auto", borderTop: "1px solid #f1f5f9", paddingTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+          {categories.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px", color: "#94a3b8", fontSize: 13 }}>No categories found.</div>
+          ) : (
+            categories.map(cat => (
+              <div key={cat.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>{cat.name}</span>
+                <button
+                  onClick={() => handleDelete(cat.id)}
+                  disabled={isPending}
+                  title="Delete Category"
+                  style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: 4 }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }

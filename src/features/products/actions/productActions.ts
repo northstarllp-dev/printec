@@ -92,10 +92,26 @@ export async function createProduct(formData: CreateProductPayload) {
     ...formData,
     images: formData.images ?? [],
   };
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("products")
     .insert([payload])
     .select();
+
+  // Retry if product_id collides
+  if (error && error.code === "23505" && error.message.includes("products_product_id_key")) {
+    const { data: existing } = await supabase.from("products").select("product_id");
+    const maxNum = (existing || []).reduce((max, p) => {
+      const match = p.product_id?.match(/^PRD-(\d+)$/);
+      if (match) return Math.max(max, parseInt(match[1], 10));
+      return max;
+    }, 0);
+    payload.product_id = `PRD-${String(maxNum + 1).padStart(3, "0")}`;
+    
+    const retry = await supabase.from("products").insert([payload]).select();
+    data = retry.data;
+    error = retry.error;
+  }
+
   if (error) throw new Error(error.message);
   revalidatePath("/admin/products");
   return data;
@@ -118,7 +134,112 @@ export async function updateProduct(
 
 export async function deleteProduct(id: string) {
   const supabase = await getSupabase();
+  
+  // Fetch product first to get the images
+  const { data: product } = await supabase
+    .from("products")
+    .select("images")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase.from("products").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  
+  // If deletion succeeded, wipe the images from storage
+  if (product && Array.isArray(product.images) && product.images.length > 0) {
+    await deleteImagesFromStorage(product.images);
+  }
+
+  revalidatePath("/admin/products");
+}
+
+export async function deleteImagesFromStorage(urls: string[]) {
+  if (!urls || urls.length === 0) return;
+  const supabase = await getSupabase();
+  
+  const paths = urls.map(url => {
+    // Extract path after /product-images/
+    const parts = url.split("/product-images/");
+    return parts.length > 1 ? parts[1] : null;
+  }).filter(Boolean) as string[];
+
+  if (paths.length > 0) {
+    await supabase.storage.from("product-images").remove(paths);
+  }
+}
+
+export type ProductCategory = {
+  id: string;
+  company_id?: string;
+  name: string;
+  created_at?: string;
+};
+
+export async function getProductCategories(): Promise<ProductCategory[]> {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from("product_categories")
+    .select("*")
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function createProductCategory(name: string): Promise<ProductCategory> {
+  if (!name || !name.trim()) throw new Error("Category name is required.");
+  
+  const supabase = await getSupabase();
+  const payload = {
+    company_id: "11111111-1111-1111-1111-111111111111",
+    name: name.trim(),
+  };
+  const { data, error } = await supabase
+    .from("product_categories")
+    .insert([payload])
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("Category already exists.");
+    }
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/admin/products");
+  return data;
+}
+
+export async function deleteProductCategory(id: string): Promise<void> {
+  const supabase = await getSupabase();
+  
+  // 1. Fetch the category name
+  const { data: catData, error: catError } = await supabase
+    .from("product_categories")
+    .select("name")
+    .eq("id", id)
+    .single();
+    
+  if (catError) throw new Error("Category not found.");
+  
+  // 2. Check if any products are using this category
+  const { count, error: countError } = await supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("category", catData.name);
+    
+  if (countError) throw new Error(countError.message);
+  
+  if (count && count > 0) {
+    throw new Error(`Cannot delete this category because it is currently used by ${count} product(s). Please reassign them first.`);
+  }
+
+  // 3. Delete the category
+  const { error } = await supabase
+    .from("product_categories")
+    .delete()
+    .eq("id", id);
+    
   if (error) throw new Error(error.message);
   revalidatePath("/admin/products");
 }

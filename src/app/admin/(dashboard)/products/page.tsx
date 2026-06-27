@@ -1,10 +1,13 @@
-import { getProducts } from "@/features/products/actions/productActions";
+import { getProducts, getProductCategories } from "@/features/products/actions/productActions";
 import { ProductsView } from "@/features/products/components/ProductsView";
 
 export default async function ProductsPage() {
-  const data = await getProducts().catch(() => []);
+  const [productsData, categoriesData] = await Promise.all([
+    getProducts().catch(() => []),
+    getProductCategories().catch(() => []),
+  ]);
 
-  const products = (data || []).map((p: any) => ({
+  const products = (productsData || []).map((p: any) => ({
     id: p.id,
     product_id: p.product_id,
     name: p.name,
@@ -19,5 +22,5 @@ export default async function ProductsPage() {
     images: Array.isArray(p.images) ? p.images : [],
   }));
 
-  return <ProductsView initialProducts={products} />;
+  return <ProductsView initialProducts={products} initialCategories={categoriesData} />;
 }
