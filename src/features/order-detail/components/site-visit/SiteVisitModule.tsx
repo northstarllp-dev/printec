@@ -33,6 +33,8 @@ import {
   SignLocation, 
   SitePhotoCategories 
 } from "@/types";
+import { ScheduleVisitModal } from "./ScheduleVisitModal";
+import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 
 export interface ExtendedSignLocation {
   id: string;
@@ -143,6 +145,9 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // State for manual scheduling
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
 
   // Site photo upload state
   const [sitePhotoUrls, setSitePhotoUrls] = useState<string[]>(
@@ -499,16 +504,56 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           </div>
         </div>
       ) : (
-        <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
-            <Calendar size={18} />
+        <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-5 flex flex-col sm:flex-row items-center gap-4 justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
+              <Calendar size={18} />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-800">No Site Visit Scheduled Yet</h4>
+              <p className="text-xs text-slate-500 mt-0.5">The client has not yet scheduled their site visit date, time, and location from the customer portal.</p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-sm font-bold text-slate-800">No Site Visit Scheduled Yet</h4>
-            <p className="text-xs text-slate-500 mt-0.5">The client has not yet scheduled their site visit date, time, and location from the customer portal.</p>
-          </div>
+          <button 
+            onClick={() => setIsScheduleModalOpen(true)}
+            className="px-4 py-2 bg-emerald-600 text-white font-semibold text-xs rounded-lg whitespace-nowrap hover:bg-emerald-700 transition-colors shadow-sm"
+          >
+            Schedule by yourself
+          </button>
         </div>
       )}
+
+      <ScheduleVisitModal
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        defaultAddress={client?.shippingAddress}
+        onSchedule={async (date, time, location, coords) => {
+          try {
+            await scheduleSiteVisitAction(order.id, {
+              auditDate: date,
+              auditTime: time,
+              customerAddress: location,
+              gpsLocation: coords
+            });
+            await onUpdate({
+              auditDate: date,
+              auditTime: time,
+              customerAddress: location,
+              gpsLocation: coords
+            });
+            setSiteVisit(prev => ({
+              ...prev,
+              auditDate: date,
+              auditTime: time,
+              customerAddress: location,
+              gpsLocation: coords
+            }));
+          } catch (err) {
+            console.error("Failed to schedule site visit", err);
+            alert("Failed to schedule site visit. Please try again.");
+          }
+        }}
+      />
       
       {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300">
