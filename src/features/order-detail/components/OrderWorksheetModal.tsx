@@ -29,7 +29,6 @@ import {
   updateInstallationDetailsAction,
   requestStageAdvancementAction,
   adminApproveStageAction,
-  adminRejectStageAction,
   updateOrderStageAction,
   addChatMessageAction,
   updateOrderHealthAction,
@@ -154,10 +153,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [activeStepTab, setActiveStepTab] = useState<number>(
     stageToTabIndex(initialOrder.stage)
   );
-  const [rejectNotes, setRejectNotes] = useState("");
-  const [showRejectInput, setShowRejectInput] = useState(false);
   const [activeRightPanel, setActiveRightPanel] = useState<"logs" | "chat" | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [adminOverrideUnlocked, setAdminOverrideUnlocked] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showLostReasonDropdown, setShowLostReasonDropdown] = useState(false);
@@ -302,23 +300,10 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
       router.refresh();
       triggerLocalAlert("Stage approved and advanced.", "success");
-      setShowRejectInput(false);
     } catch (err) { triggerLocalAlert("Failed to approve stage.", "error"); }
     finally { setIsProcessing(false); }
   };
 
-  const handleAdminRequestChanges = async (notes: string) => {
-    if (!notes.trim()) { triggerLocalAlert("Please provide rejection feedback.", "warning"); return; }
-    setIsProcessing(true);
-    try {
-      await adminRejectStageAction(order.id, notes);
-      setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
-      router.refresh();
-      setRejectNotes(""); setShowRejectInput(false);
-      triggerLocalAlert("Feedback sent back.", "info");
-    } catch (err) { triggerLocalAlert("Failed to submit rejection.", "error"); }
-    finally { setIsProcessing(false); }
-  };
   const handleUpdateOrderStage = async (orderId: string, stage: string) => {
     setIsProcessing(true);
     try {
@@ -450,7 +435,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const dd = (order.designDetails as DesignDetails) || { resources: [], versions: [], currentVersion: 0 };
   const pd = order.productionDetails || { printing: false, cutting: false, fabrication: false, assembly: false };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
-  const isCurrentTabFrozen = activeStepTab === 0 ? sv.completed : false;
+  const isCurrentTabFrozen = activeStepTab === 0 
+    ? (!order.stage.startsWith("Site Visit") || (!!sv.completed && order.stageStatus !== "Normal")) && !adminOverrideUnlocked
+    : false;
 
   // Strict Site Visit Validations
   const isSiteVisitScheduled = !!(sv.auditDate && sv.auditTime);
@@ -525,10 +512,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <SiteVisitModule
           order={order} customers={customers} employees={employees}
           currentUserRole={currentUserRole} currentEmployee={currentEmployee}
-          onClose={() => { }} onUpdate={(d) => updateSiteVisitDetails(order.id, d)}
-          onSubmitForApproval={async (): Promise<void> => { await requestStageAdvancementAction(order.id); }}
+          onClose={onClose} onUpdate={(d) => updateSiteVisitDetails(order.id, d)}
+          onSubmitForApproval={handleRequestAdvancement}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
-          onAdminRequestChanges={async (notes: string): Promise<void> => { setRejectNotes(notes); await adminRejectStageAction(order.id, notes); }}
+          adminOverrideUnlocked={adminOverrideUnlocked}
+          setAdminOverrideUnlocked={setAdminOverrideUnlocked}
         />
       );
       case 1: return (
@@ -556,7 +544,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           customers={customers}
           employees={employees}
           onAdminApprove={handleAdminApprove}
-          onAdminRequestChanges={handleAdminRequestChanges}
           updateSiteVisitDetails={updateSiteVisitDetails}
           updateOrderStage={handleUpdateOrderStage}
         />

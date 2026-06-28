@@ -9,7 +9,6 @@ interface AdminControlModuleProps {
   customers: Customer[];
   employees: Employee[];
   onAdminApprove: () => Promise<void>;
-  onAdminRequestChanges: (notes: string) => Promise<void>;
   updateSiteVisitDetails: (orderId: string, details: Partial<SiteVisitDetails>) => Promise<void>;
   updateOrderStage: (orderId: string, stage: string) => Promise<void>;
 }
@@ -36,12 +35,9 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   customers,
   employees,
   onAdminApprove,
-  onAdminRequestChanges,
   updateSiteVisitDetails,
   updateOrderStage
 }) => {
-  const [rejectNotes, setRejectNotes] = useState("");
-  const [showRejectInput, setShowRejectInput] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
 
   // Employee stats for assignment
@@ -143,7 +139,13 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
         </div>
 
         <div className="p-5">
-          {order.stageStatus && order.stageStatus !== "Normal" ? (
+          {order.health === "Lost" ? (
+             <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col items-center justify-center text-center">
+               <AlertTriangle size={32} className="text-red-400 mb-2" />
+               <h4 className="text-sm font-bold text-slate-700">Order is Cancelled</h4>
+               <p className="text-xs text-slate-500 mt-1">This order is lost/cancelled. Approvals are blocked.</p>
+             </div>
+          ) : order.stageStatus && order.stageStatus !== "Normal" ? (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h4 className="text-sm font-bold text-amber-900 flex items-center gap-2">
@@ -155,14 +157,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                 </p>
               </div>
               
-              {!showRejectInput ? (
                 <div className="flex gap-2 shrink-0">
-                  <button 
-                    onClick={() => setShowRejectInput(true)} 
-                    className="px-4 py-2 bg-white border border-amber-300 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-100 transition-colors"
-                  >
-                    Request Changes
-                  </button>
                   <button 
                     onClick={onAdminApprove} 
                     className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
@@ -171,31 +166,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
                     Approve Stage
                   </button>
                 </div>
-              ) : (
-                <div className="flex-1 max-w-md flex flex-col gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Provide feedback / reasons for rejection..."
-                    value={rejectNotes} 
-                    onChange={e => setRejectNotes(e.target.value)}
-                    className="w-full px-3 py-2 border border-amber-300 rounded-lg text-xs outline-none focus:ring-2 focus:ring-amber-500 bg-white"
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button 
-                      onClick={() => setShowRejectInput(false)} 
-                      className="px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-amber-100 rounded-md"
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      onClick={() => onAdminRequestChanges(rejectNotes)} 
-                      className="px-4 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 transition-colors"
-                    >
-                      Submit Rejection
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
             <div className="py-6 flex flex-col items-center justify-center text-center">
