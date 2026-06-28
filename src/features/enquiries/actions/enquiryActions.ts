@@ -86,11 +86,21 @@ export async function convertEnquiryToOrderAction(enquiryId: string, projectName
   }
 
   // 2. Check if customer already exists using phone, whatsapp, email
-  const { data: existingCust, error: custErr } = await supabase
-    .from("customers")
-    .select("*")
-    .or(`phone.eq.${enq.phone},whatsapp.eq.${enq.whatsapp},email.eq.${enq.email}`)
-    .limit(1);
+  let existingCust = null;
+  
+  const orClauses = [];
+  if (enq.phone) orClauses.push(`phone.eq."${enq.phone}"`);
+  if (enq.whatsapp) orClauses.push(`whatsapp.eq."${enq.whatsapp}"`);
+  if (enq.email) orClauses.push(`email.eq."${enq.email}"`);
+
+  if (orClauses.length > 0) {
+    const { data, error: custErr } = await supabase
+      .from("customers")
+      .select("*")
+      .or(orClauses.join(","))
+      .limit(1);
+    existingCust = data;
+  }
     
   let customerId: string;
   let friendlyCustomerId: string;
