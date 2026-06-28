@@ -185,8 +185,6 @@ export async function deleteOrder(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/admin/orders");
   revalidatePath("/staff/orders");
-  revalidatePath("/admin/orders");
-  revalidatePath("/staff/orders");
   if (o) {
     revalidatePath(`/admin/orders/${o.order_id}`);
     revalidatePath(`/staff/orders/${o.order_id}`);
@@ -216,12 +214,9 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
 
   // 4. Update measurements if provided
   if (details.locations && Array.isArray(details.locations)) {
-    // We could delete old measurements and insert new, or upsert.
-    // Simplest is delete all for this site_visit_id and insert new ones.
-    await supabase.from("site_visit_measurements").delete().eq("site_visit_id", siteVisit.id);
-
     if (details.locations.length > 0) {
       const locationsPayload = details.locations.map((loc: any) => ({
+        id: loc.id,
         site_visit_id: siteVisit.id,
         name: loc.name || "Unknown",
         width: loc.width,
@@ -244,8 +239,8 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
         obstacles: loc.obstacles || [],
         structural_notes: loc.structuralNotes
       }));
-      const { error: locError } = await supabase.from("site_visit_measurements").insert(locationsPayload);
-      if (locError) console.error("Failed to insert measurements:", locError.message);
+      const { error: locError } = await supabase.from("site_visit_measurements").upsert(locationsPayload, { onConflict: "id" });
+      if (locError) console.error("Failed to upsert measurements:", locError.message);
     }
   }
 
@@ -334,10 +329,11 @@ export async function requestStageAdvancementAction(orderId: string) {
 
 export async function adminApproveStageAction(orderId: string) {
   const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
     .select("stage, order_id")
-    .eq("id", orderId)
+    .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
@@ -360,7 +356,7 @@ export async function adminApproveStageAction(orderId: string) {
   const nextStage = nextStageMap[o.stage] || o.stage;
   const logMsg = `Admin approved stage progression from "${o.stage}" to "${nextStage}".`;
 
-  const result = await updateOrder(orderId, {
+  const result = await updateOrder(orderUuid, {
     stage: nextStage,
     stage_status: "Normal",
     stage_admin_notes: "",
@@ -378,45 +374,19 @@ export async function adminApproveStageAction(orderId: string) {
   return result;
 }
 
-export async function adminRejectStageAction(orderId: string, notes: string) {
-  const supabase = await getSupabase();
-  const { data: o, error: fetchError } = await supabase
-    .from("orders")
-    .select("order_id")
-    .eq("id", orderId)
-    .single();
-  if (fetchError) throw new Error(fetchError.message);
-
-  const logMsg = `Admin sent back stage progression request: ${notes}`;
-
-  const result = await updateOrder(orderId, {
-    stage_status: "Normal",
-    stage_admin_notes: notes,
-  });
-
-  await supabase.from("order_activity").insert({
-    order_id: o.order_id || orderId,
-    activity_type: "timeline",
-    actor_name: "System",
-    actor_role: "System",
-    content: logMsg,
-    metadata: { action: "stage_rejected", reason: notes }
-  });
-
-  return result;
-}
 
 export async function updateOrderStageAction(id: string, stage: string) {
   const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, id);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
     .select("stage, order_id")
-    .eq("id", id)
+    .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
   const isChanged = stage !== o.stage;
-  const result = await updateOrder(id, { stage });
+  const result = await updateOrder(orderUuid, { stage });
 
   if (isChanged) {
     await supabase.from("order_activity").insert({
@@ -571,16 +541,17 @@ export async function reopenOrderAction(orderId: string) {
 
 export async function scheduleSiteVisitAction(orderId: string, scheduleData: any) {
   const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
   
   const { data: order, error: fetchError } = await supabase
     .from("orders")
     .select("company_id, order_id, customer_id, customer_name")
-    .eq("id", orderId)
+    .eq("id", orderUuid)
     .single();
     
   if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
 
-  const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderId).maybeSingle();
+  const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderUuid).maybeSingle();
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
   const updatedSiteVisit = { ...mappedExisting, ...scheduleData, completed: false, reviewStatus: "Pending" as const };
   const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
@@ -594,8 +565,8 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
 
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
-    .update({ stage: "Site Visit Scheduled" })
-    .eq("id", orderId)
+    .update({ stage: "Site Visit Scheduled", stage_status: "Normal" })
+    .eq("id", orderUuid)
     .select()
     .single();
   if (updateError) throw new Error(updateError.message);
@@ -619,16 +590,17 @@ export async function scheduleSiteVisitAction(orderId: string, scheduleData: any
 
 export async function approveSiteVisitAction(orderId: string) {
   const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
   
   const { data: order, error: fetchError } = await supabase
     .from("orders")
     .select("company_id, order_id, customer_id")
-    .eq("id", orderId)
+    .eq("id", orderUuid)
     .single();
     
   if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
 
-  const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderId).maybeSingle();
+  const { data: existingSv } = await supabase.from("site_visits").select("*").eq("order_id", orderUuid).maybeSingle();
   const mappedExisting = mapSiteVisitFromDb(existingSv) || {};
   const companyId = order.company_id || "11111111-1111-1111-1111-111111111111";
   const dbPayload = mapSiteVisitToDb(orderId, companyId, { ...mappedExisting, reviewStatus: "Staff Approved" as const });
@@ -639,7 +611,7 @@ export async function approveSiteVisitAction(orderId: string) {
   const { data: updatedOrderRow, error: updateError } = await supabase
     .from("orders")
     .update({ stage: "Site Visit Scheduled", stage_status: "Pending Admin Approval: Site Visit Schedule" })
-    .eq("id", orderId)
+    .eq("id", orderUuid)
     .select()
     .single();
   if (updateError) throw new Error(updateError.message);
@@ -669,19 +641,20 @@ export async function approveSiteVisitAction(orderId: string) {
  */
 export async function freezeSiteVisitAction(orderId: string) {
   const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
 
   // 1. Mark the site_visit row as completed (frozen)
   const { error: svError } = await supabase
     .from("site_visits")
     .update({ completed: true })
-    .eq("order_id", orderId);
+    .eq("order_id", orderUuid);
   if (svError) throw new Error(svError.message);
 
   // 2. Fetch order for activity log
   const { data: order, error: fetchError } = await supabase
     .from("orders")
     .select("order_id, stage")
-    .eq("id", orderId)
+    .eq("id", orderUuid)
     .single();
   if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
 
@@ -689,7 +662,7 @@ export async function freezeSiteVisitAction(orderId: string) {
   const { data: updatedOrder, error: orderError } = await supabase
     .from("orders")
     .update({ stage_status: "Pending Admin Approval: Site Visit Completed" })
-    .eq("id", orderId)
+    .eq("id", orderUuid)
     .select()
     .single();
   if (orderError) throw new Error(orderError.message);

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import LoadingLines from "@/components/ui/loading-lines";
 
-export function GlobalNavigationLoader() {
+function NavigationLoaderInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -54,5 +54,13 @@ export function GlobalNavigationLoader() {
     <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm transition-opacity duration-300">
       <LoadingLines />
     </div>
+  );
+}
+
+export function GlobalNavigationLoader() {
+  return (
+    <Suspense fallback={null}>
+      <NavigationLoaderInner />
+    </Suspense>
   );
 }

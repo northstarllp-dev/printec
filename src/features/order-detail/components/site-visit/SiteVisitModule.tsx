@@ -23,7 +23,8 @@ import {
   Download,
   Trash,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Shield
 } from "lucide-react";
 import { 
   Order, 
@@ -69,12 +70,11 @@ interface SiteVisitModuleProps {
   onUpdate: (details: Partial<SiteVisitDetails>) => Promise<void>;
   onSubmitForApproval?: () => Promise<void>;
   onAdminApprove?: () => Promise<void>;
-  onAdminRequestChanges?: (notes: string) => Promise<void>;
   onStaffApproveVisit?: () => Promise<void>;
   actionsNode?: React.ReactNode;
+  adminOverrideUnlocked?: boolean;
+  setAdminOverrideUnlocked?: (val: boolean) => void;
 }
-
-
 
 const defaultSignLocation: Omit<SignLocation, "id"> = {
   name: "",
@@ -91,9 +91,10 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   onUpdate,
   onSubmitForApproval,
   onAdminApprove,
-  onAdminRequestChanges,
   onStaffApproveVisit,
-  actionsNode
+  actionsNode,
+  adminOverrideUnlocked,
+  setAdminOverrideUnlocked
 }) => {
   // Current client
   const client = customers.find(c => c.id === order.customerId);
@@ -128,9 +129,10 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     };
   });
   
-  // Freeze flag — when completed=true all fields are read-only
-  const isFrozen = !!siteVisit.completed;
-
+  // Freeze flag — read-only if not in Site Visit stage, or if completed and pending admin approval.
+  // It unfreezes if the admin requests changes (stageStatus becomes "Normal" while still in Site Visit stage).
+  const baseFrozen = !order.stage.startsWith("Site Visit") || (!!siteVisit.completed && order.stageStatus !== "Normal");
+  const isFrozen = baseFrozen && !adminOverrideUnlocked;
   // State for chat panel
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
@@ -217,9 +219,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   
-  // State for admin reject notes
-  const [rejectNotes, setRejectNotes] = useState("");
-  
   // Helper to toggle section collapse
   const toggleSection = (section: keyof typeof collapsed) => {
     setCollapsed(prev => ({ ...prev, [section]: !prev[section] }));
@@ -295,6 +294,35 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
   return (
     <div className="space-y-6 text-slate-800">
+      
+      {/* ── ADMIN OVERRIDE BANNER ── */}
+      {baseFrozen && currentUserRole === "Admin" && setAdminOverrideUnlocked && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${adminOverrideUnlocked ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${adminOverrideUnlocked ? 'bg-amber-100 text-amber-600' : 'bg-slate-200 text-slate-500'}`}>
+              <Shield size={16} />
+            </div>
+            <div>
+              <h4 className={`text-sm font-bold ${adminOverrideUnlocked ? 'text-amber-900' : 'text-slate-700'}`}>Admin God Mode</h4>
+              <p className={`text-xs ${adminOverrideUnlocked ? 'text-amber-700' : 'text-slate-500'}`}>
+                {adminOverrideUnlocked 
+                  ? "Module is currently unlocked. You can edit all details and click 'Save Draft' at the bottom." 
+                  : "This module is locked. Unlock it to forcefully edit details."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setAdminOverrideUnlocked(!adminOverrideUnlocked)}
+            className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${
+              adminOverrideUnlocked 
+                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' 
+                : 'bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 shadow-3xs'
+            }`}
+          >
+            {adminOverrideUnlocked ? "Lock Module" : "Unlock for Editing"}
+          </button>
+        </div>
+      )}
       
       {/* ── SCHEDULED VISIT DETAILS (from customer portal) ── */}
       {scheduledDate || scheduledAddress ? (
