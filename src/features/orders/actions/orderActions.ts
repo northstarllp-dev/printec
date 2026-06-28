@@ -215,10 +215,12 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
   // 4. Update measurements if provided
   if (details.locations && Array.isArray(details.locations)) {
     if (details.locations.length > 0) {
-      const locationsPayload = details.locations.map((loc: any) => ({
-        id: loc.id,
-        site_visit_id: siteVisit.id,
-        name: loc.name || "Unknown",
+      const locationsPayload = details.locations.map((loc: any) => {
+        const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(loc.id);
+        return {
+          ...(isValidUuid ? { id: loc.id } : {}),
+          site_visit_id: siteVisit.id,
+          name: loc.name || "Unknown",
         width: loc.width,
         width_unit: loc.widthUnit || "ft",
         height: loc.height,
@@ -238,7 +240,8 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
         surface_condition: loc.surfaceCondition,
         obstacles: loc.obstacles || [],
         structural_notes: loc.structuralNotes
-      }));
+      };
+      });
       const { error: locError } = await supabase.from("site_visit_measurements").upsert(locationsPayload, { onConflict: "id" });
       if (locError) console.error("Failed to upsert measurements:", locError.message);
     }

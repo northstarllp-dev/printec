@@ -235,7 +235,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const addSignLocation = () => {
     const nextNum = (siteVisit.locations?.length || 0) + 1;
     const newLocation: SignLocation = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       ...defaultSignLocation,
       name: `Item-${nextNum}`
     };
