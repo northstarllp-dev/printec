@@ -9,7 +9,9 @@ import {
   ZoomOut,
   ZoomIn,
   Loader2,
-  Trash
+  Trash,
+  Maximize,
+  Download
 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
@@ -37,22 +39,67 @@ interface Order {
 export interface DesignTabProps {
   order: Order;
   customer: Customer;
+  siteVisitItems?: Array<{ id: string; name: string }>;
 }
 
-export function DesignTab({ order, customer }: DesignTabProps) {
+export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabProps) {
   const dd = order.designDetails || { resources: [], versions: [], currentVersion: 0 };
   const [zoomLevel, setZoomLevel] = useState(100);
+  
+  const itemsList = React.useMemo(() => {
+    let items = dd.items ? [...dd.items] : [];
+    if (items.length === 0 && dd.versions && dd.versions.length > 0) {
+       items = [{ id: "general", name: "General Design", versions: dd.versions, currentVersion: dd.currentVersion || 0 }];
+    }
+    if (siteVisitItems.length > 0) {
+      siteVisitItems.forEach(svi => {
+        if (!items.find(i => i.id === svi.id)) {
+          items.push({ id: svi.id, name: svi.name, versions: [], currentVersion: 0 });
+        }
+      });
+    } else if (items.length === 0) {
+      items = [{ id: "general", name: "General Design", versions: [], currentVersion: 0 }];
+    }
+    return items;
+  }, [dd.items, dd.versions, dd.currentVersion, siteVisitItems]);
+
+  const [selectedItemId, setSelectedItemId] = useState<string>(itemsList[0]?.id || "general");
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [commentingOn, setCommentingOn] = useState<{x: number, y: number} | null>(null);
   const [commentText, setCommentText] = useState("");
-  const [draftComments, setDraftComments] = useState<any[]>([]);
   const [showGeneralFeedback, setShowGeneralFeedback] = useState(false);
   const [generalFeedbackText, setGeneralFeedbackText] = useState("");
   const supabase = createClient();
+  
+  React.useEffect(() => {
+    if (!selectedItemId && itemsList.length > 0) {
+      setSelectedItemId(itemsList[0].id);
+    }
+  }, [itemsList, selectedItemId]);
 
-  const activeVersion = (dd.versions || []).find((v: any) => v.id === selectedVersionId) || (dd.versions || [])[(dd.versions || []).length - 1];
-  const allComments = [...(activeVersion?.comments || []), ...draftComments];
+  const activeItem = itemsList.find(i => i.id === selectedItemId) || itemsList[0];
+  const localVersions = activeItem?.versions || [];
+
+  const activeVersion = localVersions.find((v: any) => v.id === selectedVersionId) || localVersions[localVersions.length - 1];
+  const allComments = activeVersion?.comments || [];
+
+  const handleUpdateItemVersions = async (newVersions: any[], updateStage?: string) => {
+    const updatedItems = itemsList.map(item => {
+      if (item.id === selectedItemId) {
+        return { ...item, versions: newVersions, currentVersion: newVersions.length > 0 ? newVersions[newVersions.length - 1].versionNumber : 0 };
+      }
+      return item;
+    });
+    const legacyUpdates = (selectedItemId === "general" && siteVisitItems.length === 0) 
+      ? { versions: newVersions, currentVersion: newVersions.length > 0 ? newVersions[newVersions.length - 1].versionNumber : 0 }
+      : {};
+    
+    const updatedDetails = { ...dd, items: updatedItems, ...legacyUpdates };
+    const payload: any = { design_details: updatedDetails };
+    if (updateStage) payload.stage = updateStage;
+    await supabase.from("orders").update(payload).eq("id", order.id);
+  };
 
   const handleResourceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -111,41 +158,86 @@ export function DesignTab({ order, customer }: DesignTabProps) {
     setCommentingOn({ x, y });
   };
 
-  const handleAddComment = () => {
+  const handleDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+      alert("Failed to download file");
+    }
+  };
+
+  const handleAddComment = async () => {
     if (!commentingOn || !commentText.trim() || !activeVersion) return;
-    const newComment = {
+    
+    // Auto-number based on existing pinpoint comments
+    const number = allComments.filter((c: any) => !c.isGeneral).length + 1;
+    
+    const pinpointComment = {
       id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
       x: commentingOn.x,
       y: commentingOn.y,
+      number,
       content: commentText,
       author: customer.name,
       createdAt: new Date().toISOString(),
       isGeneral: false,
-      isDraft: true
+    };
+
+    const generalComment = {
+      id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
+      content: `Pin #${number}: ${commentText}`,
+      author: customer.name,
+      createdAt: new Date().toISOString(),
+      isGeneral: true,
     };
     
-    setDraftComments([...draftComments, newComment]);
+    const updatedVersions = localVersions.map((v: any) => 
+      v.id === activeVersion.id ? { 
+        ...v, 
+        comments: [...(v.comments || []), pinpointComment, generalComment], 
+        status: "Changes Requested" 
+      } : v
+    );
+    
+    await handleUpdateItemVersions(updatedVersions, "Design In Progress");
+    
     setCommentingOn(null);
     setCommentText("");
   };
 
-  const handleDeleteComment = async (commentId: string, isDraft?: boolean) => {
-    if (isDraft) {
-      setDraftComments(draftComments.filter(c => c.id !== commentId));
-    } else {
-      const updatedVersions = dd.versions.map((v: any) => 
-        v.id === activeVersion.id ? { ...v, comments: (v.comments || []).filter((c: any) => c.id !== commentId) } : v
-      );
-      const updatedDetails = { ...dd, versions: updatedVersions };
-      await supabase.from("orders").update({ design_details: updatedDetails }).eq("id", order.id);
-    }
+  const handleDeleteComment = async (commentId: string) => {
+    const updatedVersions = localVersions.map((v: any) => {
+      if (v.id === activeVersion.id) {
+        const commentToDelete = (v.comments || []).find((c: any) => c.id === commentId);
+        let comments = (v.comments || []).filter((c: any) => c.id !== commentId);
+        
+        // Remove the linked general comment for pinpoint comments
+        if (commentToDelete && !commentToDelete.isGeneral) {
+          comments = comments.filter((c: any) => !(c.isGeneral && c.content.startsWith(`Pin #${commentToDelete.number}:`)));
+        }
+        
+        return { ...v, comments };
+      }
+      return v;
+    });
+    
+    await handleUpdateItemVersions(updatedVersions);
   };
 
   const handleGeneralFeedbackSubmit = async () => {
-    if (!generalFeedbackText.trim() && draftComments.length === 0) return;
-    if (!activeVersion) return;
+    if (!generalFeedbackText.trim() || !activeVersion) return;
     
-    const finalComments = draftComments.map(c => ({ ...c, isDraft: undefined }));
+    const finalComments: any[] = [];
     
     if (generalFeedbackText.trim()) {
       finalComments.push({
@@ -157,24 +249,21 @@ export function DesignTab({ order, customer }: DesignTabProps) {
       });
     }
     
-    const updatedVersions = dd.versions.map((v: any) => 
+    const updatedVersions = localVersions.map((v: any) => 
       v.id === activeVersion.id ? { ...v, comments: [...(v.comments || []), ...finalComments], status: "Changes Requested" } : v
     );
-    const updatedDetails = { ...dd, versions: updatedVersions };
-    await supabase.from("orders").update({ design_details: updatedDetails, stage: "Design In Progress" }).eq("id", order.id);
+    await handleUpdateItemVersions(updatedVersions, "Design In Progress");
     
-    setDraftComments([]);
     setShowGeneralFeedback(false);
     setGeneralFeedbackText("");
   };
 
   const handleApproveDesign = async () => {
     if (!activeVersion) return;
-    const updatedVersions = dd.versions.map((v: any) => 
+    const updatedVersions = localVersions.map((v: any) => 
       v.id === activeVersion.id ? { ...v, status: "Approved" } : v
     );
-    const updatedDetails = { ...dd, versions: updatedVersions };
-    await supabase.from("orders").update({ design_details: updatedDetails, stage: "Design Approved" }).eq("id", order.id);
+    await handleUpdateItemVersions(updatedVersions, "Design Approved");
     await supabase.from("order_activity").insert({ order_id: order.orderId || order.id, activity_type: "timeline", actor_name: "System", actor_role: "System", content: "Client approved the design proof layout.", metadata: { action: "design_approved_by_customer" } });
   };
 
@@ -214,11 +303,38 @@ export function DesignTab({ order, customer }: DesignTabProps) {
           </div>
         )}
 
+        {/* Item Selector */}
+        {itemsList.length > 1 && (
+          <div className="flex flex-wrap gap-2 mb-4 p-1 bg-gray-100 rounded-xl w-fit">
+            {itemsList.map(item => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setSelectedItemId(item.id);
+                  setSelectedVersionId(null);
+                }}
+                className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+                  selectedItemId === item.id 
+                    ? 'bg-white text-blue-600 shadow-sm' 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {item.name}
+                {item.versions.length > 0 && (
+                  <span className="ml-2 px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full text-[10px]">
+                    {item.versions.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Version Selector */}
-        {dd.versions && dd.versions.length > 0 ? (
+        {localVersions.length > 0 ? (
           <>
             <div className="flex gap-2 mb-4">
-              {dd.versions.map((v: any) => (
+              {localVersions.map((v: any) => (
                 <button
                   key={v.id}
                   onClick={() => setSelectedVersionId(v.id)}
@@ -242,21 +358,32 @@ export function DesignTab({ order, customer }: DesignTabProps) {
               )}
             </div>
 
-            <div className="aspect-video bg-[#0b1c30] rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-gray-200 shadow-inner">
-              <div className="relative" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center' }}>
+            <div className="bg-[#0b1c30] rounded-xl flex items-center justify-center mb-6 relative overflow-hidden group border border-gray-200 shadow-inner p-4 min-h-[40vh]">
+              
+              {/* Image Controls (Enlarge & Download) */}
+              <div className="absolute top-4 right-4 flex gap-2 z-50">
+                <button onClick={() => window.open(activeVersion.proofUrl, '_blank')} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Enlarge">
+                  <Maximize size={18} />
+                </button>
+                <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Download">
+                  <Download size={18} />
+                </button>
+              </div>
+
+              <div className="relative inline-block" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center' }}>
                 <img
                   src={activeVersion.proofUrl}
                   alt="Design Proof"
                   className="max-h-[60vh] object-contain transition-all"
                   onClick={handleImageClick}
-                  style={{ cursor: activeVersion.status !== "Approved" ? "crosshair" : "default" }}
+                  style={{ cursor: activeVersion.status !== "Approved" ? "crosshair" : "default", display: 'block' }}
                 />
                 
                 {/* Render Existing Comments */}
                 {allComments.map((comment: any) => (
                   !comment.isGeneral && (
                     <div key={comment.id} className="absolute z-10 hover:z-50 w-0 h-0 group/pin" style={{ left: `${comment.x}%`, top: `${comment.y}%` }}>
-                      <div className={`absolute w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold cursor-pointer transition-colors -translate-x-1/2 -translate-y-1/2 ${comment.isDraft ? 'bg-amber-500' : 'bg-red-500'}`}>!</div>
+                      <div className={`absolute w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold cursor-pointer transition-colors -translate-x-1/2 -translate-y-1/2 ${comment.isDraft ? 'bg-amber-500' : 'bg-red-500'}`}>{comment.number || "!"}</div>
                       <div className={`hidden group-hover/pin:block absolute w-48 p-2 bg-white rounded-lg shadow-xl border border-gray-200 text-xs text-gray-800 z-20 
                         ${comment.x < 20 ? 'left-0 ml-3' : comment.x > 80 ? 'right-0 mr-3' : '-translate-x-1/2'}
                         ${comment.y > 50 ? 'bottom-full mb-3' : 'top-full mt-3'}
@@ -265,7 +392,7 @@ export function DesignTab({ order, customer }: DesignTabProps) {
                           <span className="font-bold text-[10px] text-gray-400">
                             {comment.author} {comment.isDraft && <span className="text-amber-500">(Draft)</span>}
                           </span>
-                          <button onClick={(e) => { e.stopPropagation(); handleDeleteComment(comment.id, comment.isDraft); }} className="text-red-500 hover:text-red-700 p-0.5" title="Delete comment">
+                          <button onClick={(e) => { e.stopPropagation(); handleDeleteComment(comment.id); }} className="text-red-500 hover:text-red-700 p-0.5" title="Delete comment">
                             <Trash size={12} />
                           </button>
                         </div>
@@ -307,11 +434,6 @@ export function DesignTab({ order, customer }: DesignTabProps) {
               </div>
             </div>
 
-            {draftComments.length > 0 && (
-              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm font-bold flex items-center gap-2 shadow-sm animate-pulse">
-                <span>⚠️</span> You have {draftComments.length} unsaved pinpoint comment{draftComments.length > 1 ? 's' : ''}. Click "Request Changes" below to submit {draftComments.length > 1 ? 'them' : 'it'} to the designer.
-              </div>
-            )}
 
             <div className="flex flex-col md:flex-row items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-200 gap-4">
               <span className="text-xs text-gray-500">
@@ -323,7 +445,7 @@ export function DesignTab({ order, customer }: DesignTabProps) {
                     onClick={() => setShowGeneralFeedback(!showGeneralFeedback)}
                     className="px-4 py-2 border border-slate-300 bg-white text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-50 flex-1 md:flex-none transition-colors"
                   >
-                    Request Changes
+                    Add Feedback
                   </button>
                   <button
                     onClick={handleApproveDesign}
@@ -347,8 +469,8 @@ export function DesignTab({ order, customer }: DesignTabProps) {
                 />
                 <div className="flex gap-2 justify-end">
                   <button onClick={() => setShowGeneralFeedback(false)} className="px-4 py-2 border border-slate-300 text-slate-600 bg-white rounded-lg text-xs font-bold hover:bg-slate-50 transition-colors">Cancel</button>
-                  <button onClick={handleGeneralFeedbackSubmit} disabled={!generalFeedbackText.trim() && draftComments.length === 0} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-blue-700 shadow-sm transition-colors">
-                    {draftComments.length > 0 ? "Submit Feedback & Request Changes" : "Submit Feedback"}
+                  <button onClick={handleGeneralFeedbackSubmit} disabled={!generalFeedbackText.trim()} className="px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold disabled:opacity-50 hover:bg-blue-700 shadow-sm transition-colors">
+                    Submit Feedback
                   </button>
                 </div>
               </div>
@@ -360,7 +482,7 @@ export function DesignTab({ order, customer }: DesignTabProps) {
                 <h4 className="text-sm font-bold text-gray-800">General Feedback</h4>
                 {allComments.filter((c: any) => c.isGeneral).map((comment: any) => (
                   <div key={comment.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm relative group">
-                    <button onClick={() => handleDeleteComment(comment.id, comment.isDraft)} className="absolute top-3 right-3 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                    <button onClick={() => handleDeleteComment(comment.id)} className="absolute top-3 right-3 text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity p-1">
                       <Trash size={12} />
                     </button>
                     <div className="flex items-center justify-between mb-1 pr-6">
@@ -378,7 +500,7 @@ export function DesignTab({ order, customer }: DesignTabProps) {
             <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-gray-100">
               <Layout size={32} className="text-gray-400" />
             </div>
-            <h3 className="text-lg font-bold text-gray-700">Awaiting Initial Design</h3>
+            <h3 className="text-lg font-bold text-gray-700">Awaiting Initial Design for {activeItem?.name}</h3>
             <p className="text-sm text-gray-500 mt-2 max-w-sm">Our designers are currently working on your proof. You will receive an email once it is ready for your review.</p>
           </div>
         )}

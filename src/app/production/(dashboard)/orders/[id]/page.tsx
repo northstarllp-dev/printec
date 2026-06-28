@@ -4,7 +4,7 @@ import { getOrderById } from "@/features/orders/actions/orderActions";
 import { getCustomers } from "@/features/customers/actions/customerActions";
 import { getEmployees } from "@/features/employees/actions/employeeActions";
 import { getProducts } from "@/features/products/actions/productActions";
-import { getQuotationByOrderId } from "@/features/quotations/actions/quotationActions";
+import { getQuotationByOrderId, getSiteVisitMeasurementsForOrder } from "@/features/quotations/actions/quotationActions";
 import { ProductionOrderDetailClient } from "./ProductionOrderDetailClient";
 
 export default async function ProductionOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,11 +28,12 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
     redirect("/production/orders");
   }
 
-  const [customersData, employeesData, productsData, quotationData] = await Promise.all([
+  const [customersData, employeesData, productsData, quotationData, siteVisitItemsData] = await Promise.all([
     getCustomers().catch(() => []),
     getEmployees().catch(() => []),
     getProducts().catch(() => []),
     getQuotationByOrderId(order.id).catch(() => null),
+    getSiteVisitMeasurementsForOrder(order.id).catch(() => []),
   ]);
 
   const mappedOrder = {
@@ -91,6 +92,7 @@ export default async function ProductionOrderDetailPage({ params }: { params: Pr
       employees={mappedEmployees}
       products={productsData || []}
       quotation={quotationData}
+      siteVisitItems={siteVisitItemsData || []}
     />
   );
 }

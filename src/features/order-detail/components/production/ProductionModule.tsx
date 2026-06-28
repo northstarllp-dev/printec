@@ -7,12 +7,14 @@ import { Order, ProductionDetails } from "@/types";
 interface ProductionModuleProps {
   order: Order;
   isEmployee: boolean;
+  isReadOnly?: boolean;
   updateProductionDetails: (orderId: string, details: Partial<ProductionDetails>) => Promise<void>;
 }
 
 export const ProductionModule: React.FC<ProductionModuleProps> = ({
   order,
   isEmployee,
+  isReadOnly = false,
   updateProductionDetails,
 }) => {
   const pd = order.productionDetails || {
@@ -54,7 +56,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
               type="checkbox"
               checked={pd.printing || false}
               onChange={() => updateProductionDetails(order.id, { printing: !pd.printing })}
-              disabled={isEmployee && order.stageStatus?.includes("Pending")}
+              disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
               className="w-4.5 h-4.5 rounded text-emerald-600 cursor-pointer"
             />
           </div>
@@ -74,7 +76,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
               type="checkbox"
               checked={pd.cutting || false}
               onChange={() => updateProductionDetails(order.id, { cutting: !pd.cutting })}
-              disabled={isEmployee && order.stageStatus?.includes("Pending")}
+              disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
               className="w-4.5 h-4.5 rounded text-emerald-600 cursor-pointer"
             />
           </div>
@@ -96,7 +98,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
               onChange={() =>
                 updateProductionDetails(order.id, { fabrication: !pd.fabrication })
               }
-              disabled={isEmployee && order.stageStatus?.includes("Pending")}
+              disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
               className="w-4.5 h-4.5 rounded text-emerald-600 cursor-pointer"
             />
           </div>
@@ -116,7 +118,7 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
               type="checkbox"
               checked={pd.assembly || false}
               onChange={() => updateProductionDetails(order.id, { assembly: !pd.assembly })}
-              disabled={isEmployee && order.stageStatus?.includes("Pending")}
+              disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
               className="w-4.5 h-4.5 rounded text-emerald-600 cursor-pointer"
             />
           </div>

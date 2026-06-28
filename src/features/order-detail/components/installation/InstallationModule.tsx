@@ -6,12 +6,14 @@ import { Order, InstallationDetails } from "@/types";
 interface InstallationModuleProps {
   order: Order;
   isEmployee: boolean;
+  isReadOnly?: boolean;
   updateInstallationDetails: (orderId: string, details: Partial<InstallationDetails>) => Promise<void>;
 }
 
 export const InstallationModule: React.FC<InstallationModuleProps> = ({
   order,
   isEmployee,
+  isReadOnly = false,
   updateInstallationDetails,
 }) => {
   const inst = order.installationDetails || {
@@ -38,7 +40,7 @@ export const InstallationModule: React.FC<InstallationModuleProps> = ({
           value={inst.photoUrl}
           onChange={(e) => updateInstallationDetails(order.id, { photoUrl: e.target.value })}
           placeholder="Paste link to installation completion photo..."
-          disabled={isEmployee && order.stageStatus?.includes("Pending")}
+          disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
           className="w-full px-3 py-2 border border-slate-250 rounded-xl text-xs font-semibold text-slate-700 bg-white focus:outline-none"
         />
       </div>
@@ -55,7 +57,7 @@ export const InstallationModule: React.FC<InstallationModuleProps> = ({
               updateInstallationDetails(order.id, { customerSignature: e.target.value })
             }
             placeholder="Type customer name to sign..."
-            disabled={isEmployee && order.stageStatus?.includes("Pending")}
+            disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
             className="w-full px-3 py-2 border border-slate-250 rounded-xl text-xs font-semibold text-slate-700 bg-white focus:outline-none"
           />
         </div>
@@ -70,7 +72,7 @@ export const InstallationModule: React.FC<InstallationModuleProps> = ({
               updateInstallationDetails(order.id, { paymentCode: e.target.value })
             }
             placeholder="e.g. 9938"
-            disabled={isEmployee && order.stageStatus?.includes("Pending")}
+            disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
             className="w-full px-3 py-2 border border-slate-250 rounded-xl text-xs font-semibold text-slate-700 bg-white focus:outline-none"
           />
         </div>

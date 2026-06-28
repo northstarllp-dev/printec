@@ -37,6 +37,7 @@ interface ProductionOrderDetailClientProps {
   employees: any[];
   products: any[];
   quotation: any;
+  siteVisitItems?: any[];
 }
 
 export function ProductionOrderDetailClient({
@@ -44,7 +45,8 @@ export function ProductionOrderDetailClient({
   customers,
   employees,
   products,
-  quotation
+  quotation,
+  siteVisitItems = []
 }: ProductionOrderDetailClientProps) {
   const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
@@ -99,7 +101,8 @@ export function ProductionOrderDetailClient({
     }
   };
 
-  const quoteItems: QuoteItem[] = quotation?.items || [];
+  const signageOptions = quotation?.signage_options || [];
+  const designItems = dd.items || [];
 
   return (
     <div className="p-8 bg-slate-50/50 min-h-screen">
@@ -155,7 +158,7 @@ export function ProductionOrderDetailClient({
               </h2>
             </div>
 
-            {locations.length > 0 ? (
+            {siteVisitItems.length > 0 ? (
               <div className="space-y-4">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
@@ -165,35 +168,22 @@ export function ProductionOrderDetailClient({
                         <th className="py-2.5 px-4">Width</th>
                         <th className="py-2.5 px-4">Height</th>
                         <th className="py-2.5 px-4">Depth</th>
-                        <th className="py-2.5 px-4">Ground Clearance</th>
+                        <th className="py-2.5 px-4">Notes</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {locations.map((loc, idx) => (
+                      {siteVisitItems.map((loc, idx) => (
                         <tr key={loc.id || idx}>
                           <td className="py-3 px-4 font-bold text-slate-800">{loc.name}</td>
                           <td className="py-3 px-4 font-medium text-slate-600">{loc.width || "—"}</td>
                           <td className="py-3 px-4 font-medium text-slate-600">{loc.height || "—"}</td>
                           <td className="py-3 px-4 font-medium text-slate-600">{loc.depth || "—"}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.ground_clearance || "—"}</td>
+                          <td className="py-3 px-4 font-medium text-slate-600">{loc.notes || "—"}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-
-                {locations.some(l => l.notes) && (
-                  <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase mb-2">Location Notes</h3>
-                    <div className="space-y-2">
-                      {locations.map((loc, idx) => loc.notes ? (
-                        <p key={idx} className="text-xs text-slate-600 leading-normal">
-                          <strong className="text-slate-700">{loc.name}:</strong> {loc.notes}
-                        </p>
-                      ) : null)}
-                    </div>
-                  </div>
-                )}
               </div>
             ) : (
               <div className="py-6 text-center text-xs text-slate-400 font-semibold">
@@ -218,41 +208,51 @@ export function ProductionOrderDetailClient({
               )}
             </div>
 
-            {quoteItems.length > 0 ? (
+            {signageOptions.length > 0 ? (
               <div className="space-y-5">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                        <th className="py-2.5 px-4">Item Description</th>
-                        <th className="py-2.5 px-4 text-center">Qty</th>
-                        <th className="py-2.5 px-4">Unit</th>
-                        <th className="py-2.5 px-4 text-right">Rate</th>
-                        <th className="py-2.5 px-4 text-right">GST %</th>
-                        <th className="py-2.5 px-4 text-right">Total Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {quoteItems.map((item, idx) => {
-                        const rate = item.pricingType === "per_sqft" ? (item.costPerSqFt || item.unitPrice) : item.unitPrice;
-                        const qty = item.pricingType === "per_sqft" ? (item.quantity * (item.totalSqFt || 1)) : item.quantity;
-                        const sub = qty * rate;
-                        const tax = sub * (item.gstRate / 100);
-                        const final = sub + tax;
+                <div className="overflow-x-auto space-y-6">
+                  {signageOptions.map((section: any, sIdx: number) => {
+                    const svItem = siteVisitItems.find(sv => sv.id === section.siteVisitItemId);
+                    return (
+                      <div key={sIdx} className="border border-slate-200 rounded-xl overflow-hidden">
+                        <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-slate-800">
+                          {svItem ? svItem.name : section.itemLabel}
+                        </div>
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead>
+                            <tr className="bg-white border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                              <th className="py-2.5 px-4">Description</th>
+                              <th className="py-2.5 px-4 text-center">Qty</th>
+                              <th className="py-2.5 px-4">Unit</th>
+                              <th className="py-2.5 px-4 text-right">Rate</th>
+                              <th className="py-2.5 px-4 text-right">GST %</th>
+                              <th className="py-2.5 px-4 text-right">Total Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 bg-white">
+                            {(section.lines || []).map((item: any, idx: number) => {
+                              const rate = item.pricingType === "per_sqft" ? (item.costPerSqFt || item.unitPrice) : item.unitPrice;
+                              const qty = item.pricingType === "per_sqft" ? (item.quantity * (item.totalSqFt || 1)) : item.quantity;
+                              const sub = qty * rate;
+                              const tax = sub * (item.gstRate / 100);
+                              const final = sub + tax;
 
-                        return (
-                          <tr key={item.id || idx}>
-                            <td className="py-3 px-4 font-bold text-slate-800">{item.description}</td>
-                            <td className="py-3 px-4 text-center font-semibold text-slate-700">{item.quantity}</td>
-                            <td className="py-3 px-4 text-slate-500 font-medium">{item.unit || "nos"}</td>
-                            <td className="py-3 px-4 text-right text-slate-700 font-medium">₹{rate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                            <td className="py-3 px-4 text-right text-slate-500 font-medium">{item.gstRate}%</td>
-                            <td className="py-3 px-4 text-right font-bold text-slate-900">₹{final.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                              return (
+                                <tr key={item.id || idx}>
+                                  <td className="py-3 px-4 font-bold text-slate-800">{item.description}</td>
+                                  <td className="py-3 px-4 text-center font-semibold text-slate-700">{item.quantity}</td>
+                                  <td className="py-3 px-4 text-slate-500 font-medium">{item.unit || "nos"}</td>
+                                  <td className="py-3 px-4 text-right text-slate-700 font-medium">₹{rate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                  <td className="py-3 px-4 text-right text-slate-500 font-medium">{item.gstRate}%</td>
+                                  <td className="py-3 px-4 text-right font-bold text-slate-900">₹{final.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="flex flex-col md:flex-row justify-between items-start gap-4 pt-4 border-t border-slate-100">
@@ -289,36 +289,40 @@ export function ProductionOrderDetailClient({
             )}
           </div>
 
-          {/* DESIGN PROOF DETAILS */}
+          {/* FINAL PRODUCTION FILES (Per Item) */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <ImageIcon size={18} className="text-purple-600" />
+              <FileText size={18} className="text-emerald-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                Approved Design Proof
+                Final Production Files
               </h2>
             </div>
-
-            {mockImage ? (
-              <div className="space-y-4">
-                <div className="relative rounded-xl border border-slate-200 overflow-hidden bg-slate-100 flex items-center justify-center min-h-[300px]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={mockImage}
-                    alt="Design Proof Layout"
-                    className="max-h-[500px] object-contain rounded-xl"
-                  />
-                </div>
-                {dd.notes && (
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                    <h3 className="font-bold text-slate-500 uppercase mb-1">Designer Notes</h3>
-                    <p className="text-slate-600 leading-relaxed">{dd.notes}</p>
+            
+            {designItems.filter((item: any) => item.productionFiles && item.productionFiles.length > 0).length > 0 ? (
+              <div className="space-y-6">
+                {designItems.filter((item: any) => item.productionFiles && item.productionFiles.length > 0).map((item: any) => (
+                  <div key={item.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+                    <h3 className="font-bold text-slate-800 mb-3 text-sm">{item.name}</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {item.productionFiles.map((file: any) => (
+                        <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm">
+                          <FileText className="text-blue-500 mb-2" size={32} />
+                          <span className="text-xs font-bold text-slate-700 truncate w-full text-center" title={file.name}>
+                            {file.name}
+                          </span>
+                          <a href={file.url} target="_blank" rel="noreferrer" className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors w-full text-center shadow-sm">
+                            Download
+                          </a>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
             ) : (
               <div className="py-12 text-center text-xs text-slate-400 font-semibold flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl">
-                <ImageIcon size={24} className="text-slate-300" />
-                <span>No design proof image files uploaded.</span>
+                <FileText size={24} className="text-slate-300" />
+                <span>No production files uploaded yet.</span>
               </div>
             )}
           </div>

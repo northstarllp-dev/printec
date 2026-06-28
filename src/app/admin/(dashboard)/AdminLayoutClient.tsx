@@ -81,7 +81,7 @@ export function AdminLayoutClient({
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const isWorksheetPage =
-    pathname.startsWith("/admin/orders/") && pathname !== "/admin/orders";
+    pathname.startsWith("/admin/orders/") && pathname.replace(/\/$/, "") !== "/admin/orders";
 
   const [notifications, setNotifications] = useState<any[]>([
     {

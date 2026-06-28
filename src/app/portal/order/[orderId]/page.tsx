@@ -140,6 +140,20 @@ export default async function OrderDetailPage({
     advancePaid: Boolean(quotationData.advance_paid),
   } : null;
 
+  const { data: siteVisitItemsData } = await supabase
+    .from("quotation_site_visit_items")
+    .select("*")
+    .eq("order_id", orderData.id);
+    
+  const siteVisitItems = (siteVisitItemsData || []).map((m: any) => ({
+    id: m.id,
+    name: m.item_name,
+    width: m.width,
+    height: m.height,
+    depth: m.depth,
+    notes: m.notes,
+  }));
+
   // Map to camelCase
   const customer = {
     id: customerData.id,
@@ -186,6 +200,7 @@ export default async function OrderDetailPage({
     <OrderDetailClient
       customer={customer}
       order={order}
+      siteVisitItems={siteVisitItems}
       token={tokenParam}
     />
   );

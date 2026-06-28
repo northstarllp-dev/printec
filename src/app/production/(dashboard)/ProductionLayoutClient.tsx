@@ -24,7 +24,7 @@ interface ProductionLayoutClientProps {
 export function ProductionLayoutClient({ children, profile }: ProductionLayoutClientProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const isWorksheetPage = pathname.startsWith("/production/orders/") && pathname !== "/production/orders";
+  const isWorksheetPage = false; // Production doesn't use the modal worksheet, everything is a full page
 
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);

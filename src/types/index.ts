@@ -160,6 +160,7 @@ export interface DesignComment {
   createdAt: string;
   isGeneral?: boolean;
   isDraft?: boolean;
+  number?: number;
 }
 
 export interface DesignVersion {
@@ -173,12 +174,20 @@ export interface DesignVersion {
   createdAt: string;
 }
 
+export interface DesignItem {
+  id: string;
+  name: string;
+  versions: DesignVersion[];
+  currentVersion: number;
+  productionFiles?: { id: string; name: string; url: string; createdAt: string }[];
+}
+
 export interface DesignDetails {
-  proofUrl?: string; // Legacy
-  status?: string; // Legacy
   resources?: DesignResource[];
-  versions?: DesignVersion[];
-  currentVersion?: number;
+  items?: DesignItem[];
+  versions?: DesignVersion[]; // Legacy support
+  currentVersion?: number; // Legacy support
+  productionFiles?: { id: string; name: string; url: string; createdAt: string }[];
   paymentVerified?: boolean;
 }
 

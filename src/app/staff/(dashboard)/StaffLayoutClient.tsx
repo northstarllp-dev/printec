@@ -24,7 +24,7 @@ interface StaffLayoutClientProps {
 export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const isWorksheetPage = pathname.startsWith("/staff/orders/") && pathname !== "/staff/orders";
+  const isWorksheetPage = pathname.startsWith("/staff/orders/") && pathname.replace(/\/$/, "") !== "/staff/orders";
 
   const [collapsed, setCollapsed] = useState(true);
   const [isHovered, setIsHovered] = useState(false);

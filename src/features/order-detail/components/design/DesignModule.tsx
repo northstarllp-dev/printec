@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { FileText, ZoomIn, ZoomOut, UploadCloud, MessageSquare, CheckCircle, Upload, X, Trash, RefreshCw, Download } from "lucide-react";
+import { FileText, ZoomIn, ZoomOut, UploadCloud, MessageSquare, CheckCircle, Upload, X, Trash, RefreshCw, Download, Maximize, RotateCw } from "lucide-react";
 import { Order, DesignDetails, DesignVersion, DesignComment, DesignResource } from "@/types";
 import { createClient } from "@/utils/supabase/client";
 import { updateOrderStageAction } from "@/features/orders/actions/orderActions";
@@ -10,12 +10,14 @@ interface DesignModuleProps {
   order: Order;
   isEmployee: boolean;
   updateDesignDetails: (orderId: string, details: Partial<DesignDetails>) => Promise<void>;
+  siteVisitItems?: Array<{ id: string; name: string }>;
 }
 
 export const DesignModule: React.FC<DesignModuleProps> = ({
   order,
   isEmployee,
   updateDesignDetails,
+  siteVisitItems = [],
 }) => {
   const supabase = createClient();
   const dd: DesignDetails = order.designDetails || {
@@ -28,22 +30,62 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   const [zoomLevel, setZoomLevel] = useState(100);
   const [uploading, setUploading] = useState(false);
   const [movingToProduction, setMovingToProduction] = useState(false);
-  const [localVersions, setLocalVersions] = useState<DesignVersion[]>(dd.versions || []);
+
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [rotationAngle, setRotationAngle] = useState(0);
+
+  const itemsList = React.useMemo(() => {
+    let items = dd.items ? [...dd.items] : [];
+    if (items.length === 0 && dd.versions && dd.versions.length > 0) {
+       items = [{ id: "general", name: "General Design", versions: dd.versions, currentVersion: dd.currentVersion || 0 }];
+    }
+    if (siteVisitItems.length > 0) {
+      siteVisitItems.forEach(svi => {
+        if (!items.find(i => i.id === svi.id)) {
+          items.push({ id: svi.id, name: svi.name, versions: [], currentVersion: 0 });
+        }
+      });
+    } else if (items.length === 0) {
+      items = [{ id: "general", name: "General Design", versions: [], currentVersion: 0 }];
+    }
+    return items;
+  }, [dd.items, dd.versions, dd.currentVersion, siteVisitItems]);
+
+  const [selectedItemId, setSelectedItemId] = useState<string>(itemsList[0]?.id || "general");
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
 
   useEffect(() => {
-    setLocalVersions(order.designDetails?.versions || []);
-  }, [order.designDetails?.versions]);
+    if (!selectedItemId && itemsList.length > 0) {
+      setSelectedItemId(itemsList[0].id);
+    }
+  }, [itemsList, selectedItemId]);
 
+  const activeItem = itemsList.find(i => i.id === selectedItemId) || itemsList[0];
+  const localVersions = activeItem?.versions || [];
   const activeVersion = localVersions.find(v => v.id === selectedVersionId) || localVersions[localVersions.length - 1];
+
+  const handleUpdateItemVersions = async (newVersions: DesignVersion[]) => {
+    const updatedItems = itemsList.map(item => {
+      if (item.id === selectedItemId) {
+        return { ...item, versions: newVersions, currentVersion: newVersions.length > 0 ? newVersions[newVersions.length - 1].versionNumber : 0 };
+      }
+      return item;
+    });
+    const legacyUpdates = (selectedItemId === "general" && siteVisitItems.length === 0) 
+      ? { versions: newVersions, currentVersion: newVersions.length > 0 ? newVersions[newVersions.length - 1].versionNumber : 0 }
+      : {};
+    await updateDesignDetails(order.id, { items: updatedItems, ...legacyUpdates });
+  };
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 20, 200));
   const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 20, 50));
   const handleResetZoom = () => setZoomLevel(100);
 
-  const uploadFile = async (file: File) => {
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${order.id}/designs/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  const uploadFile = async (file: File | Blob, originalFileName?: string, folder: string = "designs") => {
+    const fileName = file instanceof File ? file.name : (originalFileName || "image.png");
+    const ext = fileName.split(".").pop() || "jpg";
+    const path = `${order.id}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { error } = await supabase.storage
       .from("site-visit-photos")
       .upload(path, file, { upsert: false, contentType: file.type });
@@ -53,35 +95,176 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
   };
 
   const handleDesignerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (files.length === 1 && files[0].type.startsWith("image/")) {
+      const file = files[0];
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      setPendingUploadFile(file);
+      setRotationAngle(0);
+      return;
+    }
+
+    // Direct upload for multiple files or single PDF
+    setUploading(true);
+    let currentVersions = [...localVersions];
+    try {
+      for (const file of files) {
+        const url = await uploadFile(file);
+        const newVersion: DesignVersion = {
+          id: crypto.randomUUID(),
+          versionNumber: currentVersions.length + 1,
+          proofUrl: url,
+          fileName: file.name,
+          status: "Draft",
+          comments: [],
+          createdAt: new Date().toISOString()
+        };
+        currentVersions.push(newVersion);
+      }
+      if (currentVersions.length > localVersions.length) {
+        setSelectedVersionId(currentVersions[currentVersions.length - 1].id);
+        await handleUpdateItemVersions(currentVersions);
+      }
+    } catch (err: any) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = ''; // Reset input
+    }
+  };
+
+  const processUpload = async (fileToUpload: File | Blob, fileNameOverride?: string) => {
     setUploading(true);
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(fileToUpload, fileNameOverride);
       const newVersion: DesignVersion = {
         id: crypto.randomUUID(),
         versionNumber: localVersions.length + 1,
         proofUrl: url,
-        fileName: file.name,
+        fileName: fileNameOverride || (fileToUpload instanceof File ? fileToUpload.name : "rotated-image.png"),
         status: "Draft",
         comments: [],
         createdAt: new Date().toISOString()
       };
       const newVersions = [...localVersions, newVersion];
-      setLocalVersions(newVersions);
       setSelectedVersionId(newVersion.id);
-      await updateDesignDetails(order.id, { versions: newVersions, currentVersion: newVersion.versionNumber });
+      await handleUpdateItemVersions(newVersions);
     } catch (err: any) {
       alert("Upload failed: " + err.message);
     } finally {
       setUploading(false);
+      setPendingUploadFile(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+    }
+  };
+
+  const handleConfirmUpload = () => {
+    if (!pendingUploadFile || !previewUrl) return;
+
+    if (rotationAngle % 360 === 0) {
+      processUpload(pendingUploadFile, pendingUploadFile.name);
+      return;
+    }
+
+    // Canvas rotation logic
+    const img = new Image();
+    img.src = previewUrl;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        processUpload(pendingUploadFile, pendingUploadFile.name);
+        return;
+      }
+
+      // Calculate new dimensions
+      const rads = (rotationAngle * Math.PI) / 180;
+      const c = Math.cos(rads);
+      const s = Math.sin(rads);
+      const width = img.width;
+      const height = img.height;
+      const newWidth = Math.abs(width * c) + Math.abs(height * s);
+      const newHeight = Math.abs(width * s) + Math.abs(height * c);
+
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+
+      ctx.translate(newWidth / 2, newHeight / 2);
+      ctx.rotate(rads);
+      ctx.drawImage(img, -width / 2, -height / 2);
+
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            processUpload(blob, pendingUploadFile.name);
+          } else {
+            processUpload(pendingUploadFile, pendingUploadFile.name);
+          }
+        },
+        pendingUploadFile.type || "image/png",
+        0.95
+      );
+    };
+    img.onerror = () => {
+      // Fallback
+      processUpload(pendingUploadFile, pendingUploadFile.name);
+    };
+  };
+
+  const handleProductionFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !activeItem) return;
+    setUploading(true);
+    try {
+      const newFiles: { id: string; name: string; url: string; createdAt: string }[] = [];
+      for (const file of files) {
+        const url = await uploadFile(file, undefined, "production");
+        newFiles.push({
+          id: crypto.randomUUID(),
+          name: file.name,
+          url,
+          createdAt: new Date().toISOString()
+        });
+      }
+      const newItems = itemsList.map(item => {
+        if (item.id === activeItem.id) {
+          return { ...item, productionFiles: [...(item.productionFiles || []), ...newFiles] };
+        }
+        return item;
+      });
+      await updateDesignDetails(order.id, { items: newItems });
+    } catch (err: any) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = ''; // Reset input so same file can be uploaded again if needed
+    }
+  };
+
+  const handleDeleteProductionFile = async (fileId: string) => {
+    if (!confirm("Are you sure you want to delete this production file?") || !activeItem) return;
+    try {
+      const newItems = itemsList.map(item => {
+        if (item.id === activeItem.id) {
+          return { ...item, productionFiles: (item.productionFiles || []).filter(f => f.id !== fileId) };
+        }
+        return item;
+      });
+      await updateDesignDetails(order.id, { items: newItems });
+    } catch (err: any) {
+      alert("Delete failed: " + err.message);
     }
   };
 
   const handleUpdateVersionStatus = async (versionId: string, newStatus: DesignVersion["status"]) => {
     const newVersions = localVersions.map(v => v.id === versionId ? { ...v, status: newStatus } : v);
-    setLocalVersions(newVersions);
-    await updateDesignDetails(order.id, { versions: newVersions });
+    await handleUpdateItemVersions(newVersions);
   };
 
   const handleDeleteVersion = async (versionId: string) => {
@@ -89,11 +272,10 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     try {
       const versionToDelete = localVersions.find(v => v.id === versionId);
       const newVersions = localVersions.filter(v => v.id !== versionId);
-      setLocalVersions(newVersions);
       if (selectedVersionId === versionId) {
         setSelectedVersionId(newVersions.length > 0 ? newVersions[newVersions.length - 1].id : null);
       }
-      await updateDesignDetails(order.id, { versions: newVersions, currentVersion: newVersions.length > 0 ? newVersions[newVersions.length - 1].versionNumber : 0 });
+      await handleUpdateItemVersions(newVersions);
       
       if (versionToDelete?.proofUrl) {
         const pathPart = versionToDelete.proofUrl.split("/public/site-visit-photos/")[1];
@@ -104,6 +286,18 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     } catch (err: any) {
       console.error(err);
       alert("Failed to delete design version.");
+    }
+  };
+
+  const handlePushToAdminForProduction = async () => {
+    setMovingToProduction(true);
+    try {
+      await supabase.from("orders").update({ stage_status: "Pending Admin Approval: Production Ready" }).eq("id", order.id);
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to push to admin");
+      setMovingToProduction(false);
     }
   };
 
@@ -139,6 +333,12 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
     }
   };
 
+  const allItemsApproved = itemsList.length > 0 && itemsList.every(item => {
+    const latestV = item.versions[item.versions.length - 1];
+    return latestV && latestV.status === "Approved";
+  });
+
+  const hasProductionFiles = (dd.productionFiles || []).length > 0;
 
   return (
     <div className="space-y-6">
@@ -177,8 +377,35 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         )}
       </div>
 
-      {/* Design Versions Viewer */}
-      {localVersions.length > 0 && (
+      {/* Item Selector */}
+      {itemsList.length > 1 && (
+        <div className="flex flex-wrap gap-2 mb-4 p-1 bg-slate-100/90 backdrop-blur-sm rounded-xl w-fit sticky top-0 z-20 shadow-sm border border-slate-200">
+          {itemsList.map(item => (
+            <button
+              key={item.id}
+              onClick={() => {
+                setSelectedItemId(item.id);
+                setSelectedVersionId(null);
+              }}
+              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all ${
+                selectedItemId === item.id 
+                  ? 'bg-white text-blue-600 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {item.name}
+              {item.versions.length > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[10px]">
+                  {item.versions.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Design Versions Viewer for Active Item */}
+      {localVersions.length > 0 ? (
         <div className="border border-slate-200 bg-white rounded-2xl overflow-hidden p-4 space-y-4">
           <div className="flex justify-between items-center pb-2 border-b border-slate-100">
             <div className="flex gap-2">
@@ -208,15 +435,26 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
           {activeVersion && (
             <div className="space-y-4">
               <div className="relative border border-slate-150 rounded-xl bg-slate-900 flex items-center justify-center p-6 overflow-hidden min-h-[300px]">
-                <div className="relative" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center' }}>
-                  <img src={activeVersion.proofUrl} alt={`Version ${activeVersion.versionNumber}`} className="max-h-[400px] object-contain transition-all duration-300" />
+                
+                {/* Image Controls (Enlarge & Download) */}
+                <div className="absolute top-4 right-4 flex gap-2 z-50">
+                  <button onClick={() => window.open(activeVersion.proofUrl, '_blank')} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Enlarge">
+                    <Maximize size={18} />
+                  </button>
+                  <button onClick={() => handleDownload(activeVersion.proofUrl, `Design_Proof_${activeVersion.versionNumber}`)} className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur text-white rounded-lg transition-colors" title="Download">
+                    <Download size={18} />
+                  </button>
+                </div>
+
+                <div className="relative inline-block" style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'center' }}>
+                  <img src={activeVersion.proofUrl} alt={`Version ${activeVersion.versionNumber}`} className="max-h-[400px] object-contain transition-all duration-300" style={{ display: 'block' }} />
                   
                   {/* Render Comments/Pins */}
                   {activeVersion.comments?.map((comment) => (
                     !comment.isGeneral && (
                       <div key={comment.id} className="absolute z-10 hover:z-50 w-0 h-0 group" style={{ left: `${comment.x}%`, top: `${comment.y}%` }}>
                         <div className="absolute w-6 h-6 bg-red-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold cursor-pointer -translate-x-1/2 -translate-y-1/2">
-                          !
+                          {comment.number || "!"}
                         </div>
                         <div className={`hidden group-hover:block absolute w-48 p-2 bg-white rounded-lg shadow-xl border border-slate-200 text-xs text-slate-800 z-20 
                           ${comment.x < 20 ? 'left-0 ml-3' : comment.x > 80 ? 'right-0 mr-3' : '-translate-x-1/2'}
@@ -249,14 +487,7 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                   )}
                 </span>
 
-                <div className="flex gap-2">
 
-                  {!isEmployee && activeVersion.status === "Pending Admin" && (
-                    <button type="button" onClick={() => handleUpdateVersionStatus(activeVersion.id, "Sent to Customer")} className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700">
-                      Approve & Publish to Customer
-                    </button>
-                  )}
-                </div>
               </div>
                 {/* Display General Feedback History */}
                 {activeVersion.comments?.some((c: any) => c.isGeneral) && (
@@ -275,13 +506,81 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
                 )}
               </div>
             )}
+
+            {/* Final Production Files Upload (Per Item) */}
+            {activeItem && (activeItem.versions[activeItem.versions.length - 1]?.status === "Approved") && (
+              <div className="mt-8 border-t border-slate-200 pt-8 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">Final Production Files for {activeItem.name}</h3>
+                    <p className="text-xs text-slate-500">Upload final printable files (.png, .jpg, .psd, .ai) for fabrication.</p>
+                  </div>
+                  {isEmployee && (
+                    <label className="cursor-pointer bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-sm">
+                      {uploading ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {uploading ? "Uploading..." : "Upload File"}
+                      <input type="file" multiple onChange={handleProductionFileUpload} accept=".png,.jpg,.jpeg,.psd,.ai,.eps,.pdf" className="hidden" disabled={uploading} />
+                    </label>
+                  )}
+                </div>
+
+                {(activeItem.productionFiles && activeItem.productionFiles.length > 0) ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                    {activeItem.productionFiles.map((file: any) => (
+                      <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm">
+                        <FileText className="text-blue-500 mb-2" size={32} />
+                        <span className="text-xs font-bold text-slate-700 truncate w-full text-center" title={file.name}>
+                          {file.name}
+                        </span>
+                        <a href={file.url} target="_blank" rel="noreferrer" className="mt-3 px-3 py-1.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold hover:bg-slate-200 transition-colors">
+                          Download
+                        </a>
+                        {isEmployee && (
+                          <button 
+                            onClick={() => handleDeleteProductionFile(file.id)}
+                            className="absolute -top-2 -right-2 bg-white text-red-500 border border-slate-200 rounded-full p-1 opacity-0 group-hover:opacity-100 shadow-sm hover:bg-red-50 hover:border-red-200 transition-all"
+                            title="Delete File"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-xs text-slate-400 font-semibold flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
+                    <FileText size={24} className="text-slate-300" />
+                    <span>No production files uploaded for this item yet.</span>
+                  </div>
+                )}
+              </div>
+            )}
+        </div>
+      ) : (
+        <div className="bg-slate-50 border border-dashed border-slate-300 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+            <UploadCloud size={24} className="text-slate-400" />
+          </div>
+          <h4 className="text-sm font-bold text-slate-700 mb-1">No Designs for {activeItem.name}</h4>
+          <p className="text-xs text-slate-500 max-w-sm mb-6">Upload the first design proof for this item to share it with the customer.</p>
+          {isEmployee && (
+            <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm">
+              {uploading ? (
+                <RefreshCw size={16} className="animate-spin" />
+              ) : (
+                <Upload size={16} />
+              )}
+              {uploading ? "Uploading..." : "Upload First Proof"}
+              <input type="file" multiple onChange={handleDesignerUpload} className="hidden" disabled={uploading} />
+            </label>
+          )}
         </div>
       )}
 
-      {/* Upload New Proof (Designers) */}
-      {isEmployee && (
+      {/* Upload New Design Version */}
+      {isEmployee && localVersions.length > 0 && localVersions[localVersions.length - 1]?.status !== "Approved" && (
         <div className="border border-dashed border-slate-300 rounded-2xl p-6 flex flex-col items-center justify-center bg-white text-center space-y-3 cursor-pointer hover:bg-slate-50 transition-colors relative">
-          <input type="file" onChange={handleDesignerUpload} accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={uploading} />
+          <input type="file" multiple onChange={handleDesignerUpload} accept="image/*,.pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" disabled={uploading} />
           <div className="p-3 bg-blue-50 border border-blue-100 rounded-full text-blue-500">
             {uploading ? <RefreshCw className="animate-spin" size={22} /> : <Upload size={22} />}
           </div>
@@ -296,23 +595,85 @@ export const DesignModule: React.FC<DesignModuleProps> = ({
         </div>
       )}
 
-      {/* Payment Received -> Production Transition */}
-      {activeVersion?.status === "Approved" && (
-        <div className="bg-emerald-50 border border-emerald-200 p-5 rounded-xl flex items-center justify-between">
-          <div>
-            <h4 className="text-sm font-bold text-emerald-800">Design Approved by Customer!</h4>
-            <p className="text-xs text-emerald-600 mt-1">Verify payment to proceed to fabrication.</p>
+
+
+      {/* Workflow Action Buttons (Global) */}
+      {/* Upload Preview & Rotate Modal */}
+      {previewUrl && pendingUploadFile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800">Preview & Rotate Image</h3>
+              <button onClick={() => {
+                setPendingUploadFile(null);
+                setPreviewUrl(null);
+              }} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 bg-slate-900 flex flex-col items-center justify-center min-h-[400px]">
+              <div className="flex items-center justify-center w-full min-h-[300px]">
+                <img 
+                  src={previewUrl} 
+                  className="object-contain transition-transform duration-300"
+                  style={{ 
+                    transform: `rotate(${rotationAngle}deg)`,
+                    maxHeight: (rotationAngle / 90) % 2 !== 0 ? '100%' : '300px',
+                    maxWidth: (rotationAngle / 90) % 2 !== 0 ? '300px' : '100%'
+                  }}
+                  alt="Upload Preview" 
+                />
+              </div>
+              <div className="mt-6 flex space-x-4">
+                <button 
+                  onClick={() => setRotationAngle(a => a - 90)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg flex items-center text-sm font-medium transition-colors"
+                >
+                  <RotateCw size={16} className="mr-2 -scale-x-100" /> Rotate Left
+                </button>
+                <button 
+                  onClick={() => setRotationAngle(a => a + 90)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg flex items-center text-sm font-medium transition-colors"
+                >
+                  <RotateCw size={16} className="mr-2" /> Rotate Right
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
+              <button 
+                onClick={() => {
+                  setPendingUploadFile(null);
+                  setPreviewUrl(null);
+                }}
+                disabled={uploading}
+                className="px-4 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg text-sm"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleConfirmUpload}
+                disabled={uploading}
+                className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg text-sm flex items-center gap-2 hover:bg-blue-700"
+              >
+                {uploading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} />
+                    Confirm & Upload
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-          <button
-            onClick={handlePaymentReceived}
-            disabled={movingToProduction}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2 shadow-sm"
-          >
-            <CheckCircle size={14} /> 
-            {movingToProduction ? "Moving..." : "Payment Received - Move to Production"}
-          </button>
         </div>
       )}
+
     </div>
   );
 };

@@ -270,6 +270,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /* ── Data ── */
   const client = customers.find((c) => c.id === order.customerId);
   const isEmployee = currentUserRole === "Employee";
+  const isStaffOrAdmin = currentUserRole === "Employee" || currentUserRole === "Admin";
   const currentStageIndex = stageToTabIndex(order.stage);
 
   /* ── Local State Wrappers ── */
@@ -331,6 +332,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     } finally { setIsProcessing(false); }
   };
   const handleRequestAdvancement = async () => {
+    if ((activeStepTab === 0 || activeStepTab === 2) && !canAdvanceSiteVisit) {
+      alert(siteVisitAdvanceTooltip);
+      return;
+    }
+
     setIsProcessing(true);
     try {
       await handleSaveDraft();
@@ -403,7 +409,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           break;
         case 2: // Design
           if (order.designDetails) {
-            await updateDesignDetailsAction(order.id, order.designDetails);
+            const updatedDd = { ...order.designDetails };
+            if (updatedDd.items) {
+              updatedDd.items = updatedDd.items.map(item => ({
+                ...item,
+                versions: item.versions.map(v => 
+                  v.status === "Draft" || v.status === "Changes Requested" 
+                    ? { ...v, status: "Sent to Customer" } 
+                    : v
+                )
+              }));
+            }
+            await updateDesignDetailsAction(order.id, updatedDd);
+            setOrder(prev => ({ ...prev, designDetails: updatedDd }));
           }
           break;
         case 3: // Production
@@ -429,7 +447,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   /* ── Module fallbacks ── */
   const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
-  const dd = order.designDetails || { proofUrl: "", status: "Draft" };
+  const dd = (order.designDetails as DesignDetails) || { resources: [], versions: [], currentVersion: 0 };
   const pd = order.productionDetails || { printing: false, cutting: false, fabrication: false, assembly: false };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
   const isCurrentTabFrozen = activeStepTab === 0 ? sv.completed : false;
@@ -437,10 +455,21 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   // Strict Site Visit Validations
   const isSiteVisitScheduled = !!(sv.auditDate && sv.auditTime);
   const hasSiteVisitLocations = !!(sv.locations && sv.locations.length > 0);
-  const canAdvanceSiteVisit = activeStepTab !== 0 || (isSiteVisitScheduled && hasSiteVisitLocations);
-  const siteVisitAdvanceTooltip = activeStepTab === 0 && !canAdvanceSiteVisit 
-    ? "Schedule the visit and add at least one location item to unlock approval." 
-    : "";
+  let canAdvanceSiteVisit = true;
+  let siteVisitAdvanceTooltip = "";
+  if (activeStepTab === 0) {
+    canAdvanceSiteVisit = isSiteVisitScheduled && hasSiteVisitLocations;
+    siteVisitAdvanceTooltip = !canAdvanceSiteVisit ? "Schedule the visit and add at least one location item to unlock approval." : "";
+  } else if (activeStepTab === 2) {
+    const itemsList = dd.items || [];
+    const allDesignItemsApproved = itemsList.length > 0 && itemsList.every((item: any) => {
+      const latestV = item.versions[item.versions.length - 1];
+      return latestV && latestV.status === "Approved";
+    });
+    const hasProductionFiles = itemsList.length > 0 && itemsList.every((item: any) => item.productionFiles && item.productionFiles.length > 0);
+    canAdvanceSiteVisit = allDesignItemsApproved && hasProductionFiles;
+    siteVisitAdvanceTooltip = !canAdvanceSiteVisit ? "All designs must be approved and final production files must be uploaded." : "";
+  }
 
   const actionButtonsNode = (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
@@ -457,7 +486,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         (!isCurrentTabFrozen && (
           <>
             <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
-              <Save size={13} /> Save Draft
+              {activeStepTab === 2 ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
             </button>
             {isEmployee ? (
               <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
@@ -490,6 +519,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   /* ── Module content ── */
   const renderModule = () => {
+    const isMarketerOrDesigner = currentEmployee?.role === "Marketer" || currentEmployee?.role === "Designer";
     switch (activeStepTab) {
       case 0: return (
         <SiteVisitModule
@@ -511,15 +541,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             customerId: order.customerId,
             stage: order.stage,
           }}
-          isEmployee={isEmployee}
+          isEmployee={isStaffOrAdmin}
           products={products as any}
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}
         />
       );
-      case 2: return <DesignModule order={order} isEmployee={isEmployee} updateDesignDetails={updateDesignDetails} />;
-      case 3: return <ProductionModule order={order} isEmployee={isEmployee} updateProductionDetails={updateProductionDetails} />;
-      case 4: return <InstallationModule order={order} isEmployee={isEmployee} updateInstallationDetails={updateInstallationDetails} />;
+      case 2: return <DesignModule order={order} isEmployee={isStaffOrAdmin} updateDesignDetails={updateDesignDetails} siteVisitItems={siteVisitItems} />;
+      case 3: return <ProductionModule order={order} isEmployee={isStaffOrAdmin} updateProductionDetails={updateProductionDetails} isReadOnly={isMarketerOrDesigner} />;
+      case 4: return <InstallationModule order={order} isEmployee={isStaffOrAdmin} updateInstallationDetails={updateInstallationDetails} isReadOnly={isMarketerOrDesigner} />;
       case 99: return (
         <AdminControlModule
           order={order}
@@ -889,20 +919,26 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                       <>
                         {/* Save Draft button */}
                         <button onClick={handleSaveDraft} style={{ padding: "7px 16px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Save size={13} /> Save Draft
+                          {activeStepTab === 2 ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
                         </button>
     
                         {/* Advance stage / Staff section approval push */}
                         {isEmployee ? (
-                          <div title={siteVisitAdvanceTooltip} style={{ display: "inline-block" }}>
-                            <button disabled={!canAdvanceSiteVisit} onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: canAdvanceSiteVisit ? "#22C55E" : "#94A3B8", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: canAdvanceSiteVisit ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ display: "inline-block" }}>
+                            <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                               <CheckCircle2 size={13} /> Push {activeModuleTitle} to Admin for Approval
                             </button>
                           </div>
                         ) : (
                           currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
-                            <div title={siteVisitAdvanceTooltip} style={{ display: "inline-block" }}>
-                              <button disabled={!canAdvanceSiteVisit} onClick={handleAdminApprove} style={{ padding: "7px 16px", background: canAdvanceSiteVisit ? "#22C55E" : "#94A3B8", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: canAdvanceSiteVisit ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <div style={{ display: "inline-block" }}>
+                              <button onClick={() => {
+                                if ((activeStepTab === 0 || activeStepTab === 2) && !canAdvanceSiteVisit) {
+                                  alert(siteVisitAdvanceTooltip);
+                                  return;
+                                }
+                                handleAdminApprove();
+                              }} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                                 <Check size={13} /> Approve & Advance
                               </button>
                             </div>

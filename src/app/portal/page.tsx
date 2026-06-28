@@ -108,14 +108,17 @@ export default async function PortalPage({
   let quotationsData: any[] = [];
   let siteVisitsData: any[] = [];
   let siteVisitMeasurementsData: any[] = [];
+  let siteVisitItemsData: any[] = [];
 
   if (orderIds.length > 0) {
-    const [qtsRes, svsRes] = await Promise.all([
+    const [qtsRes, svsRes, sviRes] = await Promise.all([
       supabase.from("quotations").select("*").in("order_id", orderIds),
       supabase.from("site_visits").select("id, order_id").in("order_id", orderIds),
+      supabase.from("quotation_site_visit_items").select("*").in("order_id", orderIds),
     ]);
     if (!qtsRes.error && qtsRes.data) quotationsData = qtsRes.data;
     if (!svsRes.error && svsRes.data) siteVisitsData = svsRes.data;
+    if (!sviRes.error && sviRes.data) siteVisitItemsData = sviRes.data;
 
     if (siteVisitsData.length > 0) {
       const svIds = siteVisitsData.map((sv: any) => sv.id);
@@ -153,26 +156,36 @@ export default async function PortalPage({
     customerId: customerData.customer_id || customerData.id,
   };
 
+  const mappedSiteVisitItems = siteVisitItemsData.map((m: any) => ({
+    id: m.id,
+    name: m.item_name,
+    width: m.width,
+    height: m.height,
+    depth: m.depth,
+    notes: m.notes,
+  }));
+
+  const mappedQuotations = quotationsData.map((q: any) => ({
+    id: q.id,
+    quotationId: q.quotation_id,
+    orderId: q.order_id,
+    items: q.items || [],
+    signageOptions: q.signage_options || [],
+    discount: Number(q.discount || 0),
+    shipping: Number(q.shipping || 0),
+    subtotal: Number(q.subtotal || 0),
+    tax: Number(q.tax || 0),
+    grandTotal: Number(q.grand_total || 0),
+    status: q.status,
+    notes: q.notes,
+    terms: q.terms,
+    advancePaid: Boolean(q.advance_paid),
+  }));
+
   const orders = ordersData.map((o: any) => {
     const q = quotationsData.find((qt: any) => qt.order_id === o.id);
     const sv = siteVisitsData.find((sv: any) => sv.order_id === o.id);
     const siteVisitItems = sv ? siteVisitMeasurementsData.filter((m: any) => m.site_visit_id === sv.id).map((m: any) => ({ id: m.id, name: m.name, width: m.width ?? null, height: m.height ?? null, depth: m.depth ?? null, notes: m.notes ?? null })) : [];
-
-    const quoteDetails = q ? {
-      id: q.id,
-      quotationId: q.quotation_id,
-      items: q.items || [],
-      signageOptions: q.signage_options || [],
-      discount: Number(q.discount || 0),
-      shipping: Number(q.shipping || 0),
-      subtotal: Number(q.subtotal || 0),
-      tax: Number(q.tax || 0),
-      grandTotal: Number(q.grand_total || 0),
-      status: q.status,
-      notes: q.notes,
-      terms: q.terms,
-      advancePaid: Boolean(q.advance_paid),
-    } : null;
 
     return {
       id: o.id,
@@ -196,7 +209,21 @@ export default async function PortalPage({
           ? (o.site_visits.length > 0 ? o.site_visits[0] : null)
           : (o.site_visits || null)
       ),
-      quoteDetails,
+      quoteDetails: q ? {
+        id: q.id,
+        quotationId: q.quotation_id,
+        items: q.items || [],
+        signageOptions: q.signage_options || [],
+        discount: Number(q.discount || 0),
+        shipping: Number(q.shipping || 0),
+        subtotal: Number(q.subtotal || 0),
+        tax: Number(q.tax || 0),
+        grandTotal: Number(q.grand_total || 0),
+        status: q.status,
+        notes: q.notes,
+        terms: q.terms,
+        advancePaid: Boolean(q.advance_paid),
+      } : null,
       designDetails: o.design_details,
       productionDetails: o.production_details,
       installationDetails: o.installation_details,
@@ -214,7 +241,10 @@ export default async function PortalPage({
     <PortalClient
       customer={customer}
       orders={orders}
+      quotations={mappedQuotations}
+      siteVisitItems={mappedSiteVisitItems}
       initialActiveOrderId={payload.orderId || null}
+      initialToken={tokenParam}
       token={tokenParam}
     />
   );

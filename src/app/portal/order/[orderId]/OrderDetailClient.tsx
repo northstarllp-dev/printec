@@ -68,6 +68,7 @@ interface Order {
 interface OrderDetailClientProps {
   customer: Customer;
   order: Order;
+  siteVisitItems?: any[];
   token: string;
 }
 
@@ -81,7 +82,7 @@ const tabs = [
 
 const stages = ["Enquiries", "Site Visit", "Quotations", "Design", "Production", "Installation"];
 
-export function OrderDetailClient({ customer, order: initialOrder, token }: OrderDetailClientProps) {
+export function OrderDetailClient({ customer, order: initialOrder, siteVisitItems = [], token }: OrderDetailClientProps) {
   // Determine initial tab based on order stage
   const getInitialTab = () => {
     if (!initialOrder.stage) return "site_visit";
@@ -684,7 +685,7 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
           />
         )}
         {activeTab === "design" && (
-          <DesignTab order={order} customer={customer} />
+          <DesignTab order={order} customer={customer} siteVisitItems={siteVisitItems} />
         )}
         {activeTab === "billing" && <BillingTab order={order} />}
         {activeTab === "chat" && <ChatTab order={order} />}

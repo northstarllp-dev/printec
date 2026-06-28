@@ -62,8 +62,11 @@ interface Order {
 }
 
 interface PortalClientProps {
-  customer: Customer;
-  orders: Order[];
+  customer: any;
+  orders: any[];
+  quotations?: any[];
+  siteVisitItems?: any[];
+  initialToken: string;
   initialActiveOrderId: string | null;
   token: string;
 }
@@ -88,7 +91,7 @@ function getStepIndex(stage: string): number {
   return 0;
 }
 
-export function PortalClient({ customer, orders: initialOrders, initialActiveOrderId, token }: PortalClientProps) {
+export function PortalClient({ customer, orders: initialOrders, quotations = [], siteVisitItems = [], initialActiveOrderId, token }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
 
   // Step 4: Establish session cookie on first load (avoids keeping token in URL)
@@ -1092,7 +1095,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
 
                 {/* ── DESIGN STAGE ── */}
                 {activeStepToRender === 3 && (
-                  <DesignTab order={activeOrder as any} customer={customer} />
+                  <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={siteVisitItems} />
                 )}
 
                 {/* ── PRODUCTION STAGE ── */}
