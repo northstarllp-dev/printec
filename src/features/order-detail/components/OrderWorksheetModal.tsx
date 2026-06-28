@@ -127,7 +127,6 @@ interface OrderWorksheetModalProps {
   products?: Product[];
   initialQuotation?: any;
   siteVisitItems?: SiteVisitItem[];
-  materialPreferences?: any[];
 }
 
 /* ─── Component ─────────────────────────────────────────────────── */
@@ -143,7 +142,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   products = [],
   initialQuotation = null,
   siteVisitItems = [],
-  materialPreferences = [],
 }) => {
   const router = useRouter();
   const [order, setOrder] = useState<Order>(initialOrder);
@@ -506,7 +504,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           products={products as any}
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}
-          materialPreferences={materialPreferences}
         />
       );
       case 2: return <DesignModule order={order} isEmployee={isEmployee} updateDesignDetails={updateDesignDetails} />;
@@ -632,9 +629,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             <div style={{ flex: 1, overflowY: "auto" }}>
               {filteredOrders.map((o) => {
                 const isSelected = o.id === order.id;
-                const stageInfo = STAGE_LABEL[o.stage] || { label: o.stage, color: "#94A3B8" };
+                
+                const isSiteVisitStage = o.stage === "Site Visit Scheduled" || o.stage === "Site Visit Completed";
+                const hasNoDate = !o.siteVisitDetails || !o.siteVisitDetails.auditDate;
+                const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : o.stage;
+                const stageInfo = STAGE_LABEL[displayStage] || { label: displayStage, color: "#94A3B8" };
 
-                const progress = Math.round(((stageToTabIndex(o.stage) + 1) / 5) * 100);
+                const progress = Math.round(((stageToTabIndex(displayStage) + 1) / 5) * 100);
 
                 return (
                   <div
@@ -644,8 +645,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                       padding: "12px",
                       borderBottom: "1px solid #F1F5F9",
                       cursor: "pointer",
-                      background: isSelected ? "#EFF6FF" : "white",
-                      borderLeft: isSelected ? "3px solid var(--color-secondary)" : "3px solid transparent",
+                      background: isSelected ? "linear-gradient(to right, #FFF7ED, transparent)" : "white",
+                      borderLeft: isSelected ? "3px solid #F97316" : "3px solid transparent",
                       transition: "all 0.15s",
                     }}
                     onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "#F8FAFC"; }}

@@ -49,6 +49,7 @@ interface LineItem {
   unitPrice: number;
   totalSqFt: number;
   gstRate: number;
+  notes?: string | null;
 }
 
 interface SignageSection {
@@ -61,10 +62,9 @@ interface SignageSection {
 interface Quotation {
   id?: string;
   quotation_id?: string;
-  customer_name?: string;
+  rejection_reason?: string;
   status: "Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval";
   signage_options?: SignageSection[];
-  items?: LineItem[]; // legacy flat items
   subtotal: number;
   discount: number;
   tax: number;
@@ -73,12 +73,7 @@ interface Quotation {
   amount_paid?: number;
   notes: string;
   terms: string;
-  valid_until: string;
-  advance_percent?: number;
-  advance_amount?: number;
   advance_paid?: boolean;
-  advance_paid_at?: string;
-  payment_status?: string;
 }
 
 interface QuotationModuleProps {
@@ -94,7 +89,6 @@ interface QuotationModuleProps {
   products: Product[];
   initialQuotation: Quotation | null;
   siteVisitItems?: SiteVisitItem[];
-  materialPreferences?: any[];
 }
 
 const GST_OPTIONS = [0, 5, 12, 18, 28];
@@ -326,7 +320,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   products,
   initialQuotation,
   siteVisitItems = [],
-  materialPreferences = [],
 }) => {
   const [isPending, startTransition] = useTransition();
   const [saveMsg, setSaveMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -335,6 +328,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [pushingToAdmin, setPushingToAdmin] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [selectedProductInfo, setSelectedProductInfo] = useState<Product | null>(null);
+  const [pendingAction, setPendingAction] = useState<"admin" | "customer" | null>(null);
 
   const isPastQuotation = ![
     "Site Visit Pending",
@@ -378,14 +372,10 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             if (newQuote) {
               if (newQuote.quotation_id) setQuotationId(newQuote.quotation_id);
               if (newQuote.status) setStatus(newQuote.status);
-              if (newQuote.valid_until !== undefined) setValidUntil(newQuote.valid_until ?? "");
-              if (newQuote.customer_name) setCustomerName(newQuote.customer_name);
               if (newQuote.notes !== undefined) setNotes(newQuote.notes ?? "");
               if (newQuote.terms !== undefined) setTerms(newQuote.terms ?? "");
-              if (newQuote.advance_percent !== undefined) setAdvancePercent(newQuote.advance_percent);
-              if (newQuote.discount !== undefined) setDiscount(Number(newQuote.discount) || 0);
               if (newQuote.shipping !== undefined) setShipping(Number(newQuote.shipping) || 0);
-              if (newQuote.amount_paid !== undefined) setAmountPaid(Number(newQuote.amount_paid) || 0);
+              if (newQuote.rejection_reason !== undefined) setRejectionReason(newQuote.rejection_reason ?? "");
               if (Array.isArray(newQuote.signage_options)) {
                 setSections(newQuote.signage_options);
               }
@@ -401,13 +391,17 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   }, [order.id]);
 
   // Core metadata states
-  const [quotationId, setQuotationId] = useState(initialQuotation?.quotation_id ?? "");
+  const [quotationId, setQuotationId] = useState(
+    initialQuotation?.quotation_id ?? (order.customerId ? `QT-${order.customerId.split('-')[0].toUpperCase()}` : "")
+  );
   const [status, setStatus] = useState<"Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval">(
     initialQuotation?.status ?? "Draft"
   );
-  const [validUntil, setValidUntil] = useState(initialQuotation?.valid_until ?? "");
+  const [rejectionReason, setRejectionReason] = useState(
+    initialQuotation?.rejection_reason ?? ""
+  );
   const [customerName, setCustomerName] = useState(
-    initialQuotation?.customer_name ?? order.customerName ?? ""
+    order.customerName ?? ""
   );
 
   // Redesigned: multi-section structure without options A/B
@@ -474,9 +468,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [shipping, setShipping] = useState<number>(
     initialQuotation?.shipping ? Number(initialQuotation.shipping) : 0
   );
-  const [amountPaid, setAmountPaid] = useState<number>(
-    initialQuotation?.amount_paid ? Number(initialQuotation.amount_paid) : 0
-  );
+
   
   const [taxPercent, setTaxPercent] = useState<number>(() => {
     if (initialQuotation) {
@@ -496,9 +488,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const [terms, setTerms] = useState(
     initialQuotation?.terms ?? "Terms and conditions - late fees, payment methods, delivery schedule"
   );
-  const [advancePercent, setAdvancePercent] = useState<number>(
-    initialQuotation?.advance_percent ?? 50
-  );
+
 
   // Calculations
   const subtotal = sections.reduce((sum, sec) => {
@@ -511,8 +501,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   const tax = subtotal > 0 ? Math.round(totalGst * (1 - discount / subtotal) * 100) / 100 : 0;
   const grandTotal = Math.round((subtotal - discount + tax + shipping) * 100) / 100;
-  const balanceDue = Math.round((grandTotal - amountPaid) * 100) / 100;
-  const advanceAmount = Math.round(grandTotal * (advancePercent / 100) * 100) / 100;
 
   const isLocked = (status === "Sent" || status === "Approved" || status === "Pending Approval") && isEmployee;
   const orderStage = order.stage || "";
@@ -585,7 +573,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         await upsertQuotation(order.id, {
           quotation_id: quotationId || undefined,
           signage_options: sections,
-          items: [], // Legacy flat items is empty now
           subtotal,
           discount,
           tax,
@@ -593,13 +580,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           status,
           notes,
           terms,
-          valid_until: validUntil || null,
-          customer_id: order.customerId,
-          customer_name: customerName,
-          advance_percent: advancePercent,
-          advance_amount: advanceAmount,
+
           shipping,
-          amount_paid: amountPaid,
         });
         setSaveMsg({ text: "Quotation saved ✓", ok: true });
         setTimeout(() => setSaveMsg(null), 3000);
@@ -615,7 +597,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       const saved = await upsertQuotation(order.id, {
         quotation_id: quotationId || undefined,
         signage_options: sections,
-        items: [],
         subtotal,
         discount,
         tax,
@@ -623,13 +604,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         status: "Sent",
         notes,
         terms,
-        valid_until: validUntil || null,
-        customer_id: order.customerId,
-        customer_name: customerName,
-        advance_percent: advancePercent,
-        advance_amount: advanceAmount,
+
         shipping,
-        amount_paid: amountPaid,
       });
       await sendQuotationToCustomer(saved.id, "Staff/Admin");
       setStatus("Sent");
@@ -648,7 +624,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       await upsertQuotation(order.id, {
         quotation_id: quotationId || undefined,
         signage_options: sections,
-        items: [],
         subtotal,
         discount,
         tax,
@@ -656,13 +631,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         status: "Pending Approval",
         notes,
         terms,
-        valid_until: validUntil || null,
-        customer_id: order.customerId,
-        customer_name: customerName,
-        advance_percent: advancePercent,
-        advance_amount: advanceAmount,
+
         shipping,
-        amount_paid: amountPaid,
       });
       setStatus("Pending Approval");
       setSaveMsg({ text: "Quotation submitted to Admin for approval!", ok: true });
@@ -680,7 +650,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         await upsertQuotation(order.id, {
           quotation_id: quotationId || undefined,
           signage_options: sections,
-          items: [],
           subtotal,
           discount,
           tax,
@@ -688,13 +657,8 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           status: "Draft",
           notes,
           terms,
-          valid_until: validUntil || null,
-          customer_id: order.customerId,
-          customer_name: customerName,
-          advance_percent: advancePercent,
-          advance_amount: advanceAmount,
+
           shipping,
-          amount_paid: amountPaid,
         });
         setStatus("Draft");
         setSaveMsg({ text: "Quotation returned to Draft status.", ok: true });
@@ -713,10 +677,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       const { error: quoteErr } = await supabase
         .from("quotations")
         .update({
-          advance_paid: true,
-          advance_paid_at: new Date().toISOString(),
-          amount_paid: amountPaid || advanceAmount,
-          payment_status: "Advance Received"
+          advance_paid: true
         })
         .eq("order_id", order.id);
 
@@ -777,30 +738,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* Status selector */}
-          <div style={{ position: "relative" }}>
-            <select
-              value={status}
-              disabled={isLocked}
-              onChange={(e) => setStatus(e.target.value as any)}
-              className={`${inputCls} pl-3 pr-8 py-1.5 appearance-none cursor-pointer font-bold bg-white text-slate-800`}
-            >
-              {["Draft", "Sent", "Approved", "Rejected", "Pending Approval"].map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <ChevronDown size={11} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
-          </div>
-
-          {/* Valid Until */}
-          <input
-            type="date"
-            value={validUntil}
-            disabled={isLocked}
-            onChange={(e) => setValidUntil(e.target.value)}
-            className={`${inputCls} px-2 py-1.5 bg-white`}
-            title="Valid Until"
-          />
 
           <span className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase border ${
             status === "Approved" ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
@@ -828,6 +765,20 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         </div>
       )}
 
+      {status === "Rejected" && (
+        <div className="p-4 rounded-2xl border flex items-center gap-3 shadow-sm bg-rose-50 border-rose-200 text-rose-800">
+          <AlertCircle size={16} className="text-rose-600 shrink-0" />
+          <div className="text-xs font-semibold">
+            Quotation was rejected / declined by the customer.
+            {rejectionReason && (
+              <span className="block mt-1 text-rose-700 bg-white/50 px-2 py-1 rounded border border-rose-100">
+                Reason: <span className="font-bold">"{rejectionReason}"</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Customer Info Card */}
       <div className="bg-white rounded-2xl px-5 py-4 border border-slate-200 flex justify-between items-start text-xs shadow-sm">
         <div className="space-y-1.5 flex-1 max-w-[60%]">
@@ -850,37 +801,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         </div>
       </div>
 
-      {/* Customer Material Preferences Context Banner */}
-      {materialPreferences.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2.5 shadow-sm">
-          <h4 className="text-xs font-black text-amber-800 flex items-center gap-1.5">
-            <Sparkles size={14} />
-            Customer Saved Material Preferences
-          </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            {materialPreferences.map((pref: any) => {
-              const p = pref.preferences || {};
-              const list = Object.entries(p).filter(([_, v]) => !!v);
-              if (list.length === 0) return null;
-              return (
-                <div key={pref.id} className="bg-white border border-amber-100 rounded-lg p-2.5">
-                  <div className="font-bold text-slate-800 mb-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                    {pref.signage_item_label}
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] text-slate-500">
-                    {list.map(([k, v]) => (
-                      <div key={k}>
-                        <span className="font-semibold text-slate-400 capitalize">{k.replace("_", " ")}:</span> {v as string}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+
 
       {/* Signage Sections */}
       <div className="space-y-6">
@@ -946,14 +867,14 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   const isSqft = line.pricingType === "per_sqft" || line.pricingType === "per_running_ft";
 
                   return (
-                    <div
-                      key={line.id}
-                      className="grid gap-2 px-4 py-3.5 items-center overflow-visible"
-                      style={{
-                        gridTemplateColumns: "1fr 70px 105px 80px 105px 40px 90px 28px",
-                        position: "relative",
-                        zIndex: activeRowId === line.id ? 50 : 1,
-                      }}
+                    <div key={line.id} className="flex flex-col hover:bg-slate-50 transition-colors">
+                      <div
+                        className="grid gap-2 px-4 py-3.5 items-center overflow-visible"
+                        style={{
+                          gridTemplateColumns: "1fr 70px 105px 80px 105px 40px 90px 28px",
+                          position: "relative",
+                          zIndex: activeRowId === line.id ? 50 : 1,
+                        }}
                       onFocus={() => setActiveRowId(line.id)}
                       onBlur={(e) => {
                         if (!e.currentTarget.contains(e.relatedTarget as Node)) {
@@ -1119,6 +1040,42 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                         <Trash2 size={13} />
                       </button>
                     </div>
+
+                    {/* Note section */}
+                    <div className="px-4 pb-3 flex flex-col gap-2">
+                      {(line.notes !== undefined && line.notes !== null) ? (
+                        <div className="relative">
+                          <textarea
+                            value={line.notes}
+                            onChange={(e) => updateLine(section.siteVisitItemId, line.id, { notes: e.target.value })}
+                            placeholder="Add item notes..."
+                            disabled={isLocked}
+                            className="w-full text-xs p-2 pr-8 border border-slate-200 rounded-lg outline-none focus:border-blue-500 min-h-[60px] text-slate-700 resize-y"
+                          />
+                          {!isLocked && (
+                            <button
+                              type="button"
+                              onClick={() => updateLine(section.siteVisitItemId, line.id, { notes: undefined })}
+                              className="absolute top-2 right-2 text-slate-400 hover:text-rose-500 bg-white rounded-md transition-colors"
+                              title="Remove notes"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        !isLocked && (
+                          <button
+                            type="button"
+                            onClick={() => updateLine(section.siteVisitItemId, line.id, { notes: "" })}
+                            className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:text-blue-700 self-start"
+                          >
+                            <Plus size={12} /> Add Note
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
                   );
                 })}
               </div>
@@ -1298,53 +1255,6 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             </span>
           </div>
 
-          {/* Amount Paid Input */}
-          <div className="space-y-1">
-            <label className="block text-[10px] font-black text-[#0f172a] uppercase tracking-wider">Amount Paid (₹)</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-black">Rs</span>
-              <input
-                type="number"
-                min="0"
-                value={amountPaid === 0 ? "" : amountPaid}
-                disabled={isLocked}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setAmountPaid(parseFloat(e.target.value) || 0)}
-                className={`${inputCls} w-full pl-8 pr-3 py-2 font-mono font-bold bg-white`}
-                placeholder="Rs"
-              />
-            </div>
-          </div>
-
-          {/* Balance Due Display */}
-          <div className="flex justify-between items-center py-3 border-t border-slate-200">
-            <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Balance Due</span>
-            <span className="font-black text-[#1e40af] text-xl font-mono">
-              ₹{balanceDue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          {/* Advance % Setup Row */}
-          {!isLocked && (
-            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pt-2">
-              <span>Advance payment expected</span>
-              <div className="flex items-center gap-1.5">
-                <select
-                  value={advancePercent}
-                  onChange={(e) => setAdvancePercent(Number(e.target.value))}
-                  className={`${inputCls} py-1 px-2 bg-white`}
-                >
-                  <option value={25}>25%</option>
-                  <option value={50}>50%</option>
-                  <option value={75}>75%</option>
-                  <option value={100}>100%</option>
-                </select>
-                <span className="text-[11px] text-slate-400 font-bold">
-                  (₹{advanceAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })})
-                </span>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1368,16 +1278,11 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                     type="checkbox"
                     checked={advanceReceived}
                     disabled={isPastQuotation}
-                    onChange={(e) => {
-                      setAdvanceReceived(e.target.checked);
-                      if (e.target.checked && amountPaid === 0) {
-                        setAmountPaid(advanceAmount);
-                      }
-                    }}
+                    onChange={(e) => setAdvanceReceived(e.target.checked)}
                     className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
                   />
                   <span className="text-xs font-bold text-slate-700">
-                    Advance payment received (Expected: ₹{advanceAmount.toLocaleString("en-IN")})
+                    Advance payment received
                   </span>
                 </label>
 
@@ -1410,7 +1315,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                   type="button"
                   disabled={!advanceReceived || !measurementsVerified || isMovingToDesign}
                   onClick={handleMoveToDesign}
-                  className="py-2 px-5 bg-[#1e40af] hover:bg-[#153186] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isMovingToDesign ? (
                     <>
@@ -1459,9 +1364,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={handlePushToAdmin}
+                  onClick={() => setPendingAction("admin")}
                   disabled={pushingToAdmin || grandTotal === 0}
-                  className="py-2 px-4 bg-[#1e40af] hover:bg-[#153186] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  className="py-2 px-4 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
                 >
                   {pushingToAdmin ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
                   Push to Admin
@@ -1499,9 +1404,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 )}
                 <button
                   type="button"
-                  onClick={handleSendToCustomer}
+                  onClick={() => setPendingAction("customer")}
                   disabled={sendingToCustomer || grandTotal === 0}
-                  className="py-2 px-4 bg-[#1e40af] hover:bg-[#153186] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                  className="py-2 px-4 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
                   {sendingToCustomer ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
                   {status === "Sent" ? "Re-send to Customer" : "Approve & Send to Customer"}
@@ -1532,6 +1437,37 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         <ProductInfoModal
           product={selectedProductInfo}
           onClose={() => setSelectedProductInfo(null)}
+        />
+      )}
+
+      {pendingAction && (
+        <QuotationConfirmModal
+          actionType={pendingAction}
+          subtotal={subtotal}
+          discount={discount}
+          tax={tax}
+          grandTotal={grandTotal}
+          totalItems={sections.reduce((acc, sec) => acc + sec.lines.length, 0)}
+          sectionSummaries={sections.map((sec) => ({
+            id: sec.siteVisitItemId,
+            name: sec.itemLabel || "Custom Signage",
+            linesCount: sec.lines.length,
+            amount: sec.lines.reduce((s, line) => s + calcLineAmount(line), 0),
+            lines: sec.lines.map(l => ({
+              id: l.id,
+              description: l.description || "Custom Item",
+              amount: calcLineAmount(l)
+            }))
+          }))}
+          onConfirm={() => {
+            if (pendingAction === "admin") {
+              handlePushToAdmin();
+            } else if (pendingAction === "customer") {
+              handleSendToCustomer();
+            }
+            setPendingAction(null);
+          }}
+          onClose={() => setPendingAction(null)}
         />
       )}
     </div>
@@ -1748,6 +1684,163 @@ function ProductInfoModal({ product, onClose }: { product: Product; onClose: () 
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#1e293b"}
           >
             Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quotation Confirm Modal Component
+// ─────────────────────────────────────────────────────────────────────────────
+function QuotationConfirmModal({
+  actionType,
+  subtotal,
+  discount,
+  tax,
+  grandTotal,
+  totalItems,
+  sectionSummaries,
+  onConfirm,
+  onClose,
+}: {
+  actionType: "admin" | "customer";
+  subtotal: number;
+  discount: number;
+  tax: number;
+  grandTotal: number;
+  totalItems: number;
+  sectionSummaries: { 
+    id: string; 
+    name: string; 
+    linesCount: number; 
+    amount: number;
+    lines: { id: string; description: string; amount: number; }[];
+  }[];
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backdropFilter: "blur(2px)",
+        zIndex: 99999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+      }}
+    >
+      <div
+        style={{
+          backgroundColor: "white",
+          borderRadius: "16px",
+          maxWidth: "400px",
+          width: "100%",
+          overflow: "hidden",
+          boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          border: "1px solid #f1f5f9",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <h4 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#0f172a", textTransform: "uppercase" }}>
+              Confirm Quotation
+            </h4>
+            <span style={{ fontSize: "10px", color: "#64748b", fontWeight: 600 }}>
+              {actionType === "admin" ? "Sending to Admin for Review" : "Sending to Customer for Approval"}
+            </span>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+          {/* Section Summaries Breakdown */}
+          {sectionSummaries && sectionSummaries.length > 0 && (
+            <div style={{ maxHeight: "160px", overflowY: "auto", borderBottom: "1px dashed #cbd5e1", paddingBottom: "12px", marginBottom: "4px", display: "flex", flexDirection: "column", gap: "10px" }}>
+              {sectionSummaries.map((sec) => (
+                <div key={sec.id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontSize: "12px", color: "#334155", fontWeight: 700 }}>{sec.name}</span>
+                      <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600 }}>{sec.linesCount} line item{sec.linesCount !== 1 ? 's' : ''}</span>
+                    </div>
+                    <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 700 }}>
+                      ₹{sec.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {/* Detailed Lines */}
+                  {sec.lines && sec.lines.length > 0 && (
+                    <div style={{ paddingLeft: "8px", borderLeft: "2px solid #e2e8f0", display: "flex", flexDirection: "column", gap: "4px" }}>
+                      {sec.lines.map(line => (
+                        <div key={line.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "220px" }}>
+                            {line.description}
+                          </span>
+                          <span style={{ fontSize: "11px", color: "#475569", fontWeight: 600 }}>
+                            ₹{line.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Total Items</span>
+            <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 800 }}>{totalItems}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Subtotal</span>
+            <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 800 }}>₹{subtotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+          </div>
+          {discount > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Discount</span>
+              <span style={{ fontSize: "12px", color: "#16a34a", fontWeight: 800 }}>-₹{discount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600 }}>Tax (GST)</span>
+            <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 800 }}>+₹{tax.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div style={{ borderTop: "1px dashed #cbd5e1", margin: "4px 0" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "14px", color: "#0f172a", fontWeight: 900 }}>Grand Total</span>
+            <span style={{ fontSize: "16px", color: "#2563eb", fontWeight: 900 }}>₹{grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: "16px 20px", borderTop: "1px solid #f1f5f9", backgroundColor: "#f8fafc", display: "flex", justifyContent: "flex-end", gap: "8px" }}>
+          <button
+            onClick={onClose}
+            style={{ padding: "8px 16px", backgroundColor: "white", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "white"}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{ padding: "8px 16px", backgroundColor: "#22c55e", color: "white", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#16a34a"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#22c55e"}
+          >
+            <Check size={14} /> Confirm & Proceed
           </button>
         </div>
       </div>

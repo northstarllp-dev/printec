@@ -37,7 +37,6 @@ interface OrderDetailPageClientProps {
   products?: Product[];
   initialQuotation?: any;
   siteVisitItems?: SiteVisitItem[];
-  materialPreferences?: any[];
 }
 
 export function OrderDetailPageClient({
@@ -50,7 +49,6 @@ export function OrderDetailPageClient({
   products = [],
   initialQuotation = null,
   siteVisitItems = [],
-  materialPreferences = [],
 }: OrderDetailPageClientProps) {
   const router = useRouter();
 
@@ -70,7 +68,6 @@ export function OrderDetailPageClient({
         products={products}
         initialQuotation={initialQuotation}
         siteVisitItems={siteVisitItems}
-        materialPreferences={materialPreferences}
       />
     </div>
   );

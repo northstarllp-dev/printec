@@ -279,18 +279,11 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                   subtotal: Number(updatedQuote.subtotal) || 0,
                   discount: Number(updatedQuote.discount) || 0,
                   tax: Number(updatedQuote.tax) || 0,
-                  advancePercent: Number(updatedQuote.advance_percent) || 25,
-                  advanceAmount: Number(updatedQuote.advance_amount) || 0,
                   advancePaid: updatedQuote.advance_paid || false,
-                  advancePaidAt: updatedQuote.advance_paid_at,
-                  items: updatedQuote.items || [],
                   signageOptions: updatedQuote.signage_options || [],
                   shipping: Number(updatedQuote.shipping) || 0,
-                  amountPaid: Number(updatedQuote.amount_paid) || 0,
                   notes: updatedQuote.notes || "",
                   terms: updatedQuote.terms || "",
-                  validUntil: updatedQuote.valid_until,
-                  paymentStatus: updatedQuote.payment_status || "Pending",
                 }
               } : o));
             }
@@ -348,10 +341,10 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
     if (!activeOrder || !quoteFeedback.trim()) return;
     setUpdatingStatus("quote-decline");
     const supabase = createClient();
-    const updatedQuote = { ...activeOrder.quoteDetails, status: "Negotiation" };
+    const updatedQuote = { ...activeOrder.quoteDetails, status: "Rejected", rejectionReason: quoteFeedback };
     setOrders(prev => prev.map(o => o.id === activeOrder.id ? { ...o, stage: "Quotation Negotiation", quoteDetails: updatedQuote } : o));
     await supabase.from("order_activity").insert({ order_id: activeOrder.orderId || activeOrder.id, activity_type: "customer", actor_name: customer.name, actor_role: "Customer", content: `Quotation Declined. Feedback: ${quoteFeedback}`, metadata: { action: "quotation_declined" } });
-    await supabase.from("quotations").update({ status: "Rejected" }).eq("order_id", activeOrder.id);
+    await supabase.from("quotations").update({ status: "Rejected", rejection_reason: quoteFeedback }).eq("order_id", activeOrder.id);
     await supabase.from("orders").update({ stage: "Quotation Negotiation" }).eq("id", activeOrder.id);
     setQuoteFeedback(""); setShowQuoteDeclineInput(false); setUpdatingStatus(null);
   };
@@ -878,10 +871,6 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                             <span className="font-mono font-bold text-slate-800">{qd.quotationId || "—"}</span>
                           </div>
                           <div>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Valid Until</span>
-                            <span className="font-bold text-slate-800">{qd.validUntil ? new Date(qd.validUntil).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
-                          </div>
-                          <div>
                             <span className="text-[10px] text-slate-400 font-bold uppercase block">Project Name</span>
                             <span className="font-bold text-slate-800">{activeOrder.projectName}</span>
                           </div>
@@ -1024,20 +1013,6 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                             <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Total</span>
                             <span className="font-black text-[#0f172a] text-lg font-mono">
                               ₹{(qd.grandTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                          {qd.amountPaid > 0 && (
-                            <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
-                              <span>Amount Paid</span>
-                              <span className="font-mono text-emerald-600">
-                                ₹{qd.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          )}
-                          <div className="flex justify-between items-center pt-1">
-                            <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Balance Due</span>
-                            <span className="font-black text-[#1e40af] text-lg font-mono">
-                              ₹{Math.max(0, (qd.grandTotal || 0) - (qd.amountPaid || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                             </span>
                           </div>
                         </div>

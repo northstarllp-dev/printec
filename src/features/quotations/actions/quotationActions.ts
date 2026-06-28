@@ -71,18 +71,7 @@ export async function getAllQuotations() {
   return data || [];
 }
 
-/** Get material preferences set by customer for an order */
-export async function getQuotationMaterialPreferences(orderId: string) {
-  const supabase = await getSupabase();
-  const { uuid } = await resolveOrderId(supabase, orderId);
-  const { data, error } = await supabase
-    .from("quotation_material_preferences")
-    .select("*")
-    .eq("order_id", uuid)
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
-  return data || [];
-}
+
 
 /** Get site visit measurements for an order (signage items) */
 export async function getSiteVisitMeasurementsForOrder(orderId: string) {
@@ -111,13 +100,9 @@ export interface QuotationPayload {
   status?: string;
   notes?: string;
   terms?: string;
-  valid_until?: string | null;
   customer_id?: string;
-  customer_name?: string;
-  advance_percent?: number;
-  advance_amount?: number;
+
   shipping?: number;
-  amount_paid?: number;
 }
 
 /** Upsert quotation — creates if not exists, updates if already there */
@@ -126,7 +111,6 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
   const resolved = await resolveOrderId(supabase, orderId);
 
   if (!payload.customer_id) payload.customer_id = resolved.customerId;
-  if (!payload.customer_name) payload.customer_name = resolved.customerName;
 
   const { data: existing } = await supabase.from("quotations").select("id, quotation_id").eq("order_id", resolved.uuid).maybeSingle();
 
@@ -135,7 +119,6 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
     const { data, error } = await supabase.from("quotations")
       .update({
         quotation_id: payload.quotation_id || existing.quotation_id,
-        items: payload.items ?? [],
         signage_options: payload.signage_options ?? [],
         subtotal: payload.subtotal,
         discount: payload.discount,
@@ -144,13 +127,9 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
         status: payload.status || "Draft",
         notes: payload.notes ?? null,
         terms: payload.terms ?? null,
-        valid_until: payload.valid_until ?? null,
         customer_id: payload.customer_id ?? null,
-        customer_name: payload.customer_name ?? null,
-        advance_percent: payload.advance_percent ?? 25,
-        advance_amount: payload.advance_amount ?? 0,
+
         shipping: payload.shipping ?? 0,
-        amount_paid: payload.amount_paid ?? 0,
       })
       .eq("id", existing.id)
       .select().single();
@@ -163,8 +142,6 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
       order_id: resolved.uuid,
       company_id: resolved.companyId ?? null,
       customer_id: payload.customer_id ?? null,
-      customer_name: payload.customer_name ?? null,
-      items: payload.items ?? [],
       signage_options: payload.signage_options ?? [],
       subtotal: payload.subtotal,
       discount: payload.discount,
@@ -173,11 +150,8 @@ export async function upsertQuotation(orderId: string, payload: QuotationPayload
       status: payload.status || "Draft",
       notes: payload.notes ?? null,
       terms: payload.terms ?? null,
-      valid_until: payload.valid_until ?? null,
-      advance_percent: payload.advance_percent ?? 25,
-      advance_amount: payload.advance_amount ?? 0,
       shipping: payload.shipping ?? 0,
-      amount_paid: payload.amount_paid ?? 0,
+
     }).select().single();
     if (error) throw new Error(error.message);
     result = data;
@@ -233,41 +207,7 @@ export async function setQuotationAdvance(quotationId: string, advancePercent: n
 
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WRITE — Material Preferences (Customer / Staff save)
-// ─────────────────────────────────────────────────────────────────────────────
-export interface MaterialPreferenceItem {
-  signage_item_id: string;
-  signage_item_label: string;
-  preferences: Record<string, string>;
-}
 
-export async function saveQuotationMaterialPreferences(
-  orderId: string,
-  preferences: MaterialPreferenceItem[]
-) {
-  const supabase = await getSupabase();
-  const { uuid } = await resolveOrderId(supabase, orderId);
-
-  for (const pref of preferences) {
-    await supabase.from("quotation_material_preferences").upsert({
-      order_id: uuid,
-      signage_item_id: pref.signage_item_id,
-      signage_item_label: pref.signage_item_label,
-      preferences: pref.preferences || {},
-    }, { onConflict: "order_id,signage_item_id" });
-  }
-
-  // Notify via timeline
-  await supabase.from("order_activity").insert({
-    order_id: uuid,
-    activity_type: "timeline",
-    actor_name: "System",
-    actor_role: "System",
-    content: "Customer has updated their material preferences.",
-    metadata: { action: "material_preferences_updated" }
-  });
-}
 // ─────────────────────────────────────────────────────────────────────────────
 // WRITE — Customer Actions
 // ─────────────────────────────────────────────────────────────────────────────

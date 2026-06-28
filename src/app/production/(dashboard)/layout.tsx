@@ -10,8 +10,8 @@ export default async function ProductionLayout({
 }) {
   const profile = await getCurrentUser();
 
-  // Enforce server-side security checks
-  if (!profile || profile.role !== "staff" || profile.staff_role !== "Production") {
+  // Enforce server-side security checks (allow Admins or Production Staff)
+  if (!profile || (profile.role !== "admin" && (profile.role !== "staff" || profile.staff_role !== "Production"))) {
     redirect("/production/login");
   }
 

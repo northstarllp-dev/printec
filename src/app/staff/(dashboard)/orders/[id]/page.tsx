@@ -7,7 +7,6 @@ import { getCurrentUser } from "@/features/auth/actions/authActions";
 import { getProducts } from "@/features/products/actions/productActions";
 import { 
   getQuotationByOrderId,
-  getQuotationMaterialPreferences,
   getSiteVisitMeasurementsForOrder 
 } from "@/features/quotations/actions/quotationActions";
 import { OrderDetailPageClient } from "@/app/admin/(dashboard)/orders/[id]/OrderDetailPageClient";
@@ -29,15 +28,13 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     employeesData,
     productsData,
     quotationData,
-    siteVisitItemsData,
-    materialPrefsData
+    siteVisitItemsData
   ] = await Promise.all([
     getCustomers(),
     getEmployees(),
     getProducts().catch(() => []),
     getQuotationByOrderId(order.id).catch(() => null),
     getSiteVisitMeasurementsForOrder(order.id).catch(() => []),
-    getQuotationMaterialPreferences(order.id).catch(() => []),
   ]);
 
   const mappedOrder = {
@@ -131,7 +128,6 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
       products={mappedProducts}
       initialQuotation={quotationData}
       siteVisitItems={mappedSiteVisitItems}
-      materialPreferences={materialPrefsData || []}
     />
   );
 }

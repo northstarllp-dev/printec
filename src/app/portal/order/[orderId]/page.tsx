@@ -134,15 +134,10 @@ export default async function OrderDetailPage({
     subtotal: Number(quotationData.subtotal || 0),
     tax: Number(quotationData.tax || 0),
     grandTotal: Number(quotationData.grand_total || 0),
-    amountPaid: Number(quotationData.amount_paid || 0),
     status: quotationData.status,
     notes: quotationData.notes,
     terms: quotationData.terms,
-    validUntil: quotationData.valid_until,
-    advancePercent: Number(quotationData.advance_percent || 25),
-    advanceAmount: Number(quotationData.advance_amount || 0),
     advancePaid: Boolean(quotationData.advance_paid),
-    paymentStatus: quotationData.payment_status || 'Pending',
   } : null;
 
   // Map to camelCase

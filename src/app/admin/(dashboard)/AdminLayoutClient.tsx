@@ -51,6 +51,7 @@ const NAV_ITEMS = [
   { id: "/admin/customers", label: "Customers", icon: Users, countKey: "customers" },
   { id: "/admin/employees", label: "Employees", icon: UserCheck },
   { id: "/admin/reports", label: "Reports", icon: BarChart2 },
+  { id: "/production/orders", label: "Production", icon: Factory, countKey: "production" },
   { id: "/admin/products", label: "Products", icon: Package },
   { id: "/admin/settings", label: "Settings", icon: Settings },
 ] as const;

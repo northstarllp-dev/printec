@@ -73,6 +73,7 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
 
   const navItems = [
     { id: "/production/orders", label: "Production Queue", icon: ShoppingBag },
+    ...(profile.role === "admin" ? [{ id: "/admin/dashboard", label: "Back to Admin", icon: ChevronLeft }] : []),
   ] as const;
 
   const isActivePath = (item: typeof navItems[number]) => {

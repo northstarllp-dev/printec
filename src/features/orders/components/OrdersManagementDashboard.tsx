@@ -424,7 +424,11 @@ export function OrdersManagementDashboard({
             </thead>
             <tbody>
               {filteredOrders.map((order, idx) => {
-                const statusColor = getStatusColor(order.stage);
+                const isSiteVisitStage = order.stage === "Site Visit Scheduled" || order.stage === "Site Visit Completed";
+                const hasNoDate = !order.siteVisitDetails || !order.siteVisitDetails.auditDate;
+                const displayStage = (isSiteVisitStage && hasNoDate) ? "Site Visit Pending" : order.stage;
+                const statusColor = getStatusColor(displayStage);
+                
                 const customerName = customers.find(c => c.id === order.customerId)?.name || "Unknown";
                 const dateStr = new Date(order.dateCreated).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
                 

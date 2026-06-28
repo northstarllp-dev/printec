@@ -274,18 +274,11 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
                   subtotal: Number(updatedQuote.subtotal) || 0,
                   discount: Number(updatedQuote.discount) || 0,
                   tax: Number(updatedQuote.tax) || 0,
-                  advancePercent: Number(updatedQuote.advance_percent) || 25,
-                  advanceAmount: Number(updatedQuote.advance_amount) || 0,
                   advancePaid: updatedQuote.advance_paid || false,
-                  advancePaidAt: updatedQuote.advance_paid_at,
-                  items: updatedQuote.items || [],
                   signageOptions: updatedQuote.signage_options || [],
                   shipping: Number(updatedQuote.shipping) || 0,
-                  amountPaid: Number(updatedQuote.amount_paid) || 0,
                   notes: updatedQuote.notes || "",
                   terms: updatedQuote.terms || "",
-                  validUntil: updatedQuote.valid_until,
-                  paymentStatus: updatedQuote.payment_status || "Pending",
                 }
               }));
             }
@@ -699,14 +692,10 @@ function QuotationTab({
         {qd.signageOptions && qd.signageOptions.length > 0 ? (
           <div className="space-y-6">
             {/* Invoice Header Details */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs mb-6">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 md:grid-cols-3 gap-4 text-xs mb-6">
               <div>
                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Quote ID</span>
                 <span className="font-mono font-bold text-slate-800">{qd.quotationId || "—"}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Valid Until</span>
-                <span className="font-bold text-slate-800">{qd.validUntil ? new Date(qd.validUntil).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</span>
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 font-bold uppercase block">Project Name</span>
@@ -850,20 +839,6 @@ function QuotationTab({
                 <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Total</span>
                 <span className="font-black text-[#0f172a] text-lg font-mono">
                   ₹{(qd.grandTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-              {qd.amountPaid > 0 && (
-                <div className="flex justify-between items-center text-xs font-bold text-slate-500 uppercase tracking-wider pb-3 border-b border-slate-200/50">
-                  <span>Amount Paid</span>
-                  <span className="font-mono text-emerald-600">
-                    ₹{qd.amountPaid.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between items-center pt-1">
-                <span className="font-black text-slate-900 text-sm uppercase tracking-wider">Balance Due</span>
-                <span className="font-black text-[#1e40af] text-lg font-mono">
-                  ₹{Math.max(0, (qd.grandTotal || 0) - (qd.amountPaid || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
