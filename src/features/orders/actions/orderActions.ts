@@ -342,7 +342,7 @@ export async function adminApproveStageAction(orderId: string) {
 
   const nextStageMap: Record<string, string> = {
     "Site Visit Pending":    "Site Visit Scheduled",
-    "Site Visit Scheduled":  "Site Visit Completed",
+    "Site Visit Scheduled":  "Quotation In Progress",
     "Site Visit Completed":  "Quotation In Progress",
     "Quotation In Progress": "Quotation Sent",
     "Quotation Sent":        "Quotation Negotiation",
