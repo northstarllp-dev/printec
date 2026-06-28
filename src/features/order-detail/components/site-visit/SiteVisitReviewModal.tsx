@@ -132,11 +132,11 @@ function LocationReviewCard({ loc, index }: { loc: SignLocation; index: number }
               <div className="flex items-center gap-1.5 mb-2">
                 <Camera size={13} className="text-slate-500" />
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Site Photos ({loc.photos!.length})
+                  Site Photos ({loc.photos?.length || 0})
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {loc.photos!.map((url, i) => (
+                {loc.photos?.map((url, i) => (
                   <a
                     key={i}
                     href={url}

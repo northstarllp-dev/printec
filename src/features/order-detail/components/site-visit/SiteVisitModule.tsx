@@ -164,11 +164,9 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
     if (!files || files.length === 0 || !selectedLocationId) return;
     setUploadingPhotos(true);
     try {
-      const urls: string[] = [];
-      for (const file of Array.from(files)) {
-        const url = await uploadSitePhoto(file);
-        urls.push(url);
-      }
+      const uploadPromises = Array.from(files).map(file => uploadSitePhoto(file));
+      const urls = await Promise.all(uploadPromises);
+      
       const activeLoc = (siteVisit.locations || []).find(l => l.id === selectedLocationId);
       const newUrls = [...(activeLoc?.photos || []), ...urls];
       
@@ -516,14 +514,13 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               Specify sizes, ground clearance, and upload reference photos for {activeLoc.name}
             </div>
 
-            <div className="space-y-4">
+            <fieldset disabled={isFrozen} className="space-y-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Item Label / Name</label>
                 <input
                   type="text"
                   value={activeLoc.name}
                   onChange={(e) => updateSignLocation(activeLoc.id, { name: e.target.value })}
-                  disabled={isFrozen}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                   placeholder="e.g. Front Entrance Main Signage"
                 />
@@ -537,14 +534,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                       type="number"
                       value={activeLoc.width || ""}
                       onChange={(e) => updateSignLocation(activeLoc.id, { width: parseFloat(e.target.value) || 0 })}
-                      disabled={isFrozen}
                       className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
                       placeholder="0.00"
                     />
                     <select
                       value={activeLoc.widthUnit || "ft"}
                       onChange={(e) => updateSignLocation(activeLoc.id, { widthUnit: e.target.value })}
-                      disabled={isFrozen}
                       className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
                     >
                       <option value="ft">ft</option>
@@ -560,14 +555,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                       type="number"
                       value={activeLoc.height || ""}
                       onChange={(e) => updateSignLocation(activeLoc.id, { height: parseFloat(e.target.value) || 0 })}
-                      disabled={isFrozen}
                       className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
                       placeholder="0.00"
                     />
                     <select
                       value={activeLoc.heightUnit || "ft"}
                       onChange={(e) => updateSignLocation(activeLoc.id, { heightUnit: e.target.value })}
-                      disabled={isFrozen}
                       className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
                     >
                       <option value="ft">ft</option>
@@ -583,14 +576,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                       type="number"
                       value={activeLoc.depth || ""}
                       onChange={(e) => updateSignLocation(activeLoc.id, { depth: parseFloat(e.target.value) || 0 })}
-                      disabled={isFrozen}
                       className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
                       placeholder="0.00"
                     />
                     <select
                       value={activeLoc.depthUnit || "ft"}
                       onChange={(e) => updateSignLocation(activeLoc.id, { depthUnit: e.target.value })}
-                      disabled={isFrozen}
                       className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
                     >
                       <option value="ft">ft</option>
@@ -606,14 +597,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                       type="number"
                       value={activeLoc.groundClearance || ""}
                       onChange={(e) => updateSignLocation(activeLoc.id, { groundClearance: parseFloat(e.target.value) || 0 })}
-                      disabled={isFrozen}
                       className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
                       placeholder="0.00"
                     />
                     <select
                       value={activeLoc.groundClearanceUnit || "ft"}
                       onChange={(e) => updateSignLocation(activeLoc.id, { groundClearanceUnit: e.target.value })}
-                      disabled={isFrozen}
                       className="px-2 py-2 text-xs font-bold text-slate-500 focus:outline-none bg-slate-50 disabled:bg-slate-50 disabled:cursor-not-allowed outline-none cursor-pointer"
                     >
                       <option value="ft">ft</option>
@@ -629,13 +618,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 <textarea
                   value={activeLoc.notes || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { notes: e.target.value })}
-                  disabled={isFrozen}
                   rows={2}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                   placeholder="Details on wall conditions, accessibility barriers..."
                 />
               </div>
-            </div>
+            </fieldset>
           </SectionCard>
 
           {/* ── SITE PHOTOS ── */}
@@ -662,7 +650,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             isCollapsed={collapsed.electrical}
             onToggle={() => toggleSection("electrical")}
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
+            <fieldset disabled={isFrozen} className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Power Source Available?</label>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -680,7 +668,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                         name="powerAvailable"
                         checked={activeLoc.powerAvailable === option}
                         onChange={() => updateSignLocation(activeLoc.id, { powerAvailable: option })}
-                        disabled={isFrozen}
                         className="accent-[var(--color-secondary)] disabled:cursor-not-allowed"
                       />
                       <span className="text-xs">{option ? "Yes, Available" : "No Power"}</span>
@@ -696,14 +683,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                     type="number"
                     value={activeLoc.distanceToPowerSource || ""}
                     onChange={(e) => updateSignLocation(activeLoc.id, { distanceToPowerSource: parseFloat(e.target.value) || 0 })}
-                    disabled={isFrozen}
                     className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                     placeholder="e.g. 5"
                   />
                   <select
                     value={activeLoc.distanceToPowerSourceUnit || "meters"}
                     onChange={(e) => updateSignLocation(activeLoc.id, { distanceToPowerSourceUnit: e.target.value })}
-                    disabled={isFrozen}
                     className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                   >
                     <option value="meters">meters</option>
@@ -717,13 +702,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 <textarea
                   value={activeLoc.electricalNotes || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { electricalNotes: e.target.value })}
-                  disabled={isFrozen}
                   rows={3}
                   placeholder="Detail power source details, availability of sockets, switchboards, cabling paths..."
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                 />
               </div>
-            </div>
+            </fieldset>
           </SectionCard>
 
           {/* ── STRUCTURAL ASSESSMENT ── */}
@@ -733,13 +717,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             isCollapsed={collapsed.structural}
             onToggle={() => toggleSection("structural")}
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
+            <fieldset disabled={isFrozen} className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Wall / Surface Type</label>
                 <select
                   value={activeLoc.wallType || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { wallType: e.target.value })}
-                  disabled={isFrozen}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
                   <option value="">Select Wall Type</option>
@@ -758,7 +741,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 <select
                   value={activeLoc.mountingMethod || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { mountingMethod: e.target.value })}
-                  disabled={isFrozen}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                 >
                   <option value="">Select Mounting Method</option>
@@ -775,7 +757,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   type="text"
                   value={activeLoc.surfaceCondition || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { surfaceCondition: e.target.value })}
-                  disabled={isFrozen}
                   placeholder="e.g. Robust concrete, brittle ACP sheets..."
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                 />
@@ -787,7 +768,6 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   type="text"
                   value={activeLoc.obstacles?.join(", ") || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { obstacles: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })}
-                  disabled={isFrozen}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                   placeholder="e.g. Tree branches, security cams, pipes (comma separated)"
                 />
@@ -798,13 +778,12 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 <textarea
                   value={activeLoc.structuralNotes || ""}
                   onChange={(e) => updateSignLocation(activeLoc.id, { structuralNotes: e.target.value })}
-                  disabled={isFrozen}
                   rows={3}
                   placeholder="Detail scaffolding needs, anchor size specifications, framing reinforcements..."
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                 />
               </div>
-            </div>
+            </fieldset>
           </SectionCard>
 
           {/* ── INTERNAL NOTES REMOVED ── */}
@@ -905,155 +884,7 @@ const SectionCard: React.FC<{
   </div>
 );
 
-// ── SELECTED LOCATION FORM COMPONENT ──
-const SelectedLocationForm: React.FC<{
-  location: SignLocation;
-  onUpdate: (id: string, updates: Partial<SignLocation>) => void;
-  onView: (idx: number) => void;
-}> = ({ location, onUpdate, onView }) => {
-  const [tempPhotoUrl, setTempPhotoUrl] = useState("");
-  const photos = location.photos || [];
-  
-  return (
-    <div className="space-y-4 pt-2">
-      <div>
-        <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Location Label</label>
-        <input
-          type="text"
-          value={location.name}
-          onChange={(e) => onUpdate(location.id, { name: e.target.value })}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all"
-          placeholder="e.g. Front Entrance Main Signage"
-        />
-      </div>
-      
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div>
-          <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Width</label>
-          <input
-            type="number"
-            value={location.width || ""}
-            onChange={(e) => onUpdate(location.id, { width: parseFloat(e.target.value) || 0 })}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all"
-            placeholder="ft / m"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Height</label>
-          <input
-            type="number"
-            value={location.height || ""}
-            onChange={(e) => onUpdate(location.id, { height: parseFloat(e.target.value) || 0 })}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all"
-            placeholder="ft / m"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Depth</label>
-          <input
-            type="number"
-            value={location.depth || ""}
-            onChange={(e) => onUpdate(location.id, { depth: parseFloat(e.target.value) || 0 })}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all"
-            placeholder="ft / m"
-          />
-        </div>
-        <div>
-          <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Ground Clearance</label>
-          <input
-            type="number"
-            value={location.groundClearance || ""}
-            onChange={(e) => onUpdate(location.id, { groundClearance: parseFloat(e.target.value) || 0 })}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all"
-            placeholder="ft / m"
-          />
-        </div>
-      </div>
-      
-      <div>
-        <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Location / Surface Specific Notes</label>
-        <textarea
-          value={location.notes || ""}
-          onChange={(e) => onUpdate(location.id, { notes: e.target.value })}
-          rows={2}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all resize-none"
-          placeholder="Details on wall conditions, accessibility barriers..."
-        />
-      </div>
-      
-      <div className="border-t border-slate-100 pt-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
-          <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Location Reference Photos</label>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-1.5">
-            <input
-              type="text"
-              placeholder="Paste photo URL..."
-              value={tempPhotoUrl}
-              onChange={(e) => setTempPhotoUrl(e.target.value)}
-              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-[11px] focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] w-full sm:w-48 bg-white"
-            />
-            <button
-              onClick={() => {
-                if (tempPhotoUrl) {
-                  onUpdate(location.id, { 
-                    photos: [...(location.photos || []), tempPhotoUrl] 
-                  });
-                  setTempPhotoUrl("");
-                }
-              }}
-              className="px-3 py-1.5 bg-[var(--color-secondary)] text-white rounded-lg text-[11px] font-bold hover:bg-[#4338ca]"
-            >
-              Add Photo
-            </button>
-          </div>
-        </div>
-        
-        <div className="flex flex-wrap gap-3">
-          {photos.map((photo, idx) => (
-            <div key={idx} className="relative group w-20 h-20 rounded-xl overflow-hidden border border-slate-200 shadow-3xs">
-              <img
-                src={photo}
-                alt={`Location photo ${idx + 1}`}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=200&auto=format&fit=crop";
-                }}
-              />
-              <div className="absolute inset-0 bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onView(idx); }}
-                  className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
-                  title="View"
-                >
-                  <Eye size={12} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); window.open(`${photo}?download=`, '_blank'); }}
-                  className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white transition-colors"
-                  title="Download"
-                >
-                  <Download size={12} />
-                </button>
-                <button
-                  onClick={(e) => { 
-                    e.stopPropagation();
-                    onUpdate(location.id, { 
-                      photos: photos.filter((_, i) => i !== idx) 
-                    });
-                  }}
-                  className="w-6 h-6 rounded-full bg-red-500/80 hover:bg-red-500 flex items-center justify-center text-white transition-colors"
-                  title="Remove"
-                >
-                  <Trash size={12} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
+
 
 // ── SITE PHOTO UPLOADER ──
 const SitePhotoUploader: React.FC<{

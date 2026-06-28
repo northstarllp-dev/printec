@@ -1005,15 +1005,15 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onConfirm={async () => {
             try {
               await freezeSiteVisitAction(order.id);
-              if (isEmployee) {
-                setOrder(prev => ({ ...prev, stageStatus: "Pending Admin Approval: Site Visit Completed", siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any }));
-                triggerLocalAlert("Site visit confirmed and locked. Awaiting admin review.", "success");
-              } else {
-                // If admin confirms, also approve the stage
-                await adminApproveStageAction(order.id);
-                setOrder(prev => ({ ...prev, stageStatus: "Normal", siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any }));
-                triggerLocalAlert("Site visit locked and stage advanced.", "success");
-              }
+              
+              // Both Staff AND Admin must explicitly approve the stage from the Admin Control Panel after locking.
+              setOrder(prev => ({ 
+                ...prev, 
+                stageStatus: "Pending Admin Approval: Site Visit Completed", 
+                siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any 
+              }));
+              triggerLocalAlert("Site visit confirmed and locked. Awaiting admin review.", "success");
+              
               router.refresh();
               setIsReviewModalOpen(false);
             } catch (err) {
