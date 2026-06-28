@@ -78,8 +78,8 @@ export const ScheduleVisitModal: React.FC<ScheduleVisitModalProps> = ({ isOpen, 
               </div>
 
               {selectedDate && (
-                <div className="grid grid-cols-4 gap-2 mt-3">
-                  {["10:00 AM", "11:30 AM", "02:00 PM", "03:30 PM"].map(slot => {
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-3">
+                  {["10 AM - 11 AM", "11 AM - 12 PM", "12 PM - 1 PM", "1 PM - 2 PM", "2 PM - 3 PM", "3 PM - 4 PM", "4 PM - 5 PM"].map(slot => {
                     const sel = selectedTime === slot;
                     return (
                       <button

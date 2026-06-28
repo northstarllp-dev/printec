@@ -61,21 +61,31 @@ export interface SignLocation {
   id: string;
   name: string;
   width?: number;
+  widthUnit?: string;
   height?: number;
+  heightUnit?: string;
   depth?: number;
+  depthUnit?: string;
   groundClearance?: number;
+  groundClearanceUnit?: string;
   notes?: string;
   photos: string[];
+  
+  // Electrical Assessment
+  powerAvailable?: boolean;
+  distanceToPowerSource?: number;
+  distanceToPowerSourceUnit?: string;
+  electricalNotes?: string;
+
+  // Structural Assessment
+  wallType?: "Concrete" | "ACP Cladding" | "Glass" | "Tile" | "Metal" | "Wood" | "Composite Panel" | string;
+  mountingMethod?: "Direct Mount" | "Frame Mount" | "Hanging" | "Pole Mounted" | string;
+  surfaceCondition?: string;
+  obstacles?: string[];
+  structuralNotes?: string;
 }
 
-// Site Photo Categories
-export interface SitePhotoCategories {
-  front: string[];
-  installationArea: string[];
-  powerSource: string[];
-  measurementReference: string[];
-  additional: string[];
-}
+
 
 // Extended Site Visit Details
 export interface SiteVisitDetails {
@@ -87,52 +97,11 @@ export interface SiteVisitDetails {
   preferredDate?: string;
   preferredTime?: string;
   gpsLocation?: string; // e.g. "12.9716° N, 77.5946° E"
-  customerContact?: string;
-
   // Stage 2: Scheduling & Booking
-  sitePersonnel?: string; // Employee assigned
   auditDate?: string;     // Booked date
   auditTime?: string;     // Booked time
-  availableSlots?: string[]; // e.g. ["2026-06-15 10:00 AM", "2026-06-15 02:00 PM"]
 
-  // Stage 3: In Progress Check-In
-  checkedIn?: boolean;
-  checkInTime?: string;
-  checkInGps?: string;
-  checkInTimerStart?: string; // ISO Timestamp
-  elapsedDuration?: string;   // e.g. "42 mins 10 secs"
-
-  // Staff execution details
-  visitStarted?: boolean;
-  visitStartTimestamp?: string;
-  startGpsLocation?: string;
-  startDeviceInfo?: string;
   locations?: SignLocation[]; // Updated to use new SignLocation type
-  distanceToPowerSource?: number;
-  distanceToPowerSourceUnit?: string;
-  electricalNotes?: string;
-  audioNoteUrl?: string;
-  surfaceCondition?: string;
-  obstacles?: string[];
-  customerBudget?: number;
-  expectedTimeline?: string;
-  customerPreferences?: string;
-  competitorReferences?: string;
-  suggestedProductType?: string;
-  additionalObservations?: string;
-
-
-  // New Visit Information Section
-  contactPerson?: string;
-
-  // Electrical Assessment
-  powerAvailable?: boolean;
-  electricalPhotos?: string[];
-
-  // Structural Assessment
-  wallType?: "Concrete" | "ACP Cladding" | "Glass" | "Tile" | "Metal" | "Wood" | "Composite Panel";
-  mountingMethod?: "Direct Mount" | "Frame Mount" | "Hanging" | "Pole Mounted";
-  structuralNotes?: string;
 
   // Internal Notes (Admin only)
   internalNotes?: {
@@ -144,19 +113,8 @@ export interface SiteVisitDetails {
     voiceNotes?: string[];
   };
 
-  // Photo Categories
-  photoCategories?: SitePhotoCategories;
-
-
   // Stage 5: Review & Statuses
   reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending" | "Pending Admin Approval" | "Draft" | "Needs Revision" | "Rejected" | "Staff Approved";
-  reviewNotes?: string;
-  auditTrail?: Array<{
-    event: string;
-    user: string;
-    timestamp: string;
-    details?: string;
-  }>;
 }
 
 export interface QuoteItem {
@@ -253,7 +211,7 @@ export interface Order {
   designDetails?: DesignDetails;
   productionDetails?: ProductionDetails;
   installationDetails?: InstallationDetails;
-  stageStatus?: "Normal" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done";
+  stageStatus?: "Normal" | "Pending Admin Approval: Site Visit Completed" | "Pending Admin Approval: Quote Stage" | "Pending Admin Approval: Quote Approval" | "Pending Admin Approval: Design Approval" | "Pending Admin Approval: Production Ready" | "Pending Admin Approval: Job Done";
   stageAdminNotes?: string;
   orderCode?: string;
   health?: string;

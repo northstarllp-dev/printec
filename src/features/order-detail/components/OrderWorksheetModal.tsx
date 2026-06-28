@@ -15,6 +15,7 @@ import {
   DesignDetails, ProductionDetails, InstallationDetails, Customer, Employee,
 } from "@/types";
 import { SiteVisitModule } from "./site-visit/SiteVisitModule";
+import { SiteVisitReviewModal } from "./site-visit/SiteVisitReviewModal";
 import { QuotationModule } from "./quotation/QuotationModule";
 import { DesignModule } from "./design/DesignModule";
 import LoadingLines from "@/components/ui/loading-lines";
@@ -34,6 +35,7 @@ import {
   updateOrderHealthAction,
   reopenOrderAction,
   approveSiteVisitAction,
+  freezeSiteVisitAction,
 } from "@/features/orders/actions/orderActions";
 import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
 
@@ -155,6 +157,8 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [rejectNotes, setRejectNotes] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [activeRightPanel, setActiveRightPanel] = useState<"logs" | "chat" | null>(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showLostReasonDropdown, setShowLostReasonDropdown] = useState(false);
   const [selectedLostReason, setSelectedLostReason] = useState("");
@@ -162,7 +166,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const [orderTab, setOrderTab] = useState<"all" | "active" | "pending">("all");
 
   const [messages, setMessages] = useState<any[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
   useEffect(() => { setActiveStepTab(stageToTabIndex(order.stage)); }, [order.stage]);
@@ -287,9 +290,13 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleAdminApprove = async () => {
     setIsProcessing(true);
     try {
-      // Save any pending drafts before advancing
       await handleSaveDraft();
-
+      // On Site Visit tab, don't execute immediately; open the review modal instead.
+      if (activeStepTab === 0 && order.stageStatus === "Normal") {
+        setIsReviewModalOpen(true);
+        setIsProcessing(false);
+        return;
+      }
       await adminApproveStageAction(order.id);
       setOrder(prev => ({ ...prev, stageStatus: "Normal" }));
       router.refresh();
@@ -298,6 +305,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     } catch (err) { triggerLocalAlert("Failed to approve stage.", "error"); }
     finally { setIsProcessing(false); }
   };
+
   const handleAdminRequestChanges = async (notes: string) => {
     if (!notes.trim()) { triggerLocalAlert("Please provide rejection feedback.", "warning"); return; }
     setIsProcessing(true);
@@ -325,14 +333,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   const handleRequestAdvancement = async () => {
     setIsProcessing(true);
     try {
-      // Save any pending drafts before pushing
       await handleSaveDraft();
-
-      await requestStageAdvancementAction(order.id);
-      await addChatMessageAction(order.id, "System", `${currentEmployee?.name || "Staff"} requested stage advancement.`);
-      router.refresh();
-      triggerLocalAlert("Stage advancement requested.", "success");
-    } catch (err) { triggerLocalAlert("Failed to request advancement.", "error"); }
+      // If on the Site Visit tab, don't execute immediately; open the review modal instead.
+      if (activeStepTab === 0) {
+        setIsReviewModalOpen(true);
+        setIsProcessing(false);
+        return;
+      } else {
+        await requestStageAdvancementAction(order.id);
+        await addChatMessageAction(order.id, "System", `${currentEmployee?.name || "Staff"} requested stage advancement.`);
+        router.refresh();
+        triggerLocalAlert("Stage advancement requested.", "success");
+      }
+    } catch (err) { triggerLocalAlert("Failed to submit.", "error"); }
     finally { setIsProcessing(false); }
   };
   const handleUpdateHealth = async (health: string, reason?: string) => {
@@ -415,10 +428,19 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   };
 
   /* ── Module fallbacks ── */
-  const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "" };
+  const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
   const dd = order.designDetails || { proofUrl: "", status: "Draft" };
   const pd = order.productionDetails || { printing: false, cutting: false, fabrication: false, assembly: false };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
+  const isCurrentTabFrozen = activeStepTab === 0 ? sv.completed : false;
+
+  // Strict Site Visit Validations
+  const isSiteVisitScheduled = !!(sv.auditDate && sv.auditTime);
+  const hasSiteVisitLocations = !!(sv.locations && sv.locations.length > 0);
+  const canAdvanceSiteVisit = activeStepTab !== 0 || (isSiteVisitScheduled && hasSiteVisitLocations);
+  const siteVisitAdvanceTooltip = activeStepTab === 0 && !canAdvanceSiteVisit 
+    ? "Schedule the visit and add at least one location item to unlock approval." 
+    : "";
 
   const actionButtonsNode = (
     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
@@ -432,22 +454,24 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           </button>
         </>
       ) : (
-        <>
-          <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
-            <Save size={13} /> Save Draft
-          </button>
-          {isEmployee ? (
-            <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
-              <CheckCircle2 size={13} /> Push for Approval
+        (!isCurrentTabFrozen && (
+          <>
+            <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+              <Save size={13} /> Save Draft
             </button>
-          ) : (
-            currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
-              <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
-                <Check size={13} /> Approve & Advance
+            {isEmployee ? (
+              <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+                <CheckCircle2 size={13} /> Push for Approval
               </button>
-            )
-          )}
-        </>
+            ) : (
+              currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
+                <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+                  <Check size={13} /> Approve & Advance
+                </button>
+              )
+            )}
+          </>
+        ))
       )}
     </div>
   );
@@ -475,19 +499,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onSubmitForApproval={async (): Promise<void> => { await requestStageAdvancementAction(order.id); }}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
           onAdminRequestChanges={async (notes: string): Promise<void> => { setRejectNotes(notes); await adminRejectStageAction(order.id, notes); }}
-          onStaffApproveVisit={async (): Promise<void> => {
-            try {
-              const res = await approveSiteVisitAction(order.id);
-              if (res.success && res.order) {
-                setOrder((prev) => ({ ...prev, stage: res.order.stage, siteVisitDetails: res.order.siteVisitDetails }));
-                triggerLocalAlert("Site visit schedule approved successfully.", "success");
-                router.refresh();
-              }
-            } catch (err) {
-              console.error(err);
-              triggerLocalAlert("Failed to approve site visit.", "error");
-            }
-          }}
         />
       );
       case 1: return (
@@ -816,9 +827,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                 <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "800", color: "#0F172A" }}>
                   {activeModuleTitle}
                 </h2>
-                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94A3B8" }}>
-                  {activeStepTab === 2 && sv.sitePersonnel ? `Designer: ${sv.sitePersonnel}` : ""}
-                </p>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#94A3B8" }}></p>
               </div>
             </div>
 
@@ -876,22 +885,30 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                   </>
                 ) : (
                   <>
-                    {/* Save Draft button */}
-                    <button onClick={handleSaveDraft} style={{ padding: "7px 16px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <Save size={13} /> Save Draft
-                    </button>
-
-                    {/* Advance stage / Staff section approval push */}
-                    {isEmployee ? (
-                      <button onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                        <CheckCircle2 size={13} /> Push {activeModuleTitle} to Admin for Approval
-                      </button>
-                    ) : (
-                      currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
-                        <button onClick={handleAdminApprove} style={{ padding: "7px 16px", background: "#22C55E", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Check size={13} /> Approve & Advance
+                    {!isCurrentTabFrozen && (
+                      <>
+                        {/* Save Draft button */}
+                        <button onClick={handleSaveDraft} style={{ padding: "7px 16px", border: "1px solid #E2E8F0", background: "white", color: "#64748B", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Save size={13} /> Save Draft
                         </button>
-                      )
+    
+                        {/* Advance stage / Staff section approval push */}
+                        {isEmployee ? (
+                          <div title={siteVisitAdvanceTooltip} style={{ display: "inline-block" }}>
+                            <button disabled={!canAdvanceSiteVisit} onClick={handleRequestAdvancement} style={{ padding: "8px 18px", background: canAdvanceSiteVisit ? "#22C55E" : "#94A3B8", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "800", cursor: canAdvanceSiteVisit ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: "6px" }}>
+                              <CheckCircle2 size={13} /> Push {activeModuleTitle} to Admin for Approval
+                            </button>
+                          </div>
+                        ) : (
+                          currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
+                            <div title={siteVisitAdvanceTooltip} style={{ display: "inline-block" }}>
+                              <button disabled={!canAdvanceSiteVisit} onClick={handleAdminApprove} style={{ padding: "7px 16px", background: canAdvanceSiteVisit ? "#22C55E" : "#94A3B8", border: "none", color: "white", borderRadius: "8px", fontSize: "12px", fontWeight: "700", cursor: canAdvanceSiteVisit ? "pointer" : "not-allowed", display: "flex", alignItems: "center", gap: "6px" }}>
+                                <Check size={13} /> Approve & Advance
+                              </button>
+                            </div>
+                          )
+                        )}
+                      </>
                     )}
                   </>
                 )}
@@ -977,6 +994,34 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             </span>
           )}
         </button>
+      )}
+
+      {/* ── REVIEW & CONFIRM MODAL (Site Visit) ── */}
+      {isReviewModalOpen && (
+        <SiteVisitReviewModal
+          siteVisit={sv}
+          orderName={order.projectName || order.orderId || ""}
+          onClose={() => setIsReviewModalOpen(false)}
+          onConfirm={async () => {
+            try {
+              await freezeSiteVisitAction(order.id);
+              if (isEmployee) {
+                setOrder(prev => ({ ...prev, stageStatus: "Pending Admin Approval: Site Visit Completed", siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any }));
+                triggerLocalAlert("Site visit confirmed and locked. Awaiting admin review.", "success");
+              } else {
+                // If admin confirms, also approve the stage
+                await adminApproveStageAction(order.id);
+                setOrder(prev => ({ ...prev, stageStatus: "Normal", siteVisitDetails: { ...prev.siteVisitDetails, completed: true } as any }));
+                triggerLocalAlert("Site visit locked and stage advanced.", "success");
+              }
+              router.refresh();
+              setIsReviewModalOpen(false);
+            } catch (err) {
+              console.error(err);
+              triggerLocalAlert("Failed to confirm site visit.", "error");
+            }
+          }}
+        />
       )}
     </div>
   );

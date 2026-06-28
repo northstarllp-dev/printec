@@ -57,7 +57,8 @@ export default async function StaffOrderDetailPage({ params }: { params: Promise
     customerName: order.customer_name || "",
     orderCode: order.order_id || order.id,
     orderId: order.order_id || order.id,
-
+    health: order.health || "Active",
+    lost_reason: order.lost_reason,
   };
 
   const mappedCustomers = customersData?.map(c => ({

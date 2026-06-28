@@ -225,11 +225,24 @@ export async function updateSiteVisitDetailsAction(orderId: string, details: any
         site_visit_id: siteVisit.id,
         name: loc.name || "Unknown",
         width: loc.width,
+        width_unit: loc.widthUnit || "ft",
         height: loc.height,
+        height_unit: loc.heightUnit || "ft",
         depth: loc.depth,
+        depth_unit: loc.depthUnit || "ft",
         ground_clearance: loc.groundClearance,
+        ground_clearance_unit: loc.groundClearanceUnit || "ft",
         notes: loc.notes,
-        photos: loc.photos || []
+        photos: loc.photos || [],
+        power_available: loc.powerAvailable,
+        distance_to_power_source: loc.distanceToPowerSource,
+        distance_to_power_source_unit: loc.distanceToPowerSourceUnit,
+        electrical_notes: loc.electricalNotes || "",
+        wall_type: loc.wallType || "",
+        mounting_method: loc.mountingMethod,
+        surface_condition: loc.surfaceCondition,
+        obstacles: loc.obstacles || [],
+        structural_notes: loc.structuralNotes
       }));
       const { error: locError } = await supabase.from("site_visit_measurements").insert(locationsPayload);
       if (locError) console.error("Failed to insert measurements:", locError.message);
@@ -649,4 +662,53 @@ export async function approveSiteVisitAction(orderId: string) {
   return { success: true, order: { ...updatedOrderRow, siteVisitDetails: mapSiteVisitFromDb(siteVisit) } };
 }
 
+/**
+ * Freeze the site visit: marks completed=true on site_visits and sets
+ * stage_status to "Pending Admin Approval: Site Visit Completed" so the
+ * Admin sees it in AdminControlModule and can approve to advance the order.
+ */
+export async function freezeSiteVisitAction(orderId: string) {
+  const supabase = await getSupabase();
 
+  // 1. Mark the site_visit row as completed (frozen)
+  const { error: svError } = await supabase
+    .from("site_visits")
+    .update({ completed: true })
+    .eq("order_id", orderId);
+  if (svError) throw new Error(svError.message);
+
+  // 2. Fetch order for activity log
+  const { data: order, error: fetchError } = await supabase
+    .from("orders")
+    .select("order_id, stage")
+    .eq("id", orderId)
+    .single();
+  if (fetchError || !order) throw new Error(fetchError?.message || "Order not found");
+
+  // 3. Flag the order as pending admin approval
+  const { data: updatedOrder, error: orderError } = await supabase
+    .from("orders")
+    .update({ stage_status: "Pending Admin Approval: Site Visit Completed" })
+    .eq("id", orderId)
+    .select()
+    .single();
+  if (orderError) throw new Error(orderError.message);
+
+  // 4. Activity log
+  await supabase.from("order_activity").insert({
+    order_id: order.order_id || orderId,
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: "Site visit data confirmed and locked. Pending admin review.",
+    metadata: { action: "site_visit_frozen" }
+  });
+
+  // 5. Revalidate all views
+  revalidatePath("/admin/orders");
+  revalidatePath("/staff/orders");
+  revalidatePath(`/admin/orders/${order.order_id || orderId}`);
+  revalidatePath(`/staff/orders/${order.order_id || orderId}`);
+
+  return { success: true, updatedOrder };
+}

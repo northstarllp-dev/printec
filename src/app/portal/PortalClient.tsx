@@ -195,8 +195,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
       if (count !== null) setUnreadCount(count);
     }
     loadUnread();
-    // Use unique channel name per mount to avoid Supabase channel cache collision (Strict Mode)
-    const channelName = `unread-${activeOrder.id}-${Date.now()}`;
+    const channelName = `unread-${activeOrder.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const ch = supabase
       .channel(channelName)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "order_activity", filter: `order_id=eq.${activeOrder.orderId || activeOrder.id}` }, (p) => {
@@ -212,7 +211,7 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   useEffect(() => {
     if (!activeOrder) return;
     const supabase = createClient();
-    const orderChannelName = `portal-order-sync-${activeOrder.id}-${Date.now()}`;
+    const orderChannelName = `portal-order-sync-${activeOrder.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
     const channel = supabase
       .channel(orderChannelName)
@@ -376,17 +375,12 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
   const sv = activeOrder?.siteVisitDetails || {};
 
   const uniquePhotos = useMemo(() => {
-    if (!sv) return [];
-    const allPhotos = [
-      ...(sv.photos || []),
-      ...(sv.electricalPhotos || []),
-      ...(sv.photoCategories?.additional || []),
-      ...(sv.photoCategories?.front || []),
-      ...(sv.photoCategories?.installationArea || []),
-      ...(sv.photoCategories?.powerSource || []),
-      ...(sv.photoCategories?.measurementReference || []),
-    ].filter(Boolean);
-    return Array.from(new Set(allPhotos)) as string[];
+    if (!sv || !sv.locations) return [];
+    const allPhotos: string[] = [];
+    sv.locations.forEach((loc: any) => {
+      allPhotos.push(...(loc.photos || []));
+    });
+    return Array.from(new Set(allPhotos));
   }, [sv]);
 
   const qd = activeOrder?.quoteDetails || {};
@@ -584,8 +578,8 @@ export function PortalClient({ customer, orders: initialOrders, initialActiveOrd
                             </div>
 
                             {selectedDate && (
-                              <div className="grid grid-cols-4 gap-2 mt-3">
-                                {["10:00 AM", "11:30 AM", "02:00 PM", "03:30 PM"].map(slot => {
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-3">
+                                {["10 AM - 11 AM", "11 AM - 12 PM", "12 PM - 1 PM", "1 PM - 2 PM", "2 PM - 3 PM", "3 PM - 4 PM", "4 PM - 5 PM"].map(slot => {
                                   const booked = isSlotBooked(selectedDate, slot);
                                   const sel = selectedTime === slot;
                                   return (
@@ -1314,7 +1308,7 @@ function useOrderMessages(
     fetchMessages();
     const supabase = createClient();
     // Use unique channel name per mount to avoid Supabase channel cache collision (Strict Mode)
-    const channelName = `portal-chat-${orderId}-${Date.now()}`;
+    const channelName = `portal-chat-${orderId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const channel = supabase
       .channel(channelName)
       .on(

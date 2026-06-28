@@ -499,8 +499,8 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
                     </div>
 
                     {selectedDate && (
-                      <div className="grid grid-cols-4 gap-2 mt-3">
-                        {["10:00 AM", "11:30 AM", "02:00 PM", "03:30 PM"].map(slot => {
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-3">
+                        {["10 AM - 11 AM", "11 AM - 12 PM", "12 PM - 1 PM", "1 PM - 2 PM", "2 PM - 3 PM", "3 PM - 4 PM", "4 PM - 5 PM"].map(slot => {
                           const booked = isSlotBooked(selectedDate, slot);
                           const sel = selectedTime === slot;
                           return (
@@ -601,13 +601,69 @@ export function OrderDetailClient({ customer, order: initialOrder, token }: Orde
               </div>
             ) : (
               // Completed or pending approval
-              <div className="space-y-4">
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                  <AlertCircle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+              <div className="space-y-6">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-start gap-3">
+                  <CheckCircle size={18} className="text-emerald-500 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-bold text-amber-800">Site Survey Completed — Under Verification</p>
-                    <p className="text-xs text-amber-700 mt-0.5">Measurement data is being reviewed by our engineering team.</p>
+                    <p className="text-sm font-bold text-emerald-800">Site Survey Completed</p>
+                    <p className="text-xs text-emerald-700 mt-0.5">Below are the finalized measurements and details collected by our engineering team.</p>
                   </div>
+                </div>
+
+                <div className="space-y-4">
+                  {(sv.locations || []).map((loc: any, idx: number) => (
+                    <div key={loc.id || idx} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                      <div className="bg-gray-50 border-b border-gray-200 px-4 py-3 font-bold text-gray-800 flex justify-between items-center">
+                        <span>{loc.name || `Location ${idx + 1}`}</span>
+                      </div>
+                      <div className="p-4 space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Width</span>
+                            <span className="text-sm font-mono font-bold text-gray-800">{loc.width ? `${loc.width} ${loc.widthUnit || 'ft'}` : '-'}</span>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Height</span>
+                            <span className="text-sm font-mono font-bold text-gray-800">{loc.height ? `${loc.height} ${loc.heightUnit || 'ft'}` : '-'}</span>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Depth</span>
+                            <span className="text-sm font-mono font-bold text-gray-800">{loc.depth ? `${loc.depth} ${loc.depthUnit || 'ft'}` : '-'}</span>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-2.5 text-center">
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Clearance</span>
+                            <span className="text-sm font-mono font-bold text-gray-800">{loc.groundClearance ? `${loc.groundClearance} ${loc.groundClearanceUnit || 'ft'}` : '-'}</span>
+                          </div>
+                        </div>
+
+                        {loc.notes && (
+                          <div className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg">
+                            <span className="font-bold text-gray-800 block mb-1">Notes</span>
+                            {loc.notes}
+                          </div>
+                        )}
+
+                        {loc.photos && loc.photos.length > 0 && (
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-gray-400 block mb-2">Photos</span>
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                              {loc.photos.map((url: string, i: number) => (
+                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 shrink-0 rounded-lg border border-gray-200 overflow-hidden hover:opacity-80 transition-opacity">
+                                  <img src={url} alt="Site Photo" className="w-full h-full object-cover" />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {(!sv.locations || sv.locations.length === 0) && (
+                    <div className="text-center py-8 text-gray-500 text-sm">
+                      No specific location data recorded.
+                    </div>
+                  )}
                 </div>
               </div>
             )}

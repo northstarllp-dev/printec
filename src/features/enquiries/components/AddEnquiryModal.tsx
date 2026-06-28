@@ -6,7 +6,7 @@ import { X, Send, Loader, CheckSquare, Square } from "lucide-react";
 interface AddEnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: EnquiryFormData) => void;
+  onSubmit: (data: EnquiryFormData) => void | Promise<void>;
 }
 
 export interface EnquiryFormData {
@@ -131,10 +131,9 @@ export function AddEnquiryModal({ isOpen, onClose, onSubmit }: AddEnquiryModalPr
     
     setIsSubmitting(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
+    // Execute actual submit
+    await onSubmit(formData);
     
-    onSubmit(formData);
     setIsSubmitting(false);
     setFormData({
       leadName: "",
