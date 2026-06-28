@@ -694,43 +694,74 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                         {/* Recorded Measurements */}
                         {sv.locations && sv.locations.length > 0 && (
                           <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
                               <MapPin size={16} className="text-[#1E40AF]" />
                               Recorded Measurements
                             </h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                               {sv.locations.map((loc: any, idx: number) => (
-                                <div key={idx} className="p-4 border border-slate-200 rounded-xl bg-slate-50 relative overflow-hidden">
-                                  <div className="absolute top-0 right-0 w-16 h-16 bg-[#1E40AF]/5 rounded-bl-full -mr-8 -mt-8" />
-                                  <h4 className="font-bold text-[#0b1c30] text-sm mb-3">
-                                    {loc.name || `Location ${idx + 1}`}
-                                  </h4>
-                                  <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-y-3 text-xs">
-                                      {loc.width && <div><span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Width</span><p className="font-bold font-mono text-slate-800">{loc.width}</p></div>}
-                                      {loc.height && <div><span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Height</span><p className="font-bold font-mono text-slate-800">{loc.height}</p></div>}
-                                      {loc.depth && <div><span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Depth</span><p className="font-bold font-mono text-slate-800">{loc.depth}</p></div>}
-                                      {loc.groundClearance && <div><span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Ground Clr.</span><p className="font-bold font-mono text-slate-800">{loc.groundClearance}</p></div>}
+                                <div key={idx} className="group bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+                                  {/* Header */}
+                                  <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                                    <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#1E40AF]" />
+                                      {loc.name || `Location ${idx + 1}`}
+                                    </h4>
+                                  </div>
+                                  
+                                  {/* Body */}
+                                  <div className="p-5 space-y-5">
+                                    {/* Measurements */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                      {loc.width ? (
+                                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Width</span>
+                                          <p className="font-semibold text-slate-800 font-mono">{loc.width}</p>
+                                        </div>
+                                      ) : null}
+                                      {loc.height ? (
+                                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Height</span>
+                                          <p className="font-semibold text-slate-800 font-mono">{loc.height}</p>
+                                        </div>
+                                      ) : null}
+                                      {loc.depth ? (
+                                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Depth</span>
+                                          <p className="font-semibold text-slate-800 font-mono">{loc.depth}</p>
+                                        </div>
+                                      ) : null}
+                                      {loc.groundClearance ? (
+                                        <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Ground Clr.</span>
+                                          <p className="font-semibold text-slate-800 font-mono">{loc.groundClearance}</p>
+                                        </div>
+                                      ) : null}
                                     </div>
                                     
+                                    {/* Notes */}
                                     {loc.notes && (
-                                      <div className="pt-3 border-t border-slate-200/60">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Notes</span>
-                                        <p className="text-xs text-slate-600 leading-relaxed">{loc.notes}</p>
+                                      <div className="bg-amber-50/50 rounded-lg p-3 border border-amber-100/50">
+                                        <span className="text-[10px] text-amber-700 font-bold uppercase tracking-wider block mb-1">Notes</span>
+                                        <p className="text-xs text-amber-900/80 leading-relaxed">{loc.notes}</p>
                                       </div>
                                     )}
 
+                                    {/* Photos */}
                                     {loc.photos && loc.photos.length > 0 && (
-                                      <div className="pt-3 border-t border-slate-200/60">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase block mb-2">Location Photos</span>
-                                        <div className="flex flex-wrap gap-2">
+                                      <div>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-3">Location Photos</span>
+                                        <div className="flex flex-wrap gap-3">
                                           {loc.photos.map((photo: string, pIdx: number) => (
                                             <div 
                                               key={pIdx} 
                                               onClick={() => openViewer(loc.photos, pIdx)}
-                                              className="w-14 h-14 rounded-lg border border-slate-200 overflow-hidden hover:opacity-80 transition-opacity shadow-sm cursor-pointer"
+                                              className="relative w-16 h-16 rounded-xl border border-slate-200 overflow-hidden cursor-pointer group/photo shadow-sm"
                                             >
-                                              <img src={photo} alt="Location ref" className="w-full h-full object-cover" />
+                                              <img src={photo} alt="Ref" className="w-full h-full object-cover transition-transform duration-500 group-hover/photo:scale-110" />
+                                              <div className="absolute inset-0 bg-black/0 group-hover/photo:bg-black/20 transition-colors flex items-center justify-center">
+                                                <ZoomIn size={14} className="text-white opacity-0 group-hover/photo:opacity-100 transition-opacity" />
+                                              </div>
                                             </div>
                                           ))}
                                         </div>
@@ -742,100 +773,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                             </div>
                           </div>
                         )}
-
-                        {/* Structural & Electrical Assessment */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Structural Assessment Card */}
-                          <div className="p-5 border border-slate-200 rounded-xl bg-white space-y-4 shadow-2xs">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
-                              <span>🏗️</span> Structural Assessment
-                            </h3>
-                            <div className="space-y-3.5 text-xs">
-                              {sv.wallType ? (
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Wall / Surface Type</span>
-                                  <p className="font-semibold text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">{sv.wallType}</p>
-                                </div>
-                              ) : null}
-                              {sv.mountingMethod ? (
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Proposed Mounting Method</span>
-                                  <p className="font-semibold text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">{sv.mountingMethod}</p>
-                                </div>
-                              ) : null}
-                              {sv.surfaceCondition ? (
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Surface Condition</span>
-                                  <p className="font-medium text-slate-700 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">{sv.surfaceCondition}</p>
-                                </div>
-                              ) : null}
-                              {sv.obstacles && sv.obstacles.length > 0 ? (
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Physical Obstacles</span>
-                                  <p className="font-medium text-slate-700 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">{sv.obstacles.join(", ")}</p>
-                                </div>
-                              ) : null}
-                              {sv.structuralNotes ? (
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Structural Notes</span>
-                                  <p className="text-slate-600 leading-relaxed bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 whitespace-pre-line">{sv.structuralNotes}</p>
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          {/* Electrical Assessment Card */}
-                          <div className="p-5 border border-slate-200 rounded-xl bg-white space-y-4 shadow-2xs">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
-                              <span>⚡</span> Electrical Assessment
-                            </h3>
-                            <div className="space-y-3.5 text-xs">
-                              <div>
-                                <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Power Availability</span>
-                                <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold mt-1 ${sv.powerAvailable ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'}`}>
-                                  {sv.powerAvailable ? '⚡ Power Available' : '❌ No Power Source Nearby'}
-                                </span>
-                              </div>
-                              {sv.distanceToPowerSource ? (
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Distance to Power Source</span>
-                                  <p className="font-bold text-slate-800 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 font-mono">
-                                    {sv.distanceToPowerSource} {sv.distanceToPowerSourceUnit || 'meters'}
-                                  </p>
-                                </div>
-                              ) : null}
-                              {sv.electricalNotes ? (
-                                <div>
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Electrical Notes</span>
-                                  <p className="text-slate-600 leading-relaxed bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100 whitespace-pre-line">{sv.electricalNotes}</p>
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Reference Photos Gallery */}
-                        {uniquePhotos.length > 0 ? (
-                          <div className="p-5 border border-slate-200 rounded-xl bg-white space-y-4 shadow-2xs">
-                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-100 pb-2">
-                              <span>📸</span> Reference Photos
-                            </h3>
-                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-                              {uniquePhotos.map((photo: string, pIdx: number) => (
-                                <div 
-                                  key={pIdx} 
-                                  className="relative aspect-square rounded-xl border border-slate-200 overflow-hidden hover:opacity-90 transition-opacity shadow-sm group cursor-pointer"
-                                  onClick={() => openViewer(uniquePhotos, pIdx)}
-                                >
-                                  <img src={photo} alt={`Site reference ${pIdx + 1}`} className="w-full h-full object-cover" />
-                                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    <Maximize2 size={16} className="text-white" />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
                       </div>
                     )}
                   </>
