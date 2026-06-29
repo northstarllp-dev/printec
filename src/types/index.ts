@@ -106,6 +106,8 @@ export interface SiteVisitDetails {
 
   // Stage 5: Review & Statuses
   reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending" | "Pending Admin Approval" | "Draft" | "Needs Revision" | "Rejected" | "Staff Approved";
+  
+  internalNotes?: string;
 }
 
 export interface QuoteItem {

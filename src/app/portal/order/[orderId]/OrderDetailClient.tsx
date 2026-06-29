@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   ArrowLeft,
   MapPin,
@@ -28,7 +28,21 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
+import { GoogleMap, useJsApiLoader, Marker, Autocomplete } from "@react-google-maps/api";
 import { DesignTab } from "../../components/DesignTab";
+
+const libraries: ("places")[] = ["places"];
+
+const containerStyle = {
+  width: "100%",
+  height: "100%"
+};
+
+// Default center: India/Bangalore as an example
+const defaultCenter = {
+  lat: 12.9716,
+  lng: 77.5946
+};
 
 interface Customer {
   id: string;
@@ -166,10 +180,84 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [siteAddress, setSiteAddress] = useState(customer.shippingAddress || "");
-  const [gpsCoords, setGpsCoords] = useState("12.9716° N, 77.5946° E");
+  const [gpsCoords, setGpsCoords] = useState("12.9716, 77.5946");
   const [isRescheduling, setIsRescheduling] = useState(false);
   const [schedulingLoading, setSchedulingLoading] = useState(false);
   const [mapsSearching, setMapsSearching] = useState(false);
+
+  const [markerPosition, setMarkerPosition] = useState(defaultCenter);
+  const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const geocoder = useRef<any>(null);
+
+  const { isLoaded } = useJsApiLoader({
+    id: "google-map-script",
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+  });
+
+  const autocompleteRef = useRef<any>(null);
+
+  const onPlaceChanged = () => {
+    if (autocompleteRef.current !== null) {
+      const place = autocompleteRef.current.getPlace();
+      if (place.geometry && place.geometry.location) {
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        setMarkerPosition({ lat, lng });
+        setMapCenter({ lat, lng });
+        setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        setSiteAddress(place.formatted_address || place.name || "");
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isLoaded && !geocoder.current) {
+      geocoder.current = new window.google.maps.Geocoder();
+    }
+  }, [isLoaded]);
+
+  const reverseGeocode = (lat: number, lng: number) => {
+    if (!geocoder.current) return;
+    geocoder.current.geocode({ location: { lat, lng } }, (results: any, status: any) => {
+      if (status === "OK" && results[0]) {
+        setSiteAddress(results[0].formatted_address);
+      }
+    });
+  };
+
+  const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
+    if (!e.latLng) return;
+    const lat = e.latLng.lat();
+    const lng = e.latLng.lng();
+    setMarkerPosition({ lat, lng });
+    setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    reverseGeocode(lat, lng);
+  }, []);
+
+  const handleCurrentLocation = () => {
+    setMapsSearching(true);
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setMarkerPosition({ lat, lng });
+          setMapCenter({ lat, lng });
+          setGpsCoords(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+          reverseGeocode(lat, lng);
+          setMapsSearching(false);
+        },
+        () => {
+          alert("Could not detect your location. Please check your browser permissions.");
+          setMapsSearching(false);
+        }
+      );
+    } else {
+      alert("Geolocation is not supported by your browser.");
+      setMapsSearching(false);
+    }
+  };
 
   // Make sure we map the order stage to our stages array
   const stageMapping: Record<string, string> = {
@@ -529,37 +617,59 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                       Choose Location in Maps
                     </label>
-                    <input
-                      type="text"
-                      required
-                      value={siteAddress}
-                      onChange={e => setSiteAddress(e.target.value)}
-                      placeholder="Full address where signage will be installed"
-                      className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-gray-50 focus:bg-white transition-all"
-                    />
+                    {isLoaded ? (
+                      <Autocomplete
+                        onLoad={autocomplete => (autocompleteRef.current = autocomplete)}
+                        onPlaceChanged={onPlaceChanged}
+                      >
+                        <input
+                          type="text"
+                          required
+                          value={siteAddress}
+                          onChange={e => setSiteAddress(e.target.value)}
+                          placeholder="Search for an address or type manually..."
+                          className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-gray-50 focus:bg-white transition-all"
+                        />
+                      </Autocomplete>
+                    ) : (
+                      <input
+                        type="text"
+                        required
+                        value={siteAddress}
+                        onChange={e => setSiteAddress(e.target.value)}
+                        placeholder="Full address where signage will be installed"
+                        className="w-full p-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none bg-gray-50 focus:bg-white transition-all"
+                      />
+                    )}
 
                     {/* Map visual */}
                     <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
-                      <div
-                        onClick={() => setGpsCoords(`${(12.97 + Math.random() * 0.01).toFixed(4)}° N, ${(77.59 + Math.random() * 0.01).toFixed(4)}° E`)}
-                        className="h-28 bg-[#e8edf2] flex flex-col items-center justify-center relative cursor-crosshair group select-none"
-                      >
-                        <div className="absolute inset-0 bg-[linear-gradient(to_right,#d1d9e0_1px,transparent_1px),linear-gradient(to_bottom,#d1d9e0_1px,transparent_1px)] bg-[size:20px_20px] opacity-40" />
-                        <div className="absolute w-8 h-8 rounded-full bg-blue-400/20 animate-ping" />
-                        <MapPin size={28} className="text-blue-600 relative z-10 drop-shadow-md" />
-                        <span className="text-[10px] text-gray-500 mt-1.5 relative z-10 font-medium bg-white/90 px-2 py-0.5 rounded-full border border-gray-200">
-                          Click to pin location
-                        </span>
+                      <div className="h-40 bg-[#e8edf2] relative">
+                        {isLoaded ? (
+                          <GoogleMap
+                            mapContainerStyle={containerStyle}
+                            center={mapCenter}
+                            zoom={14}
+                            onClick={onMapClick}
+                            options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
+                          >
+                            <Marker position={markerPosition} />
+                          </GoogleMap>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-xs text-slate-500">
+                            Loading Map...
+                          </div>
+                        )}
                       </div>
                       <div className="px-3 py-2 bg-white border-t border-gray-200 flex items-center justify-between">
                         <span className="text-[10px] font-mono font-semibold text-gray-600">📍 {gpsCoords}</span>
                         <button
                           type="button"
-                          onClick={() => { setMapsSearching(true); setTimeout(() => { setGpsCoords("12.9716° N, 77.5946° E"); setMapsSearching(false); }, 600); }}
-                          className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline"
+                          onClick={handleCurrentLocation}
+                          className="flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:underline cursor-pointer"
                         >
                           {mapsSearching ? <Loader2 size={10} className="animate-spin" /> : null}
-                          Auto-detect
+                          {mapsSearching ? "Detecting..." : "Auto-detect"}
                         </button>
                       </div>
                     </div>
@@ -1016,7 +1126,7 @@ function QuotationTab({
           </div>
         )}
 
-        {qd.status !== "Approved" && order.stage?.includes("Quotation") && (
+        {qd.status !== "Approved" && (qd.status === "Sent" || qd.status === "Negotiation" || (qd.grandTotal > 0 && (order.stage === "Quotation Sent" || order.stage === "Quotation Negotiation"))) && (
           <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
             <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed to Design</p>
             {showQuoteDeclineInput ? (

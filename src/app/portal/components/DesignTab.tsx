@@ -102,25 +102,30 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
   };
 
   const handleResourceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${order.id}/resources/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from("site-visit-photos").upload(path, file, { contentType: file.type });
-      if (error) throw error;
-      const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
+      const newResources = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const ext = file.name.split(".").pop() || "jpg";
+        const path = `${order.id}/resources/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error } = await supabase.storage.from("site-visit-photos").upload(path, file, { contentType: file.type });
+        if (error) throw error;
+        const { data } = supabase.storage.from("site-visit-photos").getPublicUrl(path);
+        
+        newResources.push({
+          id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
+          url: data.publicUrl,
+          name: file.name,
+          type: "file",
+          uploadedBy: "Customer",
+          createdAt: new Date().toISOString()
+        });
+      }
       
-      const newResource = {
-        id: (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36),
-        url: data.publicUrl,
-        name: file.name,
-        type: "file",
-        uploadedBy: "Customer",
-        createdAt: new Date().toISOString()
-      };
-      const updatedDetails = { ...dd, resources: [...(dd.resources || []), newResource] };
+      const updatedDetails = { ...dd, resources: [...(dd.resources || []), ...newResources] };
       const { error: updateError } = await supabase.from("orders").update({ design_details: updatedDetails }).eq("id", order.id);
       if (updateError) throw updateError;
     } catch (err: any) {
@@ -128,6 +133,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
       alert("Upload failed: " + (err.message || JSON.stringify(err)));
     } finally {
       setUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -283,7 +289,7 @@ export function DesignTab({ order, customer, siteVisitItems = [] }: DesignTabPro
           <label className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-xs font-bold cursor-pointer hover:bg-gray-100 flex items-center gap-2">
             {uploading ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />}
             {uploading ? "Uploading..." : "Upload File"}
-            <input type="file" onChange={handleResourceUpload} className="hidden" disabled={uploading} />
+            <input type="file" multiple onChange={handleResourceUpload} className="hidden" disabled={uploading} />
           </label>
         </div>
 

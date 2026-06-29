@@ -35,6 +35,9 @@ import {
 } from "@/types";
 import { ScheduleVisitModal } from "./ScheduleVisitModal";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
+import { GoogleMap, useJsApiLoader, Marker } from "@react-google-maps/api";
+
+const libraries: ("places")[] = ["places"];
 
 export interface ExtendedSignLocation {
   id: string;
@@ -74,6 +77,7 @@ interface SiteVisitModuleProps {
   actionsNode?: React.ReactNode;
   adminOverrideUnlocked?: boolean;
   setAdminOverrideUnlocked?: (val: boolean) => void;
+  onSkipSiteVisit?: () => void;
 }
 
 const defaultSignLocation: Omit<SignLocation, "id"> = {
@@ -94,7 +98,8 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   onStaffApproveVisit,
   actionsNode,
   adminOverrideUnlocked,
-  setAdminOverrideUnlocked
+  setAdminOverrideUnlocked,
+  onSkipSiteVisit
 }) => {
   // Current client
   const client = customers.find(c => c.id === order.customerId);
@@ -128,12 +133,30 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       }))
     };
   });
+
+  const { isLoaded } = useJsApiLoader({
+    id: "google-map-script",
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+  });
+
+  const mapCenter = React.useMemo(() => {
+    if (!siteVisit?.gpsLocation) return null;
+    const parts = siteVisit.gpsLocation.replace(/°|N|E|S|W/gi, "").split(",");
+    if (parts.length >= 2) {
+      const lat = parseFloat(parts[0].trim());
+      const lng = parseFloat(parts[1].trim());
+      if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
+    }
+    return null;
+  }, [siteVisit?.gpsLocation]);
   
   // Freeze flag — read-only if not in Site Visit stage, or if completed and pending admin approval.
   // It unfreezes if the admin requests changes (stageStatus becomes "Normal" while still in Site Visit stage).
   const baseFrozen = !order.stage.startsWith("Site Visit") || (!!siteVisit.completed && order.stageStatus !== "Normal");
   const isFrozen = baseFrozen && !adminOverrideUnlocked;
-  // State for chat panel
+  
+  const [isConfirmSkipOpen, setIsConfirmSkipOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
@@ -291,6 +314,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
   const scheduledDate = siteVisit.auditDate || siteVisit.preferredDate;
   const scheduledTime = siteVisit.auditTime || siteVisit.preferredTime;
   const scheduledAddress = siteVisit.customerAddress;
+  const isSkipped = scheduledAddress?.startsWith("Skipped");
 
   return (
     <div className="space-y-6 text-slate-800">
@@ -325,7 +349,15 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
       )}
       
       {/* ── SCHEDULED VISIT DETAILS (from customer portal) ── */}
-      {scheduledDate || scheduledAddress ? (
+      {isSkipped ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 shadow-xs text-center flex flex-col items-center justify-center">
+          <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mb-3">
+            <CheckCircle2 size={24} className="text-amber-600" />
+          </div>
+          <h4 className="text-sm font-bold text-amber-900 mb-1">Site Visit Skipped</h4>
+          <p className="text-xs text-amber-700 max-w-sm">The site visit has been skipped for this order. You can proceed with adding manual measurements below.</p>
+        </div>
+      ) : (scheduledDate || scheduledAddress) ? (
         <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-2xl p-5 shadow-xs">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-2">
@@ -335,6 +367,14 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               </h3>
             </div>
             <div className="flex items-center gap-2">
+              {onSkipSiteVisit && !isFrozen && (
+                <button
+                  onClick={() => setIsConfirmSkipOpen(true)}
+                  className="px-3 py-1.5 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold rounded-lg hover:bg-amber-100 transition-colors shadow-sm whitespace-nowrap"
+                >
+                  Skip Visit & Add Values
+                </button>
+              )}
               {!isFrozen && (
                 <button
                   onClick={() => setIsScheduleModalOpen(true)}
@@ -352,11 +392,11 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {/* Date & Time */}
             {(scheduledDate || scheduledTime) && (
-              <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="bg-white rounded-xl p-3 border border-indigo-100 shadow-sm flex flex-col justify-center">
+                <div className="flex items-center gap-2 mb-1">
                   <Clock size={14} className="text-indigo-500" />
                   <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
                     Visit Schedule
@@ -371,7 +411,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   }) : scheduledDate}
                 </p>
                 {scheduledTime && (
-                  <p className="text-xs font-semibold text-indigo-700 mt-1">
+                  <p className="text-xs font-semibold text-indigo-700 mt-0.5">
                     At {scheduledTime}
                   </p>
                 )}
@@ -380,42 +420,52 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
 
             {/* Address */}
             {scheduledAddress && (
-              <div className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm md:col-span-2">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="bg-white rounded-xl p-3 border border-indigo-100 shadow-sm flex flex-col justify-center">
+                <div className="flex items-center gap-2 mb-1">
                   <MapPin size={14} className="text-indigo-500" />
                   <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">
                     Site Address
                   </span>
                 </div>
-                <p className="text-sm font-semibold text-slate-800">
+                <p className="text-xs font-semibold text-slate-800 line-clamp-2">
                   {scheduledAddress}
                 </p>
                 {siteVisit.landmark && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="text-[10px] text-slate-500 mt-0.5 truncate">
                     Near: {siteVisit.landmark}
                   </p>
                 )}
                 {siteVisit.gpsLocation && (
-                  <p className="text-xs text-slate-400 mt-1 font-mono">
+                  <p className="text-[10px] text-slate-400 mt-0.5 font-mono truncate">
                     GPS: {siteVisit.gpsLocation}
                   </p>
                 )}
+                
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(siteVisit.gpsLocation || scheduledAddress)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition-colors border border-indigo-100"
+                  className="inline-flex items-center gap-1 mt-2 text-indigo-600 hover:text-indigo-800 text-[10px] font-bold transition-colors w-max"
                 >
-                  <MapPin size={12} />
-                  View Map Location
+                  <MapPin size={10} />
+                  Open in Google Maps
                 </a>
               </div>
             )}
 
-
-
-
-
+            {/* Map */}
+            {scheduledAddress && mapCenter && isLoaded && (
+              <div className="h-24 md:h-full w-full rounded-xl overflow-hidden border border-slate-200 relative bg-slate-100">
+                <GoogleMap
+                  mapContainerStyle={{ width: "100%", height: "100%" }}
+                  center={mapCenter}
+                  zoom={15}
+                  options={{ streetViewControl: false, mapTypeControl: false, disableDefaultUI: true }}
+                >
+                  <Marker position={mapCenter} />
+                </GoogleMap>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -429,13 +479,23 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
               <p className="text-xs text-slate-500 mt-0.5">The client has not yet scheduled their site visit date, time, and location from the customer portal.</p>
             </div>
           </div>
-          <button 
-            onClick={() => setIsScheduleModalOpen(true)}
-            disabled={isFrozen}
-            className="px-4 py-2 bg-emerald-600 text-white font-semibold text-xs rounded-lg whitespace-nowrap hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Schedule by yourself
-          </button>
+          <div className="flex items-center gap-2">
+            {onSkipSiteVisit && !isFrozen && (
+              <button
+                onClick={() => setIsConfirmSkipOpen(true)}
+                className="px-4 py-2 bg-amber-100 text-amber-700 font-semibold text-xs rounded-lg whitespace-nowrap hover:bg-amber-200 transition-colors shadow-sm"
+              >
+                Skip Visit & Add Values
+              </button>
+            )}
+            <button 
+              onClick={() => setIsScheduleModalOpen(true)}
+              disabled={isFrozen}
+              className="px-4 py-2 bg-emerald-600 text-white font-semibold text-xs rounded-lg whitespace-nowrap hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Schedule by yourself
+            </button>
+          </div>
         </div>
       )}
 
@@ -470,6 +530,36 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
           }
         }}
       />
+
+      {isConfirmSkipOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
+            <h2 className="text-lg font-black text-slate-900 mb-2">Confirm Skip Site Visit</h2>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              Are you sure you want to skip the site visit? This will bypass the scheduling phase and move directly to adding measurements. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsConfirmSkipOpen(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setIsConfirmSkipOpen(false);
+                  if (onSkipSiteVisit) {
+                    await onSkipSiteVisit();
+                  }
+                }}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl transition-colors shadow-sm"
+              >
+                Skip Site Visit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* ── TOP TOGGLABLE BAR & READY CHECKBOX ── */}
       <div className="bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all duration-300">

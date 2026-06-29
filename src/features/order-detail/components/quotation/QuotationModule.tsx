@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { 
   Plus, Trash2, Search, Check, ChevronDown, Info, X,
-  Sparkles, ShieldCheck, ClipboardList, IndianRupee, Loader2, AlertCircle, Package
+  Sparkles, ShieldCheck, ClipboardList, IndianRupee, Loader2, AlertCircle, Package, Save
 } from "lucide-react";
 import { 
   upsertQuotation, 
@@ -89,6 +89,7 @@ interface QuotationModuleProps {
   products: Product[];
   initialQuotation: Quotation | null;
   siteVisitItems?: SiteVisitItem[];
+  currentUserRole?: string;
 }
 
 const GST_OPTIONS = [0, 5, 12, 18, 28];
@@ -317,6 +318,7 @@ function ProductSearch({
 export const QuotationModule: React.FC<QuotationModuleProps> = ({
   order,
   isEmployee,
+  currentUserRole = "Customer",
   products,
   initialQuotation,
   siteVisitItems = [],
@@ -392,7 +394,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
   // Core metadata states
   const [quotationId, setQuotationId] = useState(
-    initialQuotation?.quotation_id ?? (order.customerId ? `QT-${order.customerId.split('-')[0].toUpperCase()}` : "")
+    initialQuotation?.quotation_id ?? (order.orderCode ? order.orderCode.replace("ORD-", "Q") : `Q-${Math.floor(Math.random() * 1000)}`)
   );
   const [status, setStatus] = useState<"Draft" | "Sent" | "Approved" | "Rejected" | "Pending Approval">(
     initialQuotation?.status ?? "Draft"
@@ -502,7 +504,12 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
   const tax = subtotal > 0 ? Math.round(totalGst * (1 - discount / subtotal) * 100) / 100 : 0;
   const grandTotal = Math.round((subtotal - discount + tax + shipping) * 100) / 100;
 
-  const isLocked = (status === "Sent" || status === "Approved" || status === "Pending Approval") && isEmployee;
+  // For staff (Employee), lock it if it's sent, approved, or pending approval.
+  // For Admin, only lock it if it's Approved or Sent, but NOT when Pending Approval (Admin needs to edit/approve).
+  // Note: currentUserRole gives us exact role.
+  const isLocked = currentUserRole === "Admin" 
+    ? (status === "Sent" || status === "Approved")
+    : (status === "Sent" || status === "Approved" || status === "Pending Approval");
   const orderStage = order.stage || "";
 
   // ── Sync Global Tax to Line Items ──
@@ -729,11 +736,9 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
             <input
               type="text"
               value={quotationId}
-              disabled={isLocked}
-              onChange={(e) => setQuotationId(e.target.value)}
-              placeholder="Auto-generated"
-              className="text-xs font-mono text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded bg-transparent px-1 py-0.5"
-              style={{ width: "120px" }}
+              readOnly={true}
+              className="text-xs font-mono text-slate-700 bg-slate-100/50 border border-slate-200 cursor-not-allowed rounded px-2 py-1"
+              style={{ width: "90px" }}
             />
           </div>
         </div>
@@ -1348,74 +1353,60 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
       {/* Action Buttons Row */}
       {(() => {
         const portalTarget = isMounted ? document.getElementById("modal-footer-portal") : null;
+        
+        const isEmployee = currentUserRole === "Employee";
+        const isAdmin = currentUserRole === "Admin";
+        
         const actionButtons = (
           <>
-            {/* Employee Action Buttons */}
-            {isEmployee && !isLocked && (
-              <>
+            {!isLocked ? (
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleSave}
                   disabled={isPending}
-                  className="py-2 px-4 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-black text-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
                 >
-                  {isPending ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
+                  {isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                   Save Draft
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setPendingAction("admin")}
-                  disabled={pushingToAdmin || grandTotal === 0}
-                  className="py-2 px-4 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  {pushingToAdmin ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
-                  Push to Admin
-                </button>
-              </>
-            )}
-
-            {isEmployee && isLocked && (
-              <div className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
-                <Check size={14} /> Submitted & Locked
-              </div>
-            )}
-
-            {/* Admin Action Buttons */}
-            {!isEmployee && status !== "Approved" && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={isPending}
-                  className="py-2 px-4 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-black text-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  {isPending ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
-                  Save Draft
-                </button>
-                {status === "Pending Approval" && (
+                
+                {isEmployee && (
+                  <button
+                    type="button"
+                    onClick={() => setPendingAction("admin")}
+                    disabled={isPending || sections.length === 0}
+                    className="py-2 px-4 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Check size={14} /> Push to Admin
+                  </button>
+                )}
+                
+                {isAdmin && status === "Pending Approval" && (
                   <button
                     type="button"
                     onClick={handleRejectToDraft}
                     disabled={isPending}
-                    className="py-2 px-4 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                    className="py-2 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Reject & Return to Draft
+                    <AlertCircle size={14} /> Request Changes
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setPendingAction("customer")}
-                  disabled={sendingToCustomer || grandTotal === 0}
-                  className="py-2 px-4 bg-[#22c55e] hover:bg-[#16a34a] text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
-                >
-                  {sendingToCustomer ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />}
-                  {status === "Sent" ? "Re-send to Customer" : "Approve & Send to Customer"}
-                </button>
-              </>
-            )}
-            {!isEmployee && status === "Approved" && (
-              <div className="py-2 px-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
-                <Check size={14} /> Customer Approved
+                
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setPendingAction("customer")}
+                    disabled={isPending || sections.length === 0}
+                    className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Check size={14} /> Push to Customer
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="py-2 px-4 bg-slate-100 border border-slate-200 text-slate-500 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm">
+                <Check size={14} /> Submitted & Locked
               </div>
             )}
           </>

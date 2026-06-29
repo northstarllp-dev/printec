@@ -517,6 +517,25 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
           onClose={onClose} onUpdate={(d) => updateSiteVisitDetails(order.id, d)}
           onSubmitForApproval={handleRequestAdvancement}
           onAdminApprove={async (): Promise<void> => { await handleAdminApprove(); }}
+          onSkipSiteVisit={async () => {
+            const now = new Date().toISOString();
+            const newDetails = {
+              ...(order.siteVisitDetails || {}),
+              auditDate: now.split("T")[0],
+              auditTime: now.split("T")[1].substring(0, 5),
+              customerAddress: "Skipped - Direct Measurement (Manual Entry)",
+              gpsLocation: "N/A"
+            };
+            
+            // Save to DB directly
+            await updateSiteVisitDetailsAction(order.id, newDetails);
+            
+            // Update local state
+            setOrder(prev => ({ ...prev, siteVisitDetails: newDetails as any }));
+            
+            // Advance stage
+            await handleUpdateOrderStage(order.id, "Site Visit Scheduled");
+          }}
           adminOverrideUnlocked={adminOverrideUnlocked}
           setAdminOverrideUnlocked={setAdminOverrideUnlocked}
         />
@@ -532,6 +551,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             stage: order.stage,
           }}
           isEmployee={isStaffOrAdmin}
+          currentUserRole={currentUserRole}
           products={products as any}
           initialQuotation={initialQuotation}
           siteVisitItems={siteVisitItems}
@@ -748,6 +768,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                         onMouseLeave={(e) => { e.currentTarget.style.background = "#0F172A"; }}
                       >
                         <Lock size={14} /> Admin Controls
+                        {order.stageStatus && order.stageStatus !== "Normal" && (
+                          <span className="flex items-center justify-center w-4 h-4 ml-1 text-[10px] font-bold text-white bg-red-500 rounded-full animate-pulse shadow-sm">
+                            1
+                          </span>
+                        )}
                       </button>
                     </>
                   )}
