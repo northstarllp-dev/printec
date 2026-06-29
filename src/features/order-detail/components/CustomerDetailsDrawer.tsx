@@ -1,0 +1,224 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { X, User, Phone, MessageCircle, Mail, MapPin, Building2, Calendar, FileText, Loader2, ArrowRight } from "lucide-react";
+import { Customer, Enquiry } from "@/types";
+import { getEnquiryByOrderId } from "@/features/enquiries/actions/enquiryActions";
+
+interface CustomerDetailsDrawerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  customer: Customer;
+  orderId: string;
+}
+
+export const CustomerDetailsDrawer: React.FC<CustomerDetailsDrawerProps> = ({
+  isOpen,
+  onClose,
+  customer,
+  orderId,
+}) => {
+  const [enquiry, setEnquiry] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && orderId) {
+      const fetchEnquiry = async () => {
+        setLoading(true);
+        try {
+          const data = await getEnquiryByOrderId(orderId);
+          setEnquiry(data);
+        } catch (error) {
+          console.error("Failed to fetch enquiry:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchEnquiry();
+    }
+  }, [isOpen, orderId]);
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-[999]" 
+        onClick={onClose}
+        style={{ animation: "fadeIn 0.2s ease-out" }}
+      />
+      
+      {/* Drawer */}
+      <div 
+        className="fixed inset-y-0 right-0 w-[420px] bg-[#F8FAFC] shadow-2xl z-[1000] border-l border-slate-200 flex flex-col"
+        style={{ animation: "slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)" }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 bg-white border-b border-slate-200 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+              <User size={20} className="text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-800 leading-tight">{customer.name}</h2>
+              <div className="text-xs font-semibold text-slate-500 mt-0.5 font-mono">
+                {customer.customerCode || customer.customerId || "No ID"}
+              </div>
+            </div>
+          </div>
+          <button 
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          
+          {/* Contact Section (Bento Style) */}
+          <section>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3 ml-1">Contact Details</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 bg-white rounded-xl p-4 border border-slate-200 shadow-sm flex items-center justify-between group">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                    <MessageCircle size={16} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">WhatsApp</div>
+                    <div className="text-sm font-semibold text-slate-700">{customer.whatsapp || customer.phone || "N/A"}</div>
+                  </div>
+                </div>
+                {customer.whatsapp && (
+                  <a href={`https://wa.me/${customer.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 opacity-0 group-hover:opacity-100 transition-all hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200">
+                    <ArrowRight size={14} />
+                  </a>
+                )}
+              </div>
+
+              <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Phone size={14} className="text-slate-400" />
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">Phone</div>
+                </div>
+                <div className="text-sm font-semibold text-slate-700 truncate">{customer.phone || "N/A"}</div>
+              </div>
+
+              <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Mail size={14} className="text-slate-400" />
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">Email</div>
+                </div>
+                <div className="text-sm font-semibold text-slate-700 truncate" title={customer.email}>{customer.email || "N/A"}</div>
+              </div>
+            </div>
+          </section>
+
+          {/* Location Section */}
+          <section>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3 ml-1">Addresses</h3>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-slate-100 flex items-start gap-3">
+                <MapPin size={16} className="text-rose-500 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Billing Address</div>
+                  <div className="text-xs font-medium text-slate-700 leading-relaxed">
+                    {customer.billingAddress || "No billing address provided."}
+                  </div>
+                  {customer.city && <div className="text-xs text-slate-500 mt-1">{customer.city}</div>}
+                </div>
+              </div>
+              <div className="p-4 flex items-start gap-3 bg-slate-50/50">
+                <Building2 size={16} className="text-indigo-500 shrink-0 mt-0.5" />
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">Shipping Address</div>
+                  <div className="text-xs font-medium text-slate-700 leading-relaxed">
+                    {customer.shippingAddress || "Same as billing address."}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Original Enquiry Section */}
+          <section>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-3 ml-1 flex items-center justify-between">
+              Original Enquiry Context
+              {loading && <Loader2 size={12} className="animate-spin text-slate-300" />}
+            </h3>
+            
+            {loading ? (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 flex flex-col items-center justify-center text-center">
+                <Loader2 size={24} className="animate-spin text-slate-300 mb-2" />
+                <div className="text-xs font-medium text-slate-500">Fetching enquiry data...</div>
+              </div>
+            ) : enquiry ? (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="grid grid-cols-2 divide-x divide-slate-100 border-b border-slate-100">
+                  <div className="p-4">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Calendar size={14} className="text-slate-400" />
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Received</div>
+                    </div>
+                    <div className="text-xs font-semibold text-slate-800">
+                      {new Date(enquiry.dateReceived || enquiry.date_received).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </div>
+                  </div>
+                  <div className="p-4 bg-slate-50/30">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      <div className="text-[10px] font-bold text-slate-400 uppercase">Source</div>
+                    </div>
+                    <div className="text-xs font-semibold text-slate-800">{enquiry.source || "N/A"}</div>
+                  </div>
+                </div>
+                
+                <div className="p-4 bg-slate-50/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText size={14} className="text-slate-400" />
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Notes</div>
+                  </div>
+                  <div className="text-xs text-slate-600 leading-relaxed font-medium bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                    {enquiry.notes || "No initial notes recorded."}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 text-center">
+                <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-3">
+                  <FileText size={16} className="text-slate-300" />
+                </div>
+                <div className="text-xs font-medium text-slate-500">No linked enquiry found for this order.</div>
+              </div>
+            )}
+          </section>
+
+        </div>
+        
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-200 bg-white shrink-0 flex justify-end">
+          <button 
+            onClick={onClose}
+            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            Close Details
+          </button>
+        </div>
+      </div>
+      
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes slideInRight {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      `}} />
+    </>
+  );
+}

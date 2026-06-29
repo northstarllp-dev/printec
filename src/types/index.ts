@@ -103,15 +103,6 @@ export interface SiteVisitDetails {
 
   locations?: SignLocation[]; // Updated to use new SignLocation type
 
-  // Internal Notes (Admin only)
-  internalNotes?: {
-    customerPreferences?: string;
-    budgetNotes?: string;
-    suggestedProductType?: string;
-    competitorReferences?: string;
-    specialInstallationNotes?: string;
-    voiceNotes?: string[];
-  };
 
   // Stage 5: Review & Statuses
   reviewStatus?: "Approved" | "Revisit" | "MoreInfo" | "Pending" | "Pending Admin Approval" | "Draft" | "Needs Revision" | "Rejected" | "Staff Approved";

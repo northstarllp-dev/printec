@@ -1016,7 +1016,7 @@ function QuotationTab({
           </div>
         )}
 
-        {qd.status !== "Approved" && (order.stage === "Quotation Sent" || order.stage === "Quotation Negotiation") && (
+        {qd.status !== "Approved" && order.stage?.includes("Quotation") && (
           <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
             <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed to Design</p>
             {showQuoteDeclineInput ? (

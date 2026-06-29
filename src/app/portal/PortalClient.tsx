@@ -538,6 +538,39 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
               </div>
 
               <div className="p-6">
+                {/* ── ENQUIRIES STAGE ── */}
+                {activeStepToRender === 0 && (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-xl font-black text-[#0b1c30] mb-1">Enquiry Details</h2>
+                      <p className="text-sm text-slate-500">Your original request and project requirements.</p>
+                    </div>
+                    
+                    <div className="p-5 border border-slate-200 rounded-2xl bg-white shadow-sm space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Project Name</span>
+                          <p className="font-semibold text-slate-800">{activeOrder.projectName}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Product Type</span>
+                          <p className="font-semibold text-slate-800">{activeOrder.productType || "Not Specified"}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Requirements</span>
+                          <p className="font-semibold text-slate-800 whitespace-pre-line">{activeOrder.requirements || "No requirements provided."}</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Date Created</span>
+                          <p className="font-semibold text-slate-800">{new Date(activeOrder.dateCreated).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* ── SITE VISIT STAGE ── */}
                 {activeStepToRender === 1 && (
                   <>
@@ -700,7 +733,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                               {sv.locations.map((loc: any, idx: number) => (
-                                <div key={idx} className="group bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+                                <div key={idx} className={`group bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 ${sv.locations.length % 2 !== 0 && idx === sv.locations.length - 1 ? 'md:col-span-2' : ''}`}>
                                   {/* Header */}
                                   <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                                     <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
@@ -716,25 +749,25 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                                       {loc.width ? (
                                         <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Width</span>
-                                          <p className="font-semibold text-slate-800 font-mono">{loc.width}</p>
+                                          <p className="font-semibold text-slate-800 font-mono">{loc.width} {loc.widthUnit || "in"}</p>
                                         </div>
                                       ) : null}
                                       {loc.height ? (
                                         <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Height</span>
-                                          <p className="font-semibold text-slate-800 font-mono">{loc.height}</p>
+                                          <p className="font-semibold text-slate-800 font-mono">{loc.height} {loc.heightUnit || "in"}</p>
                                         </div>
                                       ) : null}
                                       {loc.depth ? (
                                         <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Depth</span>
-                                          <p className="font-semibold text-slate-800 font-mono">{loc.depth}</p>
+                                          <p className="font-semibold text-slate-800 font-mono">{loc.depth} {loc.depthUnit || "in"}</p>
                                         </div>
                                       ) : null}
                                       {loc.groundClearance ? (
                                         <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-1">Ground Clr.</span>
-                                          <p className="font-semibold text-slate-800 font-mono">{loc.groundClearance}</p>
+                                          <p className="font-semibold text-slate-800 font-mono">{loc.groundClearance} {loc.groundClearanceUnit || "in"}</p>
                                         </div>
                                       ) : null}
                                     </div>
@@ -1000,7 +1033,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                       </div>
                     )}
 
-                    {qd.status !== "Approved" && (activeOrder?.stage === "Quotation Sent" || activeOrder?.stage === "Quotation Negotiation") && (
+                    {qd.status !== "Approved" && activeOrder?.stage?.includes("Quotation") && (
                       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
                         <p className="text-xs font-bold text-[#1E40AF]">Approve this quotation to proceed to Design</p>
                         {showQuoteDeclineInput ? (

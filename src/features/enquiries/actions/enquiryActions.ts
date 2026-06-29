@@ -42,6 +42,20 @@ export async function getEnquiries() {
   return data;
 }
 
+export async function getEnquiryByOrderId(orderId: string) {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from("enquiries")
+    .select("*")
+    .eq("order_id", orderId)
+    .single();
+    
+  if (error && error.code !== "PGRST116") { // Ignore not found error
+    throw new Error(error.message);
+  }
+  return data;
+}
+
 export async function createEnquiry(formData: any) {
   const supabase = await getSupabase();
 

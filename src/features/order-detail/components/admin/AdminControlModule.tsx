@@ -54,13 +54,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   const [revoking, setRevoking] = useState(false);
   const [revokeResult, setRevokeResult] = useState<string | null>(null);
 
-  // Local state for internal notes
-  const sv = order.siteVisitDetails || {} as SiteVisitDetails;
-  const inotes = sv.internalNotes || {};
-  
-  const [customerPreferences, setCustomerPreferences] = useState(inotes.customerPreferences || "");
-  const [budgetNotes, setBudgetNotes] = useState(inotes.budgetNotes || "");
-  const [suggestedProductType, setSuggestedProductType] = useState(inotes.suggestedProductType || "");
 
   useEffect(() => {
     setSelectedEmployeeIds(new Set(order.assignedEmployees || []));
@@ -107,24 +100,6 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
     }
   };
 
-  const handleSaveInternalNotes = async () => {
-    try {
-      setSavingNotes(true);
-      await updateSiteVisitDetails(order.id, {
-        internalNotes: {
-          ...inotes,
-          customerPreferences,
-          budgetNotes,
-          suggestedProductType
-        }
-      });
-      alert("Internal notes saved!");
-    } catch (e) {
-      alert("Failed to save notes");
-    } finally {
-      setSavingNotes(false);
-    }
-  };
 
   return (
     <div className="space-y-6 max-w-none">
@@ -275,56 +250,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
         </div>
       </div>
 
-      {/* ── INTERNAL NOTES (ADMIN ONLY) ── */}
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-xs overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <FileText size={18} className="text-slate-300" />
-            <h3 className="text-sm font-extrabold text-white uppercase tracking-wider">Internal Administrative Settings</h3>
-          </div>
-          <button
-            onClick={handleSaveInternalNotes}
-            disabled={savingNotes}
-            className="px-4 py-1.5 bg-[#1E40AF] text-white rounded-lg text-xs font-bold hover:bg-blue-800 transition-colors disabled:opacity-50"
-          >
-            {savingNotes ? "Saving..." : "Save Notes"}
-          </button>
-        </div>
-        <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Customer Preferences / Demands</label>
-            <textarea
-              value={customerPreferences}
-              onChange={(e) => setCustomerPreferences(e.target.value)}
-              rows={3}
-              placeholder="e.g. Strongly prefers warm white LEDs over cool white..."
-              className="w-full px-3 py-2 border border-slate-600 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-900 text-white transition-all resize-none"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Internal Budgeting Notes</label>
-            <textarea
-              value={budgetNotes}
-              onChange={(e) => setBudgetNotes(e.target.value)}
-              rows={3}
-              placeholder="e.g. Scaffolding rental is max ₹5k..."
-              className="w-full px-3 py-2 border border-slate-600 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-900 text-white transition-all resize-none"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Suggested Signage Board Style</label>
-            <input
-              type="text"
-              value={suggestedProductType}
-              onChange={(e) => setSuggestedProductType(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-600 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-900 text-white transition-all"
-              placeholder="e.g. 3D Acrylic Letters on ACP base"
-            />
-          </div>
-        </div>
-      </div>
+
 
     </div>
   );

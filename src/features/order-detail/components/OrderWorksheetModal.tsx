@@ -9,6 +9,7 @@ import {
   Check, Share2, Pencil, CheckCircle2,
   MapPin, FileText, LayoutDashboard, CheckSquare,
   ArrowLeft, MoreVertical, Lock, Save,
+  BarChart3, Palette, Package, Wrench, User,
 } from "lucide-react";
 import {
   Order, PipelineStage, SiteVisitDetails,
@@ -22,6 +23,7 @@ import LoadingLines from "@/components/ui/loading-lines";
 import { ProductionModule } from "./production/ProductionModule";
 import { AdminControlModule } from "./admin/AdminControlModule";
 import { InstallationModule } from "./installation/InstallationModule";
+import { CustomerDetailsDrawer } from "./CustomerDetailsDrawer";
 import {
   updateSiteVisitDetailsAction,
   updateDesignDetailsAction,
@@ -150,9 +152,9 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     message: string;
     type: "info" | "success" | "warning" | "error";
   } | null>(null);
-  const [activeStepTab, setActiveStepTab] = useState<number>(
-    stageToTabIndex(initialOrder.stage)
-  );
+  const [activeTab, setActiveTab] = useState(0);
+  const [activeStepTab, setActiveStepTab] = useState(stageToTabIndex(initialOrder.stage));
+  const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [activeRightPanel, setActiveRightPanel] = useState<"logs" | "chat" | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
   const [adminOverrideUnlocked, setAdminOverrideUnlocked] = useState(false);
@@ -472,16 +474,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
       ) : (
         (!isCurrentTabFrozen && (
           <>
-            <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+            <button onClick={handleSaveDraft} style={{ padding: "6px 14px", border: "1px solid #E2E8F0", background: "white", color: "#0F172A", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
               {activeStepTab === 2 ? <><Send size={13} /> Send to Customer</> : <><Save size={13} /> Save Draft</>}
             </button>
             {isEmployee ? (
-              <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+              <button onClick={handleRequestAdvancement} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "800", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
                 <CheckCircle2 size={13} /> Push for Approval
               </button>
             ) : (
               currentStageIndex === activeStepTab && order.stageStatus === "Normal" && (
-                <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "all 0.15s" }}>
+                <button onClick={handleAdminApprove} style={{ padding: "6px 14px", background: "#22C55E", border: "none", color: "white", borderRadius: "6px", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", transition: "color 0.15s, background-color 0.15s" }}>
                   <Check size={13} /> Approve & Advance
                 </button>
               )
@@ -554,21 +556,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
 
   /* ── Workflow steps for middle panel ── */
   const workflowSteps = [
-    ...(isEmployee ? [] : [{ label: "Enquiry", tabIndex: -1, done: true }]),
-    ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: 99, done: false }]),
-    { label: "Site Visit", tabIndex: 0, done: currentStageIndex > 0 },
-    { label: "Quote", tabIndex: 1, done: currentStageIndex > 1 },
-    { label: "Design", tabIndex: 2, done: currentStageIndex > 2 },
-    { label: "Production", tabIndex: 3, done: currentStageIndex > 3 },
-    { label: "Installation", tabIndex: 4, done: currentStageIndex > 4 },
+    ...(isEmployee ? [] : [{ label: "Enquiries", tabIndex: -1, done: true, icon: FileText }]),
+    ...(isEmployee ? [] : [{ label: "Admin Controls", tabIndex: 99, done: false, icon: Lock }]),
+    { label: "Site Visit", tabIndex: 0, done: currentStageIndex > 0, icon: MapPin },
+    { label: "Quote", tabIndex: 1, done: currentStageIndex > 1, icon: BarChart3 },
+    { label: "Design", tabIndex: 2, done: currentStageIndex > 2, icon: Palette },
+    { label: "Production", tabIndex: 3, done: currentStageIndex > 3, icon: Package },
+    { label: "Installation", tabIndex: 4, done: currentStageIndex > 4, icon: Wrench },
   ];
 
   const activeModuleTitle = activeStepTab === 99 ? "Admin Control Panel" : ["Site Visit Audit", "Product Quote", "Design Proof", "Fabrication Checklist", "Field Installation"][activeStepTab] || "Order Details";
-
-  /* ── Counts for top bar pills ── */
-  const activeCount = allOrders.filter((o) => o.stage !== "Completed" && o.stage !== "Closed").length;
-  const quotingCount = allOrders.filter((o) => o.stage?.startsWith("Quotation")).length;
-  const doneCount = allOrders.filter((o) => o.stage === "Completed" || o.stage === "Closed").length;
 
   return (
     <div style={{ position: "relative", display: "flex", flexDirection: "column", flex: 1, height: "100%", maxHeight: "100%", overflow: "hidden", background: "#F8FAFC" }}>
@@ -589,17 +586,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
         <div style={{ width: "1px", height: "20px", background: "#E2E8F0" }} />
         <span style={{ fontSize: "14px", fontWeight: "700", color: "#0F172A" }}>Order Management</span>
 
-        <div className="hidden md:flex" style={{ gap: "8px", marginLeft: "auto", alignItems: "center" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: "4px", background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", fontWeight: "700", color: "#2563EB" }}>
-            ↑ {activeCount} Active
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: "4px", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", fontWeight: "700", color: "#EA580C" }}>
-            ◉ {quotingCount} Quoting
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: "4px", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", fontWeight: "700", color: "#16A34A" }}>
-            ✓ {doneCount} Done
-          </span>
-        </div>
+        <div style={{ marginLeft: "auto" }} />
 
         {localAlert && (
           <div style={{
@@ -645,7 +632,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                     background: orderTab === tab ? "var(--color-secondary)" : "transparent",
                     color: orderTab === tab ? "white" : "#94A3B8",
                     border: "none", borderRadius: "6px", cursor: "pointer",
-                    textTransform: "capitalize", transition: "all 0.15s",
+                    textTransform: "capitalize", transition: "color 0.15s, background-color 0.15s",
                   }}
                 >
                   {tab === "all" ? "All" : tab === "active" ? "Active" : "Pending"}
@@ -675,7 +662,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
                       cursor: "pointer",
                       background: isSelected ? "linear-gradient(to right, #FFF7ED, transparent)" : "white",
                       borderLeft: isSelected ? "3px solid #F97316" : "3px solid transparent",
-                      transition: "all 0.15s",
+                      transition: "color 0.15s, background-color 0.15s",
                     }}
                     onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "#F8FAFC"; }}
                     onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "white"; }}
@@ -723,108 +710,127 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             {/* Top row: Order Info & Customer */}
             <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "12px", padding: "16px 0", borderBottom: "1px solid #F1F5F9" }}>
               <div>
-                <div style={{ fontSize: "11px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "4px" }}>
+                <div style={{ fontSize: "11px", fontWeight: "700", color: "#94A3B8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
                   {order.orderCode}
                 </div>
-                <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#0F172A", lineHeight: 1.2 }}>
-                  {order.projectName}
-                </h2>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                  <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "800", color: "#0F172A", lineHeight: 1.2 }}>
+                    {order.projectName}
+                  </h2>
+                </div>
               </div>
 
-              {/* Customer Info Mini-Bar */}
-              {client && (
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", background: "#F8FAFC", padding: "6px 16px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                  <div style={{ fontSize: "12px", fontWeight: "700", color: "#0F172A" }}>{client.name}</div>
-                  {client.phone && (
-                    <div style={{ fontSize: "12px", color: "#64748B" }}>
-                      📞 {isEmployee ? (client.phone.replace(/\D/g, "").length < 4 ? "****" : client.phone.replace(/\D/g, "").slice(0, 2) + "******" + client.phone.replace(/\D/g, "").slice(-2)) : client.phone}
-                    </div>
-                  )}
+              {/* Customer Info & Actions */}
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <button
+                    onClick={() => setShowCustomerPanel(true)}
+                    style={{ background: "transparent", border: "1px solid #E2E8F0", color: "#475569", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", transition: "all 0.15s" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#0F172A"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#475569"; }}
+                  >
+                    <User size={14} /> Customer Details
+                  </button>
                   {!isEmployee && (
                     <>
-                      <div style={{ width: "1px", height: "14px", background: "#CBD5E1" }} />
                       <button
                         onClick={handleCopyMagicLink}
-                        style={{ background: "none", border: "none", color: "#F97316", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                        style={{ background: "transparent", border: "1px solid #E2E8F0", color: "#475569", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", transition: "all 0.15s" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#0F172A"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#475569"; }}
                       >
-                        <Share2 size={12} /> {copiedLink ? "Copied!" : "Portal"}
+                        <Share2 size={14} /> {copiedLink ? "Copied!" : "Portal"}
                       </button>
-                      <div style={{ width: "1px", height: "14px", background: "#CBD5E1" }} />
                       <button
                         onClick={() => setActiveStepTab(99)}
-                        style={{ background: activeStepTab === 99 ? "var(--color-secondary)" : "none", border: "none", color: activeStepTab === 99 ? "white" : "#0F172A", fontSize: "12px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", padding: "4px 8px", borderRadius: "6px", transition: "all 0.15s" }}
+                        style={{ background: "#0F172A", border: "none", color: "white", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", padding: "6px 12px", borderRadius: "6px", transition: "background-color 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = "#334155"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = "#0F172A"; }}
                       >
-                        <Lock size={12} /> Admin Controls
+                        <Lock size={14} /> Admin Controls
                       </button>
                     </>
                   )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Horizontal Timeline */}
-            {activeStepTab !== 99 && (
-              <div className="hidden md:flex" style={{ position: "relative", paddingTop: "24px", paddingBottom: "0px", justifyContent: "space-between" }}>
-                {/* Background Connecting Line */}
-                <div style={{ position: "absolute", top: "36px", left: "40px", right: "40px", height: "2px", background: "#E2E8F0", zIndex: 0 }} />
+            {activeStepTab !== 99 && (() => {
+              const visibleSteps = workflowSteps.filter(s => s.tabIndex !== 99);
+              const activeIndex = visibleSteps.findIndex(s => s.tabIndex === activeStepTab);
+              const filledPct = visibleSteps.length > 1
+                ? (activeIndex / (visibleSteps.length - 1)) * 100
+                : 0;
+              const insetPct = visibleSteps.length > 0 ? 100 / (2 * visibleSteps.length) : 0;
+              return (
+                <div className="hidden md:flex" style={{ position: "relative", paddingTop: "24px", paddingBottom: "16px", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  {/* Grey base line */}
+                  <div style={{ position: "absolute", top: "42px", left: `${insetPct}%`, right: `${insetPct}%`, height: "2.5px", background: "#E2E8F0", borderRadius: "99px", zIndex: 0 }} />
+                  {/* Green filled progress line */}
+                  <div style={{ position: "absolute", top: "42px", left: `${insetPct}%`, width: `calc((100% - ${insetPct * 2}%) * ${filledPct / 100})`, height: "2.5px", background: "#22C55E", borderRadius: "99px", zIndex: 1, transition: "width 0.45s ease" }} />
 
-                {workflowSteps.filter(s => s.tabIndex !== 99).map((step, i) => {
-                  const isActive = activeStepTab === step.tabIndex;
-                  const isDone = step.done || step.tabIndex < currentStageIndex;
-                  const isFuture = !isActive && !isDone;
+                  {visibleSteps.map((step, i) => {
+                    const isActive = activeStepTab === step.tabIndex;
+                    const isDone = step.done || step.tabIndex < currentStageIndex;
+                    const StepIcon = step.icon as any;
 
-                  return (
-                    <button
-                      key={step.label}
-                      onClick={() => { if (step.tabIndex >= 0) setActiveStepTab(step.tabIndex); }}
-                      disabled={step.tabIndex < 0}
-                      style={{
-                        position: "relative", zIndex: 1, background: "none", border: "none", padding: "0 10px",
-                        display: "flex", flexDirection: "column", alignItems: "center", gap: "8px",
-                        cursor: step.tabIndex >= 0 ? "pointer" : "default", width: "100px",
-                        outline: "none"
-                      }}
-                    >
-                      {/* Node */}
-                      <div style={{
-                        width: "26px", height: "26px", borderRadius: "50%",
-                        background: isActive ? "var(--color-secondary)" : isDone ? "#22C55E" : "white",
-                        border: `2px solid ${isActive ? "var(--color-secondary)" : isDone ? "#22C55E" : "#CBD5E1"}`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        boxShadow: isActive ? "0 0 0 4px #EFF6FF" : "none",
-                        transition: "all 0.2s ease",
-                        zIndex: 2
-                      }}>
-                        {isDone ? (
-                          <Check size={14} color="white" strokeWidth={3} />
-                        ) : (
-                          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: isActive ? "white" : "transparent" }} />
-                        )}
-                      </div>
+                    // Node colours
+                    const nodeBg = isDone ? "#22C55E" : isActive ? "var(--color-secondary)" : "#F8FAFC";
+                    const nodeBorder = isDone ? "#22C55E" : isActive ? "var(--color-secondary)" : "#CBD5E1";
+                    const iconColor = (isDone || isActive) ? "white" : "#94A3B8";
 
-                      {/* Label Tab matching bottom area */}
-                      <div style={{
-                        background: isActive ? "#F1F5F9" : "transparent",
-                        padding: "8px 16px",
-                        borderTopLeftRadius: "8px",
-                        borderTopRightRadius: "8px",
-                        color: isActive ? "var(--color-secondary)" : isDone ? "#475569" : "#94A3B8",
-                        fontWeight: isActive ? "800" : "600",
-                        fontSize: "12px",
-                        width: "120px",
-                        textAlign: "center",
-                        borderBottom: isActive ? "none" : "1px solid transparent",
-                        marginBottom: "-1px", // seamlessly connect to the background of the form area
-                        position: "relative",
-                        zIndex: isActive ? 3 : 1
-                      }}>
-                        {step.label}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                    // Label colours
+                    const labelColor = isDone ? "#16A34A" : isActive ? "var(--color-secondary)" : "#94A3B8";
+                    const labelWeight = isActive ? "800" : isDone ? "700" : "500";
+
+                    return (
+                      <button
+                        key={step.label}
+                        onClick={() => { if (step.tabIndex >= 0) setActiveStepTab(step.tabIndex); }}
+                        disabled={step.tabIndex < 0}
+                        style={{
+                          position: "relative", zIndex: 2, background: "none", border: "none", padding: "0 4px",
+                          display: "flex", flexDirection: "column", alignItems: "center", gap: "10px",
+                          cursor: step.tabIndex >= 0 ? "pointer" : "default", flex: 1,
+                          outline: "none"
+                        }}
+                      >
+                        {/* Node */}
+                        <div style={{
+                          width: "36px", height: "36px", borderRadius: "50%",
+                          background: nodeBg,
+                          border: `2px solid ${nodeBorder}`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          boxShadow: isActive ? "0 0 0 5px #EFF6FF" : isDone ? "0 0 0 3px #DCFCE7" : "none",
+                          transition: "all 0.25s ease",
+                          flexShrink: 0,
+                        }}>
+                          {isDone ? (
+                            <Check size={16} color="white" strokeWidth={3} />
+                          ) : (
+                            StepIcon && <StepIcon size={15} color={iconColor} strokeWidth={2} />
+                          )}
+                        </div>
+
+                        {/* Label */}
+                        <div style={{
+                          fontSize: "12px",
+                          fontWeight: labelWeight,
+                          color: labelColor,
+                          whiteSpace: "nowrap",
+                          textAlign: "center",
+                          letterSpacing: isActive ? "0.01em" : "normal",
+                          transition: "color 0.2s ease",
+                        }}>
+                          {step.label}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Module Header (if not 99, we can still show a clean title) */}
@@ -833,11 +839,11 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               {activeStepTab === 99 && (
                 <button
                   onClick={() => setActiveStepTab(stageToTabIndex(order.stage))}
-                  style={{ display: "flex", alignItems: "center", gap: "8px", background: "var(--color-primary)", border: "none", borderRadius: "8px", cursor: "pointer", color: "white", fontSize: "13px", fontWeight: "700", padding: "10px 16px", transition: "all 0.2s" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "var(--color-primary-container)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "var(--color-primary)"; }}
+                  style={{ display: "flex", alignItems: "center", gap: "6px", background: "white", border: "1px solid #E2E8F0", borderRadius: "8px", cursor: "pointer", color: "#475569", fontSize: "12px", fontWeight: "600", padding: "6px 12px", transition: "all 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; e.currentTarget.style.color = "#0F172A"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "white"; e.currentTarget.style.color = "#475569"; }}
                 >
-                  <ArrowLeft size={16} /> Back to Worksheet
+                  <ArrowLeft size={14} /> Back to Worksheet
                 </button>
               )}
               <div>
@@ -1044,6 +1050,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
               triggerLocalAlert("Failed to confirm site visit.", "error");
             }
           }}
+        />
+      )}
+      
+      {/* Customer Details Drawer */}
+      {client && (
+        <CustomerDetailsDrawer
+          isOpen={showCustomerPanel}
+          onClose={() => setShowCustomerPanel(false)}
+          customer={client}
+          orderId={initialOrder.id}
         />
       )}
     </div>

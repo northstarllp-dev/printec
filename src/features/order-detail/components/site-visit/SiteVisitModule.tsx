@@ -559,7 +559,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Width</label>
                   <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
                     <input
-                      type="number"
+                      type="number" step="any"
                       value={activeLoc.width || ""}
                       onChange={(e) => updateSignLocation(activeLoc.id, { width: parseFloat(e.target.value) || 0 })}
                       className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
@@ -580,7 +580,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Height</label>
                   <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
                     <input
-                      type="number"
+                      type="number" step="any"
                       value={activeLoc.height || ""}
                       onChange={(e) => updateSignLocation(activeLoc.id, { height: parseFloat(e.target.value) || 0 })}
                       className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
@@ -601,7 +601,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Depth</label>
                   <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
                     <input
-                      type="number"
+                      type="number" step="any"
                       value={activeLoc.depth || ""}
                       onChange={(e) => updateSignLocation(activeLoc.id, { depth: parseFloat(e.target.value) || 0 })}
                       className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
@@ -622,7 +622,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                   <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1">Ground Clearance</label>
                   <div className="flex focus-within:ring-2 focus-within:ring-[var(--color-secondary)]/20 focus-within:border-[var(--color-secondary)] border border-slate-200 rounded-xl overflow-hidden transition-all bg-white">
                     <input
-                      type="number"
+                      type="number" step="any"
                       value={activeLoc.groundClearance || ""}
                       onChange={(e) => updateSignLocation(activeLoc.id, { groundClearance: parseFloat(e.target.value) || 0 })}
                       className="w-full px-3 py-2 text-xs font-semibold focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed border-r border-slate-200"
@@ -708,7 +708,7 @@ export const SiteVisitModule: React.FC<SiteVisitModuleProps> = ({
                 <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Distance to Power Source</label>
                 <div className="flex gap-2">
                   <input
-                    type="number"
+                    type="number" step="any"
                     value={activeLoc.distanceToPowerSource || ""}
                     onChange={(e) => updateSignLocation(activeLoc.id, { distanceToPowerSource: parseFloat(e.target.value) || 0 })}
                     className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--color-secondary)]/20 focus:border-[var(--color-secondary)] bg-white transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"

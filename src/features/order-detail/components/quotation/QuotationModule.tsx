@@ -732,7 +732,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
               disabled={isLocked}
               onChange={(e) => setQuotationId(e.target.value)}
               placeholder="Auto-generated"
-              className="border-b border-dashed border-slate-300 text-xs font-mono text-slate-700 focus:outline-none focus:border-blue-500 bg-transparent px-1 py-0.5"
+              className="text-xs font-mono text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded bg-transparent px-1 py-0.5"
               style={{ width: "120px" }}
             />
           </div>
