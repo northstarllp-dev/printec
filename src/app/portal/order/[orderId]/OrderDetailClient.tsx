@@ -1223,7 +1223,7 @@ function ChatTab({ order }: { order: Order }) {
           </div>
           <div className="max-w-[70%]">
             <div className="bg-gray-100 rounded-xl p-3">
-              <p className="text-sm text-gray-900">Hi! Welcome to Printec! We have received your order and will get started soon.</p>
+              <p className="text-sm text-gray-900">Hi! Welcome to Printoms! We have received your order and will get started soon.</p>
             </div>
             <span className="text-xs text-gray-500 mt-1 block">Today at 10:00 AM</span>
           </div>

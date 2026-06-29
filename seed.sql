@@ -1,4 +1,4 @@
--- Seed Data for Printec Orders, Customers, and Enquiries
+-- Seed Data for Printoms Orders, Customers, and Enquiries
 
 -- 1. Create Mock Customers
 INSERT INTO public.customers (id, company_id, name, phone, whatsapp, email, city, billing_address, shipping_address, status)

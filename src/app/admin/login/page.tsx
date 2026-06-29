@@ -8,7 +8,7 @@ import { adminSignIn } from "@/features/auth/actions/authActions";
 export default function AdminLogin() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("admin@printec.com");
+  const [email, setEmail] = useState("admin@printoms.com");
   const [password, setPassword] = useState("adminpass");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -96,7 +96,7 @@ export default function AdminLogin() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="prt-input"
-              placeholder="admin@printec.com"
+              placeholder="admin@printoms.com"
             />
           </div>
 
@@ -141,11 +141,11 @@ export default function AdminLogin() {
             Demo Credentials
           </div>
           <div style={{ fontSize: 12, fontFamily: "monospace", color: "#0F172A", marginBottom: 10, background: "white", border: "1px solid #E2E8F0", borderRadius: 6, padding: "6px 10px" }}>
-            admin@printec.com / adminpass
+            admin@printoms.com / adminpass
           </div>
           <button
             type="button"
-            onClick={() => { setEmail("admin@printec.com"); setPassword("adminpass"); setError(""); }}
+            onClick={() => { setEmail("admin@printoms.com"); setPassword("adminpass"); setError(""); }}
             style={{ fontSize: 12, color: "var(--color-primary)", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
           >
             Quick fill credentials →

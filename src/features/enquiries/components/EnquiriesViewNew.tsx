@@ -671,13 +671,13 @@ export function WelcomeMessageModal({ isOpen, onClose, customerInfo }: WelcomeMe
 
   const messageText = `Hello ${customerInfo.customerName},
 
-Welcome to Printec! We are excited to work with you on your signage project.
+Welcome to Printoms! We are excited to work with you on your signage project.
 
 You can track your order status, approve quotations/designs, make payments, and chat directly with our team on your secure Customer Portal:
 ${portalUrl || "Loading link..."}
 
 Best regards,
-Printec Team`;
+Printoms Team`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(messageText);
@@ -693,7 +693,7 @@ Printec Team`;
   };
 
   const handleSendEmail = () => {
-    const subject = encodeURIComponent("Welcome to Printec - Customer Portal Link");
+    const subject = encodeURIComponent("Welcome to Printoms - Customer Portal Link");
     const body = encodeURIComponent(messageText);
     window.open(`mailto:${customerInfo.email || ""}?subject=${subject}&body=${body}`, "_blank");
   };

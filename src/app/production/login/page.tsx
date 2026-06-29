@@ -8,7 +8,7 @@ import { staffSignIn } from "@/features/auth/actions/authActions";
 export default function ProductionLogin() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("production@printec.co.in");
+  const [email, setEmail] = useState("production@printoms.co.in");
   const [password, setPassword] = useState("productionpass");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -93,7 +93,7 @@ export default function ProductionLogin() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="prt-input"
-              placeholder="production@printec.co.in"
+              placeholder="production@printoms.co.in"
             />
           </div>
 
@@ -138,11 +138,11 @@ export default function ProductionLogin() {
             Demo Credentials
           </div>
           <div style={{ fontSize: 12, fontFamily: "monospace", color: "#0F172A", marginBottom: 10, background: "white", border: "1px solid #E2E8F0", borderRadius: 6, padding: "6px 10px" }}>
-            production@printec.co.in / productionpass
+            production@printoms.co.in / productionpass
           </div>
           <button
             type="button"
-            onClick={() => { setEmail("production@printec.co.in"); setPassword("productionpass"); setError(""); }}
+            onClick={() => { setEmail("production@printoms.co.in"); setPassword("productionpass"); setError(""); }}
             style={{ fontSize: 12, color: "#0284c7", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}
           >
             Quick fill credentials →

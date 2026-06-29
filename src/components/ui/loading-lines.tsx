@@ -3,8 +3,8 @@
 import React from "react";
 
 const LoadingLines: React.FC = () => {
-  // Using PRINTEC instead of Loading
-  const letters = "PRINTEC".split("");
+  // Using PRINTOMS instead of Loading
+  const letters = "PRINTOMS".split("");
 
   return (
     <div className="relative flex items-center justify-center h-[120px] w-auto m-8 font-poppins text-[1.6em] font-black select-none text-slate-900 scale-[2]">

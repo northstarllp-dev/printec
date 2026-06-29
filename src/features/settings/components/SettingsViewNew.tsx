@@ -5,8 +5,8 @@ import { Save, MoreVertical, Bell, Lock, Palette } from "lucide-react";
 
 export function SettingsViewNew() {
   const [settings, setSettings] = useState({
-    companyName: "Printec",
-    email: "admin@printec.com",
+    companyName: "Printoms",
+    email: "admin@printoms.com",
     phone: "+91 98765 12345",
     address: "123 Business Park, Tech City",
     notifications: true,

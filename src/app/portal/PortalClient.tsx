@@ -513,7 +513,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
           <AlertCircle size={48} className="text-slate-300 mx-auto mb-4" />
           <h1 className="text-xl font-bold text-[#0b1c30] mb-2">No Active Orders</h1>
           <p className="text-sm text-slate-500">We couldn't find any active orders for your account.</p>
-          <p className="text-xs text-slate-400 mt-6 font-bold">PRINTEC Signage Solutions</p>
+          <p className="text-xs text-slate-400 mt-6 font-bold">PRINTOMS Signage Solutions</p>
         </div>
       </div>
     );
@@ -1623,7 +1623,7 @@ function CustomerChat({ orderId, customerId, token, customerName }: ChatProps) {
         {!loading && messages.length === 0 && (
           <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
             <MessageSquare size={24} className="stroke-1 opacity-50" />
-            <p className="text-xs font-medium text-center">No messages yet.<br />Send a message to start chatting with the Printec team.</p>
+            <p className="text-xs font-medium text-center">No messages yet.<br />Send a message to start chatting with the Printoms team.</p>
           </div>
         )}
         {messages.map((msg) => {
@@ -1754,7 +1754,7 @@ function MobileChatButton({ orderId, customerId, token, customerName }: ChatProp
             <div className="px-4 py-3 bg-[#0b1c30] text-white flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2">
                 <MessageSquare size={16} className="text-blue-300" />
-                <span className="text-sm font-black">Chat with Printec</span>
+                <span className="text-sm font-black">Chat with Printoms</span>
                 <span className="text-[9px] bg-emerald-500 text-white px-1.5 py-0.5 rounded-full font-bold">LIVE</span>
               </div>
               <button

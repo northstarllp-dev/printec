@@ -16,7 +16,7 @@ interface StaffLoginFormProps {
 export function StaffLoginForm({ employees }: StaffLoginFormProps) {
   const router = useRouter();
 
-  const [email, setEmail] = useState("staff@printec.com");
+  const [email, setEmail] = useState("staff@printoms.com");
   const [password, setPassword] = useState("staffpass");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -103,7 +103,7 @@ export function StaffLoginForm({ employees }: StaffLoginFormProps) {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="prt-input"
-              placeholder="staff@printec.com"
+              placeholder="staff@printoms.com"
             />
           </div>
 

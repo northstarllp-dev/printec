@@ -5,9 +5,9 @@ async function main() {
   const supabaseKey = 'sb_publishable_-6LLS65MbgeojAp25xzM1w_0thdyjYC';
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  console.log("Signing up installation@printec.co.in...");
+  console.log("Signing up installation@printoms.co.in...");
   const { data, error } = await supabase.auth.signUp({
-    email: 'installation@printec.co.in',
+    email: 'installation@printoms.co.in',
     password: 'installationpass',
   });
 
@@ -26,7 +26,7 @@ async function main() {
     if (dbError) {
        console.error("DB Update Error:", dbError.message);
     } else {
-       console.log("Successfully set up installation@printec.co.in!");
+       console.log("Successfully set up installation@printoms.co.in!");
     }
   }
 }

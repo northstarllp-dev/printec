@@ -1,6 +1,6 @@
-# Printec UI Design System
+# Printoms UI Design System
 
-This document outlines the core UI design rules and tokens for the Printec Order Management System. It ensures that the specific UI color codes are **ALWAYS FOLLOWED** for consistency across the application.
+This document outlines the core UI design rules and tokens for the Printoms Order Management System. It ensures that the specific UI color codes are **ALWAYS FOLLOWED** for consistency across the application.
 
 ## Core Color Strategy
 

@@ -24,7 +24,7 @@ export default async function PortalPage({
     return (
       <PortalError
         title="Invalid Magic Link"
-        message="The magic link you clicked is incomplete or has expired. Please ask Printec Admin to send it again."
+        message="The magic link you clicked is incomplete or has expired. Please ask Printoms Admin to send it again."
       />
     );
   }
@@ -47,7 +47,7 @@ export default async function PortalPage({
     return (
       <PortalError
         title="Invalid or Expired Link"
-        message="This secure portal link is invalid or has expired. Please request a new link from Printec."
+        message="This secure portal link is invalid or has expired. Please request a new link from Printoms."
       />
     );
   }
@@ -67,7 +67,7 @@ export default async function PortalPage({
     return (
       <PortalError
         title="Access Revoked"
-        message="This portal link has been revoked. Please contact Printec support for a new link."
+        message="This portal link has been revoked. Please contact Printoms support for a new link."
       />
     );
   }
@@ -311,7 +311,7 @@ function PortalError({ title, message }: { title: string; message: string }) {
         </p>
         <div style={{ marginTop: 32 }}>
           <p style={{ fontSize: 12, color: "#737780", margin: 0, fontWeight: 700 }}>
-            PRINTEC Signage Solutions
+            PRINTOMS Signage Solutions
           </p>
         </div>
       </div>

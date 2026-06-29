@@ -134,7 +134,7 @@ export default function QuotePage() {
               P
             </div>
             <div>
-              <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">PRINTEC</span>
+              <span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">PRINTOMS</span>
               <span className="block text-[10px] tracking-widest text-emerald-400 font-bold uppercase">Sign Studios</span>
             </div>
           </div>
@@ -460,7 +460,7 @@ export default function QuotePage() {
             
             <h2 className="text-3xl font-extrabold text-white tracking-tight">Quote Request Submitted!</h2>
             <p className="text-slate-400 mt-3 text-sm sm:text-base leading-relaxed">
-              We have successfully registered your design preferences. An estimator from Printec Sign Studio will get in touch with you shortly.
+              We have successfully registered your design preferences. An estimator from Printoms Sign Studio will get in touch with you shortly.
             </p>
 
             <div className="my-8 p-4 bg-slate-950/80 border border-slate-800/80 rounded-2xl inline-block">
@@ -535,7 +535,7 @@ export default function QuotePage() {
       {/* Footer */}
       <footer className="border-t border-slate-800/40 py-6 bg-slate-950/20 backdrop-blur">
         <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
-          <p>© 2026 Printec Operations LLP. All rights reserved.</p>
+          <p>© 2026 Printoms Operations LLP. All rights reserved.</p>
           <div className="flex gap-6">
             <a href="#" className="hover:text-slate-300 transition">Privacy Policy</a>
             <a href="#" className="hover:text-slate-300 transition">Terms of Service</a>

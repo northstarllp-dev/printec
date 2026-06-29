@@ -205,7 +205,7 @@ export function InstallationLayoutClient({ children, profile }: InstallationLayo
                 display: "block",
               }}
             >
-              PRINTEC
+              PRINTOMS
             </span>
             <span
               style={{

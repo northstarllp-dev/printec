@@ -1,4 +1,4 @@
-# Printec Database Schema
+# Printoms Database Schema
 
 > **Last Updated:** 2026-06-24
 > **Platform:** Supabase (PostgreSQL 17)

@@ -1,11 +1,11 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
 
-interface PrintecLoadingProps {
+interface PrintomsLoadingProps {
   fullScreen?: boolean;
 }
 
-export function PrintecLoading({ fullScreen = false }: PrintecLoadingProps) {
+export function PrintomsLoading({ fullScreen = false }: PrintomsLoadingProps) {
   const containerClasses = fullScreen 
     ? "fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm"
     : "flex flex-col items-center justify-center p-8 w-full h-full min-h-[300px]";
@@ -20,7 +20,7 @@ export function PrintecLoading({ fullScreen = false }: PrintecLoadingProps) {
         </div>
         <div className="flex flex-col items-center">
           <span className="text-xl font-bold tracking-widest text-slate-800 uppercase">
-            Printec
+            Printoms
           </span>
           <span className="text-xs font-medium text-slate-500 tracking-wider">
             Loading...

@@ -209,7 +209,7 @@ export function ProductionLayoutClient({ children, profile }: ProductionLayoutCl
                 display: "block",
               }}
             >
-              PRINTEC
+              PRINTOMS
             </span>
             <span
               style={{

@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Printec Admin Operations Dashboard",
+  title: "Printoms Admin Operations Dashboard",
   description: "Operations dashboard for custom signage and order management.",
 };
 

@@ -232,7 +232,7 @@ export function StaffLayoutClient({ children, profile }: StaffLayoutClientProps)
                 display: "block",
               }}
             >
-              PRINTEC
+              PRINTOMS
             </span>
             <span
               style={{

@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** Printec
+**Project:** Printoms
 **Generated:** 2026-06-13 10:53:55
 **Category:** SaaS (General)
 

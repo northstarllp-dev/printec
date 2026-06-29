@@ -70,7 +70,7 @@ export default async function OrderDetailPage({
     return (
       <PortalError
         title="Access Revoked"
-        message="This portal link has been revoked. Please contact Printec support for a new link."
+        message="This portal link has been revoked. Please contact Printoms support for a new link."
       />
     );
   }
@@ -267,7 +267,7 @@ function PortalError({ title, message }: { title: string; message: string }) {
         </p>
         <div style={{ marginTop: 32 }}>
           <p style={{ fontSize: 12, color: "#737780", margin: 0, fontWeight: 700 }}>
-            PRINTEC Signage Solutions
+            PRINTOMS Signage Solutions
           </p>
         </div>
       </div>
