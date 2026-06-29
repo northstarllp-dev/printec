@@ -44,7 +44,14 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
   const handleSubmit = async () => {
     try {
       setSaving(true);
-      await assignTeamToOrder(orderId, Array.from(selectedIds));
+      // Auto-assign Installation and Production roles
+      const autoAssignedIds = employees
+        .filter(emp => emp.staff_role === "Installation" || emp.staff_role === "Production")
+        .map(emp => emp.id);
+        
+      const finalIds = Array.from(new Set([...Array.from(selectedIds), ...autoAssignedIds]));
+      
+      await assignTeamToOrder(orderId, finalIds);
       setSaving(false);
       onSuccess();
     } catch (err) {
@@ -53,6 +60,8 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
       alert("Failed to assign team.");
     }
   };
+
+  const visibleEmployees = employees.filter(emp => emp.staff_role === "Designer" || emp.staff_role === "Marketer");
 
   return (
     <div style={{
@@ -117,15 +126,15 @@ export function AssignTeamModal({ isOpen, onClose, orderId, onSuccess }: AssignT
             <div style={{ textAlign: "center", padding: "40px", color: "#64748b", fontSize: "14px", fontWeight: "500" }}>
               Loading staff availability...
             </div>
-          ) : employees.length === 0 ? (
+          ) : visibleEmployees.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px", background: "white", borderRadius: "16px", border: "1px dashed #cbd5e1" }}>
               <User size={32} color="#cbd5e1" style={{ margin: "0 auto 12px auto" }} />
-              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#334155", margin: "0 0 4px 0" }}>No employees found</h3>
-              <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>There are no active staff members in the system.</p>
+              <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#334155", margin: "0 0 4px 0" }}>No assignable employees</h3>
+              <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>There are no Designers or Marketers in the system.</p>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {employees.map(emp => {
+              {visibleEmployees.map(emp => {
                 const isSelected = selectedIds.has(emp.id);
                 return (
                   <div

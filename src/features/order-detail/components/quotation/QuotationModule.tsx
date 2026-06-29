@@ -80,6 +80,7 @@ interface QuotationModuleProps {
   order: {
     id: string;
     orderId?: string;
+    orderCode?: string;
     projectName: string;
     customerName?: string;
     customerId?: string;

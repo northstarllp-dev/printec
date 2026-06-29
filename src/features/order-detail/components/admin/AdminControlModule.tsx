@@ -69,7 +69,14 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   const handleSaveTeam = async () => {
     try {
       setSavingTeam(true);
-      await assignTeamToOrder(order.id, Array.from(selectedEmployeeIds));
+      // Auto-assign Installation and Production roles
+      const autoAssignedIds = employeeStats
+        .filter(emp => emp.staff_role === "Installation" || emp.staff_role === "Production")
+        .map(emp => emp.id);
+        
+      const finalIds = Array.from(new Set([...Array.from(selectedEmployeeIds), ...autoAssignedIds]));
+      
+      await assignTeamToOrder(order.id, finalIds);
       alert("Team assignments updated!");
     } catch (e) {
       alert("Failed to assign team");
@@ -77,6 +84,8 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
       setSavingTeam(false);
     }
   };
+
+  const visibleEmployees = employeeStats.filter(emp => emp.staff_role === "Designer" || emp.staff_role === "Marketer");
 
   const toggleEmployee = (id: string) => {
     setSelectedEmployeeIds(prev => {
@@ -203,11 +212,11 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
         <div className="p-4 max-h-72 overflow-y-auto">
           {loadingStats ? (
             <div className="text-xs text-slate-500 text-center py-6">Loading staff availability...</div>
-          ) : employeeStats.length === 0 ? (
-            <div className="text-xs text-slate-400 text-center py-6">No employees found.</div>
+          ) : visibleEmployees.length === 0 ? (
+            <div className="text-xs text-slate-400 text-center py-6">No assignable employees found.</div>
           ) : (
             <div className="flex flex-col gap-2">
-              {employeeStats.map(emp => {
+              {visibleEmployees.map(emp => {
                 const isSelected = selectedEmployeeIds.has(emp.id);
                 return (
                   <div
