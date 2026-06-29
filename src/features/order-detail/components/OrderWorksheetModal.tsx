@@ -451,11 +451,16 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
     siteVisitAdvanceTooltip = !canAdvanceSiteVisit ? "Schedule the visit and add at least one location item to unlock approval." : "";
   } else if (activeStepTab === 2) {
     const itemsList = dd.items || [];
-    const allDesignItemsApproved = itemsList.length > 0 && itemsList.every((item: any) => {
+    const activeDesignItems = itemsList.filter((item: any) => item.versions && item.versions.length > 0);
+    
+    const allDesignItemsApproved = activeDesignItems.length > 0 && activeDesignItems.every((item: any) => {
       const latestV = item.versions[item.versions.length - 1];
       return latestV && latestV.status === "Approved";
     });
-    const hasProductionFiles = itemsList.length > 0 && itemsList.every((item: any) => item.productionFiles && item.productionFiles.length > 0);
+    
+    // As long as there is at least one production file uploaded across any item, it's fine.
+    const hasProductionFiles = itemsList.some((item: any) => item.productionFiles && item.productionFiles.length > 0);
+    
     canAdvanceSiteVisit = allDesignItemsApproved && hasProductionFiles;
     siteVisitAdvanceTooltip = !canAdvanceSiteVisit ? "All designs must be approved and final production files must be uploaded." : "";
   }
