@@ -115,7 +115,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
   const [convertModalOpen, setConvertModalOpen] = useState(false);
   const [assignTeamModalOpen, setAssignTeamModalOpen] = useState(false);
   const [assignedOrderId, setAssignedOrderId] = useState("");
-  const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, leadName: string} | null>(null);
+  const [selectedEnquiry, setSelectedEnquiry] = useState<{id: string, leadName: string, notes?: string} | null>(null);
 
   // Welcome message states
   const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
@@ -520,7 +520,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
                         {enq.status !== "Converted" ? (
                           <button 
                             onClick={() => {
-                              setSelectedEnquiry({ id: enq.id, leadName: enq.leadName });
+                              setSelectedEnquiry({ id: enq.id, leadName: enq.leadName, notes: enq.notes });
                               setConvertModalOpen(true);
                             }}
                             style={{ padding: "6px 12px", background: "var(--color-primary)", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: "600", color: "white", cursor: "pointer", transition: "all 0.2s" }}
@@ -565,6 +565,7 @@ export function EnquiriesViewNew({ initialEnquiries, initialCustomers }: { initi
             setSelectedEnquiry(null);
           }}
           defaultProjectName={`New Project for ${selectedEnquiry.leadName}`}
+          defaultRequirements={selectedEnquiry.notes || ""}
           onSubmit={async (projectName, productType, requirements) => {
             const enq = enquiries.find(e => e.id === selectedEnquiry.id);
             const res = await convertEnquiryToOrderLocal(selectedEnquiry.id, projectName, productType, requirements);

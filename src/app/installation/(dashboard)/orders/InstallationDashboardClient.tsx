@@ -136,6 +136,7 @@ export function InstallationDashboardClient({ initialOrders }: InstallationDashb
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Customer</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Current Stage</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date Initiated</th>
+                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Installation Date</th>
                 <th className="text-right py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
@@ -180,6 +181,11 @@ export function InstallationDashboardClient({ initialOrders }: InstallationDashb
                         })}
                       </td>
 
+                      {/* Installation Date Placeholder */}
+                      <td className="py-4 px-6 text-sm text-indigo-500 font-bold">
+                        28 Oct 2026
+                      </td>
+
                       {/* Action */}
                       <td className="py-4 px-6 text-right">
                         <Link
@@ -195,7 +201,7 @@ export function InstallationDashboardClient({ initialOrders }: InstallationDashb
                 })
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-sm font-semibold text-slate-400">
+                  <td colSpan={7} className="py-12 text-center text-sm font-semibold text-slate-400">
                     No installation orders found.
                   </td>
                 </tr>

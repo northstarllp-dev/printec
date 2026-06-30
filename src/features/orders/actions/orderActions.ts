@@ -307,21 +307,32 @@ export async function updateInstallationDetailsAction(orderId: string, details: 
 
 export async function requestStageAdvancementAction(orderId: string) {
   const supabase = await getSupabase();
-  const { data: current, error: fetchError } = await supabase.from("orders").select("stage").eq("id", orderId).single();
+  const { data: current, error: fetchError } = await supabase.from("orders").select("stage, workflow_type").eq("id", orderId).single();
   if (fetchError) throw new Error(fetchError.message);
 
   let nextStatus = "Normal";
   const stage = current.stage;
+  const isDesignFirst = (current.workflow_type || "quote_first") === "design_first";
   
   if (stage === "Site Visit Pending" || stage === "Site Visit Scheduled") {
     nextStatus = "Pending Admin Approval: Site Visit Completed";
   } else if (stage === "Site Visit Completed") {
-    nextStatus = "Pending Admin Approval: Quote Stage";
+    nextStatus = isDesignFirst
+      ? "Pending Admin Approval: Design Stage"
+      : "Pending Admin Approval: Quote Stage";
   } else if (stage === "Quotation In Progress" || stage === "Quotation Sent" || stage === "Quotation Negotiation") {
     nextStatus = "Pending Admin Approval: Quote Approval";
-  } else if (stage === "Quotation Approved" || stage === "Design In Progress") {
+  } else if (stage === "Quotation Approved") {
+    nextStatus = isDesignFirst
+      ? "Pending Admin Approval: Production Ready"
+      : "Pending Admin Approval: Design Approval";
+  } else if (stage === "Design In Progress") {
     nextStatus = "Pending Admin Approval: Design Approval";
-  } else if (stage === "Design Approved" || stage === "Production") {
+  } else if (stage === "Design Approved") {
+    nextStatus = isDesignFirst
+      ? "Pending Admin Approval: Quote Stage"
+      : "Pending Admin Approval: Production Ready";
+  } else if (stage === "Production") {
     nextStatus = "Pending Admin Approval: Production Ready";
   } else if (stage === "Ready For Installation" || stage === "Installation Scheduled") {
     nextStatus = "Pending Admin Approval: Job Done";
@@ -335,26 +346,45 @@ export async function adminApproveStageAction(orderId: string) {
   const orderUuid = await resolveOrderUuid(supabase, orderId);
   const { data: o, error: fetchError } = await supabase
     .from("orders")
-    .select("stage, order_id")
+    .select("stage, order_id, workflow_type")
     .eq("id", orderUuid)
     .single();
   if (fetchError) throw new Error(fetchError.message);
 
-  const nextStageMap: Record<string, string> = {
-    "Site Visit Pending":    "Site Visit Scheduled",
-    "Site Visit Scheduled":  "Quotation In Progress",
-    "Site Visit Completed":  "Quotation In Progress",
-    "Quotation In Progress": "Quotation Sent",
-    "Quotation Sent":        "Quotation Negotiation",
-    "Quotation Negotiation": "Quotation Approved",
-    "Quotation Approved":    "Design In Progress",
-    "Design In Progress":    "Design Approved",
-    "Design Approved":       "Production",
-    "Production":            "Ready For Installation",
-    "Ready For Installation":"Installation Scheduled",
-    "Installation Scheduled":"Completed",
-    "Completed":             "Closed",
-  };
+  const isDesignFirst = (o.workflow_type || "quote_first") === "design_first";
+
+  // Build the next-stage map dynamically based on workflow type
+  const nextStageMap: Record<string, string> = isDesignFirst
+    ? {
+        "Site Visit Pending":     "Site Visit Scheduled",
+        "Site Visit Scheduled":   "Design In Progress",
+        "Site Visit Completed":   "Design In Progress",
+        "Design In Progress":     "Design Approved",
+        "Design Approved":        "Quotation In Progress",
+        "Quotation In Progress":  "Quotation Sent",
+        "Quotation Sent":         "Quotation Negotiation",
+        "Quotation Negotiation":  "Quotation Approved",
+        "Quotation Approved":     "Production",
+        "Production":             "Ready For Installation",
+        "Ready For Installation": "Installation Scheduled",
+        "Installation Scheduled": "Completed",
+        "Completed":              "Closed",
+      }
+    : {
+        "Site Visit Pending":     "Site Visit Scheduled",
+        "Site Visit Scheduled":   "Quotation In Progress",
+        "Site Visit Completed":   "Quotation In Progress",
+        "Quotation In Progress":  "Quotation Sent",
+        "Quotation Sent":         "Quotation Negotiation",
+        "Quotation Negotiation":  "Quotation Approved",
+        "Quotation Approved":     "Design In Progress",
+        "Design In Progress":     "Design Approved",
+        "Design Approved":        "Production",
+        "Production":             "Ready For Installation",
+        "Ready For Installation": "Installation Scheduled",
+        "Installation Scheduled": "Completed",
+        "Completed":              "Closed",
+      };
 
   const nextStage = nextStageMap[o.stage] || o.stage;
   const logMsg = `Admin approved stage progression from "${o.stage}" to "${nextStage}".`;
@@ -372,6 +402,46 @@ export async function adminApproveStageAction(orderId: string) {
     actor_role: "System",
     content: logMsg,
     metadata: { action: "stage_approved", old: o.stage, new: nextStage }
+  });
+
+  return result;
+}
+
+/**
+ * Called when Admin chooses a workflow path after approving Site Visit.
+ * Persists the workflow_type and advances the stage to the first post-site-visit step.
+ */
+export async function setWorkflowTypeAction(
+  orderId: string,
+  workflowType: "quote_first" | "design_first"
+) {
+  const supabase = await getSupabase();
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+  const { data: o, error: fetchError } = await supabase
+    .from("orders")
+    .select("order_id, stage")
+    .eq("id", orderUuid)
+    .single();
+  if (fetchError) throw new Error(fetchError.message);
+
+  const firstStage = workflowType === "design_first"
+    ? "Design In Progress"
+    : "Quotation In Progress";
+
+  const result = await updateOrder(orderUuid, {
+    workflow_type: workflowType,
+    stage: firstStage,
+    stage_status: "Normal",
+    stage_admin_notes: "",
+  });
+
+  await supabase.from("order_activity").insert({
+    order_id: o.order_id || orderId,
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Workflow path set to "${workflowType === "design_first" ? "Design First" : "Quote First"}". Order advanced to ${firstStage}.`,
+    metadata: { action: "workflow_type_set", workflow_type: workflowType, stage: firstStage }
   });
 
   return result;

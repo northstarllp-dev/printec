@@ -1,17 +1,42 @@
-import React, { useState } from "react";
-import { X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Search } from "lucide-react";
+import { getActiveProducts } from "@/features/products/actions/productActions";
 
 interface ConvertEnquiryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (projectName: string, productType: string, requirements: string) => void;
   defaultProjectName: string;
+  defaultRequirements?: string;
 }
 
-export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectName }: ConvertEnquiryModalProps) {
+export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectName, defaultRequirements = "" }: ConvertEnquiryModalProps) {
   const [projectName, setProjectName] = useState(defaultProjectName);
   const [productType, setProductType] = useState("");
-  const [requirements, setRequirements] = useState("");
+  const [requirements, setRequirements] = useState(defaultRequirements);
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      getActiveProducts().then((data) => {
+        setProducts(data.map((p) => ({ id: p.id, name: p.name })));
+      }).catch(console.error);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(productType.toLowerCase()));
 
   if (!isOpen) return null;
 
@@ -102,28 +127,77 @@ export function ConvertEnquiryModal({ isOpen, onClose, onSubmit, defaultProjectN
           </div>
 
           {/* Product Type */}
-          <div>
+          <div ref={dropdownRef} style={{ position: "relative" }}>
             <label style={{ display: "block", fontSize: "13px", fontWeight: "600", color: "#475569", marginBottom: "8px" }}>
               Product Type / Sign Type
             </label>
-            <input 
-              type="text" 
-              value={productType}
-              onChange={(e) => setProductType(e.target.value)}
-              placeholder="e.g. ACP LED Glow Sign"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                border: "1px solid #cbd5e1",
+            <div style={{ position: "relative" }}>
+              <input 
+                type="text" 
+                value={productType}
+                onChange={(e) => {
+                  setProductType(e.target.value);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                placeholder="Search or enter product..."
+                style={{
+                  width: "100%",
+                  padding: "10px 12px 10px 36px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  color: "#0f172a",
+                  outline: "none",
+                  transition: "border-color 0.2s"
+                }}
+              />
+              <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8" }} />
+            </div>
+            
+            {showDropdown && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                marginTop: "4px",
+                background: "white",
+                border: "1px solid #e2e8f0",
                 borderRadius: "8px",
-                fontSize: "14px",
-                color: "#0f172a",
-                outline: "none",
-                transition: "border-color 0.2s"
-              }}
-              onFocus={(e) => e.target.style.borderColor = "var(--color-primary)"}
-              onBlur={(e) => e.target.style.borderColor = "#cbd5e1"}
-            />
+                boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)",
+                maxHeight: "200px",
+                overflowY: "auto",
+                zIndex: 10
+              }}>
+                {filteredProducts.length > 0 ? (
+                  filteredProducts.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setProductType(p.name);
+                        setShowDropdown(false);
+                      }}
+                      style={{
+                        padding: "10px 12px",
+                        fontSize: "14px",
+                        color: "#0f172a",
+                        cursor: "pointer",
+                        borderBottom: "1px solid #f1f5f9"
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                    >
+                      {p.name}
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ padding: "10px 12px", fontSize: "14px", color: "#94a3b8", textAlign: "center" }}>
+                    No products found matching "{productType}"
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Requirements */}

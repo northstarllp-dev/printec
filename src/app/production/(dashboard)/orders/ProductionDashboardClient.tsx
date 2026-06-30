@@ -141,6 +141,7 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Customer</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Current Stage</th>
                 <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Date Initiated</th>
+                <th className="text-left py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Deadline Date</th>
                 <th className="text-right py-4 px-6 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
@@ -185,6 +186,11 @@ export function ProductionDashboardClient({ initialOrders }: ProductionDashboard
                           month: "short",
                           year: "numeric"
                         })}
+                      </td>
+
+                      {/* Deadline Date Placeholder */}
+                      <td className="py-4 px-6 text-sm text-rose-500 font-bold">
+                        24 Oct 2026
                       </td>
 
                       {/* Action */}

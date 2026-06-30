@@ -77,6 +77,7 @@ interface Order {
   stageAdminNotes?: string;
   orderCode?: string;
   orderId?: string;
+  workflow_type?: string;
 }
 
 interface OrderDetailClientProps {
@@ -86,25 +87,38 @@ interface OrderDetailClientProps {
   token: string;
 }
 
-const tabs = [
-  { id: "site_visit", label: "Site Visit", icon: MapPin },
-  { id: "quotation", label: "Quotation", icon: FileCheck },
-  { id: "design", label: "Design", icon: Layout },
-  { id: "billing", label: "Billing", icon: CreditCard },
-  { id: "chat", label: "Chat", icon: MessageSquare },
-];
-
-const stages = ["Enquiries", "Site Visit", "Quotations", "Design", "Production", "Installation"];
-
 export function OrderDetailClient({ customer, order: initialOrder, siteVisitItems = [], token }: OrderDetailClientProps) {
+  const workflowType = initialOrder.workflow_type || "quote_first";
+  const isDesignFirst = workflowType === "design_first";
+
+  const stages = isDesignFirst 
+    ? ["Enquiries", "Site Visit", "Design", "Quotations", "Production", "Installation"]
+    : ["Enquiries", "Site Visit", "Quotations", "Design", "Production", "Installation"];
+
+  const tabs = isDesignFirst
+    ? [
+        { id: "site_visit", label: "Site Visit", icon: MapPin },
+        { id: "design", label: "Design", icon: Layout },
+        { id: "quotation", label: "Quotation", icon: FileCheck },
+        { id: "billing", label: "Billing", icon: CreditCard },
+        { id: "chat", label: "Chat", icon: MessageSquare },
+      ]
+    : [
+        { id: "site_visit", label: "Site Visit", icon: MapPin },
+        { id: "quotation", label: "Quotation", icon: FileCheck },
+        { id: "design", label: "Design", icon: Layout },
+        { id: "billing", label: "Billing", icon: CreditCard },
+        { id: "chat", label: "Chat", icon: MessageSquare },
+      ];
+
   // Determine initial tab based on order stage
   const getInitialTab = () => {
     if (!initialOrder.stage) return "site_visit";
-    if (initialOrder.stage.includes("Site Visit Pending") || initialOrder.stage === "Site Visit Pending") return "site_visit";
+    if (initialOrder.stage.includes("Site Visit")) return "site_visit";
     if (initialOrder.stage.includes("Quotation")) return "quotation";
     if (initialOrder.stage.includes("Design")) return "design";
     if (initialOrder.stage.includes("Production") || initialOrder.stage.includes("Ready For")) return "billing";
-    if (initialOrder.stage.includes("Installation") || initialOrder.stage.includes("Completed")) return "chat";
+    if (initialOrder.stage.includes("Installation") || initialOrder.stage.includes("Completed") || initialOrder.stage.includes("Closed")) return "chat";
     return "site_visit";
   };
   
@@ -469,7 +483,16 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
               const targetTab = tabMap[stage];
               const isTabActive = activeTab === targetTab;
               
-              const Icon = idx === 0 ? CheckCircle : idx === 1 ? MapPin : idx === 2 ? FileCheck : idx === 3 ? Layout : idx ===4 ? CheckCircle : Wrench;
+              const iconMap: Record<string, any> = {
+                "Enquiries": CheckCircle,
+                "Site Visit": MapPin,
+                "Quotations": FileCheck,
+                "Design": Layout,
+                "Production": Package,
+                "Installation": Wrench
+              };
+              
+              const Icon = iconMap[stage] || CheckCircle;
 
               return (
                 <React.Fragment key={idx}>

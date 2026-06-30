@@ -204,6 +204,7 @@ export default async function PortalPage({
       imageMockup: o.image_mockup,
       versionHistory: o.version_history || [],
       chatHistory: o.chat_history || [],
+      workflow_type: o.workflow_type,
       siteVisitDetails: mapSiteVisitFromDb(
         Array.isArray(o.site_visits)
           ? (o.site_visits.length > 0 ? o.site_visits[0] : null)

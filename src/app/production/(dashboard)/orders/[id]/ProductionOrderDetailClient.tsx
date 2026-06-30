@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
   ArrowLeft, CheckSquare, FileText, MapPin, 
-  AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save
+  AlertOctagon, Check, Image as ImageIcon, Sparkles, Loader2, Save, Timer
 } from "lucide-react";
 import { updateProductionDetailsAction } from "@/features/orders/actions/orderActions";
 
@@ -38,6 +38,23 @@ interface ProductionOrderDetailClientProps {
   products: any[];
   quotation: any;
   siteVisitItems?: any[];
+}
+
+function maskPhone(phone: string) {
+  if (!phone) return "";
+  // Keep first 3 characters (e.g., +91) and last 4, mask the rest
+  const cleanPhone = phone.trim();
+  if (cleanPhone.length > 7) {
+    return cleanPhone.substring(0, 3) + "******" + cleanPhone.slice(-4);
+  }
+  return cleanPhone.replace(/./g, "*");
+}
+
+function maskEmail(email: string) {
+  if (!email || !email.includes("@")) return email;
+  const [name, domain] = email.split("@");
+  if (name.length <= 2) return `${name[0]}***@${domain}`;
+  return `${name[0]}***${name[name.length - 1]}@${domain}`;
 }
 
 export function ProductionOrderDetailClient({
@@ -132,16 +149,99 @@ export function ProductionOrderDetailClient({
           </p>
         </div>
 
-        {alert && (
-          <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
-            alert.type === "success" 
-              ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-              : "bg-rose-50 text-rose-700 border-rose-200"
-          }`}>
-            {alert.message}
+        <div className="flex items-center gap-4">
+          {alert && (
+            <div className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+              alert.type === "success" 
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            }`}>
+              {alert.message}
+            </div>
+          )}
+
+          {/* DEADLINE PLACEHOLDER */}
+          <div className="flex flex-col items-end">
+            <span className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+              Production Deadline
+            </span>
+            <div className="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-2 border-b-2 border-rose-700">
+              <Timer size={16} className="text-rose-100 animate-pulse" />
+              24 Oct 2026
+            </div>
           </div>
-        )}
+        </div>
       </div>
+
+      <div className="mb-6 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+        <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-3 flex items-center gap-2">
+          <FileText size={18} className="text-blue-600" /> Basic Information
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-xs">
+          <div>
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Order No</div>
+            <div className="font-bold text-slate-800">{order.orderCode}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Customer Name</div>
+            <div className="font-bold text-slate-800">{client?.name || order.customerName || "—"}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Project Name</div>
+            <div className="font-bold text-slate-800">{order.projectName}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Priority</div>
+            <div className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded inline-block">{order.priority || "High"}</div>
+          </div>
+          <div>
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Expected Completion Date</div>
+            <div className="font-bold text-slate-800">{order.expected_completion_date ? new Date(order.expected_completion_date).toLocaleDateString("en-IN") : "TBD"}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* CUSTOMER DETAIL CARD */}
+      {client && (
+        <div className="mb-6 bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+            <Sparkles size={18} className="text-rose-600" />
+            <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+              Client Contact
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-8 text-xs">
+            <div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Client Name</div>
+              <div className="font-bold text-slate-800">{client.name}</div>
+            </div>
+            {client.phone && (
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Phone</div>
+                <div className="font-semibold text-slate-700">📞 {maskPhone(client.phone)}</div>
+              </div>
+            )}
+            {client.email && (
+              <div>
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Email Address</div>
+                <div className="font-semibold text-slate-700">{maskEmail(client.email)}</div>
+              </div>
+            )}
+            {client.shippingAddress && (
+              <div className="flex-1 min-w-[200px]">
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Installation Site Address</div>
+                <div className="font-medium text-slate-600 leading-relaxed">{client.shippingAddress}</div>
+              </div>
+            )}
+            {(order.notes || quotation?.notes) && (
+              <div className="flex-1 min-w-[200px]">
+                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Requirements / Notes</div>
+                <div className="font-medium text-slate-600 leading-relaxed">{order.notes || quotation?.notes}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -154,7 +254,7 @@ export function ProductionOrderDetailClient({
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
               <MapPin size={18} className="text-indigo-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                Site Visit Dimensions
+                Measurements
               </h2>
             </div>
 
@@ -165,8 +265,7 @@ export function ProductionOrderDetailClient({
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
                         <th className="py-2.5 px-4">Location / Name</th>
-                        <th className="py-2.5 px-4">Width</th>
-                        <th className="py-2.5 px-4">Height</th>
+                        <th className="py-2.5 px-4">Dimensions (W × H)</th>
                         <th className="py-2.5 px-4">Depth</th>
                         <th className="py-2.5 px-4">Notes</th>
                       </tr>
@@ -175,9 +274,10 @@ export function ProductionOrderDetailClient({
                       {siteVisitItems.map((loc, idx) => (
                         <tr key={loc.id || idx}>
                           <td className="py-3 px-4 font-bold text-slate-800">{loc.name}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.width || "—"}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.height || "—"}</td>
-                          <td className="py-3 px-4 font-medium text-slate-600">{loc.depth || "—"}</td>
+                          <td className="py-3 px-4 font-medium text-slate-600">
+                            {loc.width && loc.height ? `${loc.width}ft × ${loc.height}ft` : "—"}
+                          </td>
+                          <td className="py-3 px-4 font-medium text-slate-600">{loc.depth ? `${loc.depth}in` : "—"}</td>
                           <td className="py-3 px-4 font-medium text-slate-600">{loc.notes || "—"}</td>
                         </tr>
                       ))}
@@ -196,16 +296,11 @@ export function ProductionOrderDetailClient({
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <FileText size={18} className="text-amber-600" />
+                <CheckSquare size={18} className="text-amber-600" />
                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                  Approved Quotation Details
+                  Material Requirements (From Quotation)
                 </h2>
               </div>
-              {quotation?.quotation_id && (
-                <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-200/80">
-                  ID: {quotation.quotation_id}
-                </span>
-              )}
             </div>
 
             {signageOptions.length > 0 ? (
@@ -221,30 +316,19 @@ export function ProductionOrderDetailClient({
                         <table className="w-full text-left text-xs border-collapse">
                           <thead>
                             <tr className="bg-white border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                              <th className="py-2.5 px-4">Description</th>
-                              <th className="py-2.5 px-4 text-center">Qty</th>
-                              <th className="py-2.5 px-4">Unit</th>
-                              <th className="py-2.5 px-4 text-right">Rate</th>
-                              <th className="py-2.5 px-4 text-right">GST %</th>
-                              <th className="py-2.5 px-4 text-right">Total Amount</th>
+                              <th className="py-2.5 px-4 w-1/2">Material Description</th>
+                              <th className="py-2.5 px-4">Required Quantity</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 bg-white">
                             {(section.lines || []).map((item: any, idx: number) => {
-                              const rate = item.pricingType === "per_sqft" ? (item.costPerSqFt || item.unitPrice) : item.unitPrice;
                               const qty = item.pricingType === "per_sqft" ? (item.quantity * (item.totalSqFt || 1)) : item.quantity;
-                              const sub = qty * rate;
-                              const tax = sub * (item.gstRate / 100);
-                              const final = sub + tax;
-
                               return (
                                 <tr key={item.id || idx}>
                                   <td className="py-3 px-4 font-bold text-slate-800">{item.description}</td>
-                                  <td className="py-3 px-4 text-center font-semibold text-slate-700">{item.quantity}</td>
-                                  <td className="py-3 px-4 text-slate-500 font-medium">{item.unit || "nos"}</td>
-                                  <td className="py-3 px-4 text-right text-slate-700 font-medium">₹{rate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                                  <td className="py-3 px-4 text-right text-slate-500 font-medium">{item.gstRate}%</td>
-                                  <td className="py-3 px-4 text-right font-bold text-slate-900">₹{final.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                                  <td className="py-3 px-4 font-semibold text-slate-700">
+                                    {qty} {item.pricingType === "per_sqft" ? "Sq Ft" : item.unit || "Nos"}
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -253,33 +337,6 @@ export function ProductionOrderDetailClient({
                       </div>
                     );
                   })}
-                </div>
-
-                <div className="flex flex-col md:flex-row justify-between items-start gap-4 pt-4 border-t border-slate-100">
-                  <div className="text-xs text-slate-500 space-y-1">
-                    {quotation.notes && <p><strong>Notes:</strong> {quotation.notes}</p>}
-                    {quotation.terms && <p><strong>Terms:</strong> {quotation.terms}</p>}
-                  </div>
-                  <div className="w-full md:w-64 bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-1.5 self-end text-xs">
-                    <div className="flex justify-between font-medium text-slate-500">
-                      <span>Subtotal:</span>
-                      <span>₹{(quotation.subtotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    {Number(quotation.discount) > 0 && (
-                      <div className="flex justify-between font-medium text-slate-500">
-                        <span>Discount:</span>
-                        <span>- ₹{Number(quotation.discount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between font-medium text-slate-500">
-                      <span>Tax (GST):</span>
-                      <span>₹{(quotation.tax || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between font-black text-slate-900 text-sm pt-2 border-t border-slate-200">
-                      <span>Grand Total:</span>
-                      <span>₹{(quotation.grand_total || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
                 </div>
               </div>
             ) : (
@@ -292,9 +349,9 @@ export function ProductionOrderDetailClient({
           {/* FINAL PRODUCTION FILES (Per Item) */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-              <FileText size={18} className="text-emerald-600" />
+              <ImageIcon size={18} className="text-emerald-600" />
               <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                Final Production Files
+                Design Files
               </h2>
             </div>
             
@@ -304,17 +361,22 @@ export function ProductionOrderDetailClient({
                   <div key={item.id} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
                     <h3 className="font-bold text-slate-800 mb-3 text-sm">{item.name}</h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {item.productionFiles.map((file: any) => (
-                        <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm">
-                          <FileText className="text-blue-500 mb-2" size={32} />
-                          <span className="text-xs font-bold text-slate-700 truncate w-full text-center" title={file.name}>
-                            {file.name}
-                          </span>
-                          <a href={file.url} target="_blank" rel="noreferrer" className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors w-full text-center shadow-sm">
-                            Download
-                          </a>
-                        </div>
-                      ))}
+                      {item.productionFiles.map((file: any) => {
+                        const fileExt = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+                        return (
+                          <div key={file.id} className="border border-slate-200 rounded-xl p-4 flex flex-col items-center justify-center bg-white relative group shadow-sm text-center gap-2 hover:border-blue-300 transition-colors">
+                            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center font-black text-xs mb-1">
+                              {fileExt}
+                            </div>
+                            <span className="text-xs font-bold text-slate-700 truncate w-full" title={file.name}>
+                              {file.name}
+                            </span>
+                            <a href={file.url} target="_blank" rel="noreferrer" className="mt-1 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors w-full shadow-sm">
+                              Download
+                            </a>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -323,6 +385,40 @@ export function ProductionOrderDetailClient({
               <div className="py-12 text-center text-xs text-slate-400 font-semibold flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-xl">
                 <FileText size={24} className="text-slate-300" />
                 <span>No production files uploaded yet.</span>
+              </div>
+            )}
+          </div>
+
+          {/* PRODUCTION NOTES */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
+              <AlertOctagon size={18} className="text-rose-600" />
+              <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                Production Notes
+              </h2>
+            </div>
+            {quotation?.notes || quotation?.terms ? (
+              <div className="space-y-4">
+                {quotation.notes && (
+                  <div>
+                    <h3 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">General Notes</h3>
+                    <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      {quotation.notes}
+                    </div>
+                  </div>
+                )}
+                {quotation.terms && (
+                  <div>
+                    <h3 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5">Terms & Conditions</h3>
+                    <div className="text-xs text-slate-700 font-medium whitespace-pre-wrap bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      {quotation.terms}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-xs text-slate-400 font-semibold">
+                No special production notes provided.
               </div>
             )}
           </div>
@@ -388,42 +484,6 @@ export function ProductionOrderDetailClient({
               </div>
             )}
           </div>
-
-          {/* CUSTOMER DETAIL CARD */}
-          {client && (
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-slate-100">
-                <Sparkles size={18} className="text-rose-600" />
-                <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
-                  Client Contact
-                </h2>
-              </div>
-              <div className="space-y-3.5 text-xs">
-                <div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Client Name</div>
-                  <div className="font-bold text-slate-800">{client.name}</div>
-                </div>
-                {client.phone && (
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phone</div>
-                    <div className="font-semibold text-slate-700">📞 {client.phone}</div>
-                  </div>
-                )}
-                {client.email && (
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Email Address</div>
-                    <div className="font-semibold text-slate-700">{client.email}</div>
-                  </div>
-                )}
-                {client.shippingAddress && (
-                  <div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Installation Site Address</div>
-                    <div className="font-medium text-slate-600 leading-relaxed">{client.shippingAddress}</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
         </div>
 

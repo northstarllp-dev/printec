@@ -47,6 +47,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
     orderId: order.order_id || order.id,
     health: order.health || "Active",
     lost_reason: order.lost_reason,
+    workflow_type: (order.workflow_type as "quote_first" | "design_first") || "quote_first",
 
   };
 

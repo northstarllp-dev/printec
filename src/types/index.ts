@@ -219,6 +219,8 @@ export interface Order {
   health?: string;
   lost_reason?: string;
   orderId?: string;
+  /** Determines whether Quote or Design comes first after Site Visit */
+  workflow_type?: "quote_first" | "design_first";
 }
 
 export type EnquirySource = "Meta Ads" | "Referrals" | "Walk-ins" | "Google Enquiry (Ph Call)" | "Website";

@@ -9,6 +9,7 @@ interface AdminControlModuleProps {
   customers: Customer[];
   employees: Employee[];
   onAdminApprove: () => Promise<void>;
+  onApproveWithWorkflowChoice?: () => void;
   updateSiteVisitDetails: (orderId: string, details: Partial<SiteVisitDetails>) => Promise<void>;
   updateOrderStage: (orderId: string, stage: string) => Promise<void>;
 }
@@ -35,6 +36,7 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
   customers,
   employees,
   onAdminApprove,
+  onApproveWithWorkflowChoice,
   updateSiteVisitDetails,
   updateOrderStage
 }) => {
@@ -142,13 +144,23 @@ export const AdminControlModule: React.FC<AdminControlModuleProps> = ({
               </div>
               
                 <div className="flex gap-2 shrink-0">
-                  <button 
-                    onClick={onAdminApprove} 
-                    className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
-                  >
-                    <CheckCircle2 size={16} />
-                    Approve Stage
-                  </button>
+                  {order.stage.startsWith("Site Visit") && onApproveWithWorkflowChoice ? (
+                    <button
+                      onClick={onApproveWithWorkflowChoice}
+                      className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 size={16} />
+                      Choose Workflow & Approve
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={onAdminApprove} 
+                      className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-bold hover:bg-emerald-600 transition-colors flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 size={16} />
+                      Approve Stage
+                    </button>
+                  )}
                 </div>
             </div>
           ) : (

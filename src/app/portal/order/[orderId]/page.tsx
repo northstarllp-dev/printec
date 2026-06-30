@@ -181,6 +181,7 @@ export default async function OrderDetailPage({
     dateCreated: orderData.date_created,
     versionHistory: orderData.version_history || [],
     chatHistory: orderData.chat_history || [],
+    workflow_type: orderData.workflow_type,
     siteVisitDetails: mapSiteVisitFromDb(
       Array.isArray(orderData.site_visits)
         ? (orderData.site_visits.length > 0 ? orderData.site_visits[0] : null)

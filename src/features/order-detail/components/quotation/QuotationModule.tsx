@@ -85,6 +85,7 @@ interface QuotationModuleProps {
     customerName?: string;
     customerId?: string;
     stage?: string;
+    workflow_type?: "quote_first" | "design_first";
   };
   isEmployee: boolean;
   products: Product[];
@@ -342,6 +343,10 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     "Quotation Negotiation",
     "Quotation Approved",
   ].includes(order.stage || "");
+
+  const isDesignFirst = order.workflow_type === "design_first";
+  const nextStageLabel = isDesignFirst ? "Production" : "Design";
+  const nextStageValue = isDesignFirst ? "Production" : "Design In Progress";
 
   const [advanceReceived, setAdvanceReceived] = useState(
     isPastQuotation || (initialQuotation?.advance_paid ?? false)
@@ -677,7 +682,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
     });
   };
 
-  const handleMoveToDesign = async () => {
+  const handleMoveToNextStage = async () => {
     setIsMovingToDesign(true);
     try {
       const supabase = createClient();
@@ -691,16 +696,16 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
 
       if (quoteErr) throw new Error(quoteErr.message);
 
-      await updateOrderStageAction(order.id, "Design In Progress");
+      await updateOrderStageAction(order.id, nextStageValue);
 
-      setSaveMsg({ text: "Moved to Design phase successfully!", ok: true });
+      setSaveMsg({ text: `Moved to ${nextStageLabel} phase successfully!`, ok: true });
       
       setTimeout(() => {
         window.location.reload();
       }, 1000);
     } catch (err: any) {
       console.error("Error moving to design:", err);
-      setSaveMsg({ text: err.message || "Failed to move to design phase", ok: false });
+      setSaveMsg({ text: err.message || `Failed to move to ${nextStageLabel.toLowerCase()} phase`, ok: false });
       setTimeout(() => setSaveMsg(null), 4000);
     } finally {
       setIsMovingToDesign(false);
@@ -1264,7 +1269,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
         </div>
       </div>
 
-      {/* Checklist & Move to Design Box */}
+      {/* Checklist & Move to Next Stage Box */}
       {status === "Approved" && (
         <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -1274,7 +1279,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 Quotation Approved - Next Steps
               </h4>
               <p className="text-[11px] text-slate-500 font-bold">
-                Please verify the checklist below to transition this order to the Design phase.
+                Please verify the checklist below to transition this order to the {nextStageLabel} phase.
               </p>
               
               {/* Checklist */}
@@ -1312,7 +1317,7 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl px-4 py-3 flex items-center gap-2 text-xs font-bold shadow-sm">
                   <ShieldCheck size={16} className="text-emerald-600" />
                   <div>
-                    <div className="font-black uppercase tracking-wider text-[10px]">Moved to Design</div>
+                    <div className="font-black uppercase tracking-wider text-[10px]">Moved to {nextStageLabel}</div>
                     <div className="text-[10px] text-emerald-600 font-bold">Advance paid & verified</div>
                   </div>
                 </div>
@@ -1320,18 +1325,18 @@ export const QuotationModule: React.FC<QuotationModuleProps> = ({
                 <button
                   type="button"
                   disabled={!advanceReceived || !measurementsVerified || isMovingToDesign}
-                  onClick={handleMoveToDesign}
+                  onClick={handleMoveToNextStage}
                   className="py-2 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isMovingToDesign ? (
                     <>
                       <Loader2 size={13} className="animate-spin" />
-                      Moving to Design...
+                      Moving to {nextStageLabel}...
                     </>
                   ) : (
                     <>
                       <Sparkles size={13} />
-                      Move to Design
+                      Move to {nextStageLabel}
                     </>
                   )}
                 </button>

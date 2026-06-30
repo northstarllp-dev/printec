@@ -70,6 +70,7 @@ interface Order {
   stageAdminNotes?: string;
   orderCode?: string;
   orderId?: string;
+  workflow_type?: string;
   // New quotation workflow fields
 
   siteVisitItems?: Array<{ id: string; name: string; width?: number | null; height?: number | null; depth?: number | null; notes?: string | null }>;
@@ -86,21 +87,19 @@ interface PortalClientProps {
   token: string;
 }
 
-// Map stage to step index (0-based, 6 steps total)
-const STEPS = [
-  { key: "enquiry", label: "Enquiries", icon: FileText },
-  { key: "site_visit", label: "Site Visit", icon: MapPin },
-  { key: "quotation", label: "Quotations", icon: BarChart3 },
-  { key: "design", label: "Design", icon: Palette },
-  { key: "production", label: "Production", icon: Package },
-  { key: "installation", label: "Installation", icon: Wrench },
-];
-
-function getStepIndex(stage: string): number {
+// We moved STEPS inside the component to be dynamic
+function getStepIndex(stage: string, workflowType: string = "quote_first"): number {
   const s = (stage || "").toLowerCase();
+  const isDesignFirst = workflowType === "design_first";
+  
   if (s.includes("site visit")) return 1;
-  if (s.includes("quotation")) return 2;
-  if (s.includes("design")) return 3;
+  if (isDesignFirst) {
+    if (s.includes("design")) return 2;
+    if (s.includes("quotation")) return 3;
+  } else {
+    if (s.includes("quotation")) return 2;
+    if (s.includes("design")) return 3;
+  }
   if (s.includes("production") || s.includes("fabricat") || s.includes("ready")) return 4;
   if (s.includes("installation") || s.includes("completed") || s.includes("closed")) return 5;
   return 0;
@@ -108,6 +107,36 @@ function getStepIndex(stage: string): number {
 
 export function PortalClient({ customer, orders: initialOrders, quotations = [], siteVisitItems = [], initialActiveOrderId, token }: PortalClientProps) {
   const [orders, setOrders] = useState<Order[]>(initialOrders);
+
+  const initialOrder = initialOrders.find(
+    o => o.id === initialActiveOrderId || o.orderId === initialActiveOrderId || o.orderCode === initialActiveOrderId
+  ) || initialOrders[0];
+
+  const [activeOrderId, setActiveOrderId] = useState<string>(
+    initialOrder?.id || ""
+  );
+  
+  const activeOrder = orders.find(o => o.id === activeOrderId) || orders[0];
+  const workflowType = activeOrder?.workflow_type || "quote_first";
+  const isDesignFirst = workflowType === "design_first";
+
+  const STEPS = isDesignFirst 
+    ? [
+        { key: "enquiry", label: "Enquiries", icon: FileText },
+        { key: "site_visit", label: "Site Visit", icon: MapPin },
+        { key: "design", label: "Design", icon: Palette },
+        { key: "quotation", label: "Quotations", icon: BarChart3 },
+        { key: "production", label: "Production", icon: Package },
+        { key: "installation", label: "Installation", icon: Wrench },
+      ]
+    : [
+        { key: "enquiry", label: "Enquiries", icon: FileText },
+        { key: "site_visit", label: "Site Visit", icon: MapPin },
+        { key: "quotation", label: "Quotations", icon: BarChart3 },
+        { key: "design", label: "Design", icon: Palette },
+        { key: "production", label: "Production", icon: Package },
+        { key: "installation", label: "Installation", icon: Wrench },
+      ];
 
   // Step 4: Establish session cookie on first load (avoids keeping token in URL)
   useEffect(() => {
@@ -129,13 +158,6 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     })();
     return () => { mounted = false; };
   }, [token]);
-  const initialOrder = initialOrders.find(
-    o => o.id === initialActiveOrderId || o.orderId === initialActiveOrderId || o.orderCode === initialActiveOrderId
-  ) || initialOrders[0];
-
-  const [activeOrderId, setActiveOrderId] = useState<string>(
-    initialOrder?.id || ""
-  );
 
   // Site Visit scheduling states
   const [selectedDate, setSelectedDate] = useState("");
@@ -277,8 +299,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     }
   };
 
-  const activeOrder = orders.find(o => o.id === activeOrderId) || orders[0];
-  const currentStep = activeOrder ? getStepIndex(activeOrder.stage) : 0;
+  const currentStep = activeOrder ? getStepIndex(activeOrder.stage, activeOrder.workflow_type) : 0;
   
   const [viewedStep, setViewedStep] = useState<number | null>(null);
   const activeStepToRender = viewedStep !== null ? viewedStep : currentStep;
@@ -654,7 +675,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
               <div className="p-6">
                 {/* ── ENQUIRIES STAGE ── */}
-                {activeStepToRender === 0 && (
+                {STEPS[activeStepToRender]?.key === "enquiry" && (
                   <div className="space-y-6">
                     <div>
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Enquiry Details</h2>
@@ -687,7 +708,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 )}
 
                 {/* ── SITE VISIT STAGE ── */}
-                {activeStepToRender === 1 && (
+                {STEPS[activeStepToRender]?.key === "site_visit" && (
                   <>
                     {sv.customerAddress?.startsWith("Skipped") ? (
                       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
@@ -959,7 +980,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 )}
 
                 {/* ── QUOTATION STAGE ── */}
-                {activeStepToRender === 2 && (
+                {STEPS[activeStepToRender]?.key === "quotation" && (
                   <div className="space-y-6">
                     {/* Header */}
                     <div>
@@ -1211,12 +1232,12 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 )}
 
                 {/* ── DESIGN STAGE ── */}
-                {activeStepToRender === 3 && (
+                {STEPS[activeStepToRender]?.key === "design" && (
                   <DesignTab order={activeOrder as any} customer={customer} siteVisitItems={siteVisitItems} />
                 )}
 
                 {/* ── PRODUCTION STAGE ── */}
-                {activeStepToRender === 4 && (
+                {STEPS[activeStepToRender]?.key === "production" && (
                   <div className="space-y-5">
                     <div>
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Workshop Fabrication Status</h2>
@@ -1239,7 +1260,7 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                 )}
 
                 {/* ── INSTALLATION STAGE ── */}
-                {activeStepToRender === 5 && (
+                {STEPS[activeStepToRender]?.key === "installation" && (
                   <div className="space-y-5">
                     <div>
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Field Installation</h2>
