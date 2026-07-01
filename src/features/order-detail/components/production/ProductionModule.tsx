@@ -18,10 +18,10 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
   updateProductionDetails,
 }) => {
   const pd = order.productionDetails || {
-    printing: false,
-    cutting: false,
-    fabrication: false,
-    assembly: false,
+    procurementOfMaterials: false,
+    acpAndAcrylicCutting: false,
+    lightingAndWiring: false,
+    qualityCheck: false,
   };
 
   return (
@@ -41,21 +41,21 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
         </p>
 
         <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-white shadow-xs">
-          {/* Print Sheet check */}
+          {/* Procurement Check */}
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center">
               <CheckSquare
                 size={16}
-                className={`mr-3 ${pd.printing ? "text-emerald-600" : "text-slate-300"}`}
+                className={`mr-3 ${pd.procurementOfMaterials ? "text-emerald-600" : "text-slate-300"}`}
               />
               <span className="text-xs font-bold text-slate-800">
-                1. Print Plotted Sheet Layout & Backing
+                1. Procurement of Materials
               </span>
             </div>
             <input
               type="checkbox"
-              checked={pd.printing || false}
-              onChange={() => updateProductionDetails(order.id, { printing: !pd.printing })}
+              checked={pd.procurementOfMaterials || false}
+              onChange={() => updateProductionDetails(order.id, { procurementOfMaterials: !pd.procurementOfMaterials })}
               disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
               className="w-4.5 h-4.5 rounded text-emerald-600 cursor-pointer"
             />
@@ -66,58 +66,58 @@ export const ProductionModule: React.FC<ProductionModuleProps> = ({
             <div className="flex items-center">
               <CheckSquare
                 size={16}
-                className={`mr-3 ${pd.cutting ? "text-emerald-600" : "text-slate-300"}`}
+                className={`mr-3 ${pd.acpAndAcrylicCutting ? "text-emerald-600" : "text-slate-300"}`}
               />
               <span className="text-xs font-bold text-slate-800">
-                2. CNC Router Precision Plotted Cutting & Edges
+                2. ACP & Acrylic Cutting
               </span>
             </div>
             <input
               type="checkbox"
-              checked={pd.cutting || false}
-              onChange={() => updateProductionDetails(order.id, { cutting: !pd.cutting })}
+              checked={pd.acpAndAcrylicCutting || false}
+              onChange={() => updateProductionDetails(order.id, { acpAndAcrylicCutting: !pd.acpAndAcrylicCutting })}
               disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
               className="w-4.5 h-4.5 rounded text-emerald-600 cursor-pointer"
             />
           </div>
 
-          {/* Fabrication Check */}
+          {/* Lighting & Wiring Check */}
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center">
               <CheckSquare
                 size={16}
-                className={`mr-3 ${pd.fabrication ? "text-emerald-600" : "text-slate-300"}`}
+                className={`mr-3 ${pd.lightingAndWiring ? "text-emerald-600" : "text-slate-300"}`}
               />
               <span className="text-xs font-bold text-slate-800">
-                3. Metal frame welding & ACP backing support
+                3. Lighting & Wiring
               </span>
             </div>
             <input
               type="checkbox"
-              checked={pd.fabrication || false}
+              checked={pd.lightingAndWiring || false}
               onChange={() =>
-                updateProductionDetails(order.id, { fabrication: !pd.fabrication })
+                updateProductionDetails(order.id, { lightingAndWiring: !pd.lightingAndWiring })
               }
               disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
               className="w-4.5 h-4.5 rounded text-emerald-600 cursor-pointer"
             />
           </div>
 
-          {/* Assembly Check */}
+          {/* Quality Check Check */}
           <div className="p-4 flex items-center justify-between">
             <div className="flex items-center">
               <CheckSquare
                 size={16}
-                className={`mr-3 ${pd.assembly ? "text-emerald-600" : "text-slate-300"}`}
+                className={`mr-3 ${pd.qualityCheck ? "text-emerald-600" : "text-slate-300"}`}
               />
               <span className="text-xs font-bold text-slate-800">
-                4. Acrylic Letters Mounting & LED internal wiring test
+                4. Quality Check
               </span>
             </div>
             <input
               type="checkbox"
-              checked={pd.assembly || false}
-              onChange={() => updateProductionDetails(order.id, { assembly: !pd.assembly })}
+              checked={pd.qualityCheck || false}
+              onChange={() => updateProductionDetails(order.id, { qualityCheck: !pd.qualityCheck })}
               disabled={isReadOnly || (isEmployee && order.stageStatus?.includes("Pending"))}
               className="w-4.5 h-4.5 rounded text-emerald-600 cursor-pointer"
             />

@@ -10,7 +10,7 @@ async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
@@ -42,7 +42,9 @@ export async function getOrders() {
     ),
     order_assignments(
       employee_id
-    )
+    ),
+    installations(*),
+    productions(*)
   `).order("date_created", { ascending: false });
   if (error) throw new Error(error.message);
   
@@ -54,7 +56,9 @@ export async function getOrders() {
     return {
       ...order,
       assigned_employees: assignedEmployees,
-      siteVisitDetails: mapSiteVisitFromDb(sv)
+      siteVisitDetails: mapSiteVisitFromDb(sv),
+      installationDetails: Array.isArray(order.installations) ? order.installations[0] : order.installations,
+      productionDetails: Array.isArray(order.productions) ? order.productions[0] : order.productions
     };
   });
 }
@@ -68,7 +72,9 @@ export async function getOrderById(id: string) {
     site_visits(
       *,
       site_visit_measurements(*)
-    )
+    ),
+    installations(*),
+    productions(*)
   `).eq("id", id).maybeSingle();
   
   // If not found, try by friendly order_id column
@@ -80,7 +86,9 @@ export async function getOrderById(id: string) {
         site_visits(
           *,
           site_visit_measurements(*)
-        )
+        ),
+        installations(*),
+        productions(*)
       `)
       .eq("order_id", id)
       .maybeSingle();
@@ -106,7 +114,9 @@ export async function getOrderById(id: string) {
   return {
     ...data,
     assigned_employees: assignedEmployees,
-    siteVisitDetails: mapSiteVisitFromDb(sv)
+    siteVisitDetails: mapSiteVisitFromDb(sv),
+    installationDetails: Array.isArray(data.installations) ? data.installations[0] : data.installations,
+    productionDetails: Array.isArray(data.productions) ? data.productions[0] : data.productions
   };
 }
 
@@ -281,28 +291,66 @@ export async function updateDesignDetailsAction(orderId: string, details: any) {
 
 export async function updateProductionDetailsAction(orderId: string, details: any) {
   const supabase = await getSupabase();
-  const { data: current, error: fetchError } = await supabase.from("orders").select("production_details").eq("id", orderId).single();
-  if (fetchError) throw new Error(fetchError.message);
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+
+  // Check if a production row exists
+  const { data: current, error: fetchError } = await supabase.from("productions").select("*").eq("order_id", orderUuid).maybeSingle();
   
-  const updatedDetails = {
-    ...(current?.production_details || {}),
-    ...details
-  };
+  if (current) {
+    const { error: updateError } = await supabase.from("productions").update(details).eq("order_id", orderUuid);
+    if (updateError) throw new Error(updateError.message);
+  } else {
+    const { error: insertError } = await supabase.from("productions").insert({ order_id: orderUuid, ...details });
+    if (insertError) throw new Error(insertError.message);
+  }
   
-  return await updateOrder(orderId, { production_details: updatedDetails });
+  // Revalidate cache
+  revalidatePath("/production/orders");
+  revalidatePath(`/production/orders/${orderId}`);
+  revalidatePath(`/production/orders/${orderUuid}`);
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/admin/orders/${orderUuid}`);
+  revalidatePath("/staff/orders");
+  revalidatePath(`/staff/orders/${orderId}`);
+  revalidatePath(`/staff/orders/${orderUuid}`);
+  revalidatePath("/portal");
+  revalidatePath(`/portal/${orderId}`);
+  revalidatePath(`/portal/${orderUuid}`);
+  
+  return { success: true };
 }
 
 export async function updateInstallationDetailsAction(orderId: string, details: any) {
   const supabase = await getSupabase();
-  const { data: current, error: fetchError } = await supabase.from("orders").select("installation_details").eq("id", orderId).single();
-  if (fetchError) throw new Error(fetchError.message);
+  const orderUuid = await resolveOrderUuid(supabase, orderId);
+
+  // Check if an installation row exists
+  const { data: current, error: fetchError } = await supabase.from("installations").select("*").eq("order_id", orderUuid).maybeSingle();
   
-  const updatedDetails = {
-    ...(current?.installation_details || {}),
-    ...details
-  };
+  if (current) {
+    const { error: updateError } = await supabase.from("installations").update(details).eq("order_id", orderUuid);
+    if (updateError) throw new Error(updateError.message);
+  } else {
+    const { error: insertError } = await supabase.from("installations").insert({ order_id: orderUuid, ...details });
+    if (insertError) throw new Error(insertError.message);
+  }
   
-  return await updateOrder(orderId, { installation_details: updatedDetails });
+  // Revalidate cache
+  revalidatePath("/installation/orders");
+  revalidatePath(`/installation/orders/${orderId}`);
+  revalidatePath(`/installation/orders/${orderUuid}`);
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath(`/admin/orders/${orderUuid}`);
+  revalidatePath("/staff/orders");
+  revalidatePath(`/staff/orders/${orderId}`);
+  revalidatePath(`/staff/orders/${orderUuid}`);
+  revalidatePath("/portal");
+  revalidatePath(`/portal/${orderId}`);
+  revalidatePath(`/portal/${orderUuid}`);
+  
+  return { success: true };
 }
 
 export async function requestStageAdvancementAction(orderId: string) {

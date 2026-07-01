@@ -244,8 +244,6 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
             stageAdminNotes: updated.stage_admin_notes,
             chatHistory: updated.chat_history || prev.chatHistory,
             designDetails: updated.design_details || prev.designDetails,
-            productionDetails: updated.production_details || prev.productionDetails,
-            installationDetails: updated.installation_details || prev.installationDetails,
           }));
         }
       })
@@ -480,7 +478,7 @@ export const OrderWorksheetModal: React.FC<OrderWorksheetModalProps> = ({
   /* ── Module fallbacks ── */
   const sv = order.siteVisitDetails || { width: 0, height: 0, depth: 0, auditDate: "", auditTime: "", sitePersonnel: "", photos: [], completed: false, notes: "", locations: [] };
   const dd = (order.designDetails as DesignDetails) || { resources: [], versions: [], currentVersion: 0 };
-  const pd = order.productionDetails || { printing: false, cutting: false, fabrication: false, assembly: false };
+  const pd = order.productionDetails || { procurementOfMaterials: false, acpAndAcrylicCutting: false, lightingAndWiring: false, qualityCheck: false };
   const inst = order.installationDetails || { photoUrl: "", customerSignature: "", paymentCode: "" };
 
   // Compute workflow-aware tab assignments

@@ -1,0 +1,240 @@
+"use client";
+
+import React, { useState } from "react";
+import { Calendar, Clock, Save, Loader2, CheckCircle, RefreshCw } from "lucide-react";
+import { scheduleInstallationAction } from "@/features/installations/actions/installationActions";
+
+interface InstallationScheduleModuleProps {
+  orderId: string;
+  initialScheduledDate?: string;
+  initialScheduledTime?: string;
+  isCompleted?: boolean;
+  isCustomerView?: boolean;
+}
+
+export const InstallationScheduleModule: React.FC<InstallationScheduleModuleProps> = ({
+  orderId,
+  initialScheduledDate = "",
+  initialScheduledTime = "",
+  isCompleted = false,
+  isCustomerView = false,
+}) => {
+  // confirmedDate/Time track the *saved* value — updated after a successful save
+  const [confirmedDate, setConfirmedDate] = useState(initialScheduledDate);
+  const [confirmedTime, setConfirmedTime] = useState(initialScheduledTime);
+  
+  // selectedDate/Time track the picker selection while the form is open
+  const [selectedDate, setSelectedDate] = useState(initialScheduledDate);
+  const [selectedTime, setSelectedTime] = useState(initialScheduledTime);
+
+  const [scheduling, setScheduling] = useState(false);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [alert, setAlert] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const isScheduled = !!confirmedDate && !!confirmedTime;
+  const showForm = !isScheduled || isRescheduling;
+
+  const handleSchedule = async () => {
+    if (!selectedDate || !selectedTime) {
+      setAlert({ message: "Please select both a date and a time.", type: "error" });
+      setTimeout(() => setAlert(null), 3000);
+      return;
+    }
+    setScheduling(true);
+    try {
+      await scheduleInstallationAction(orderId, { scheduledDate: selectedDate, scheduledTime: selectedTime });
+      // Update local confirmed state so UI flips immediately without a page reload
+      setConfirmedDate(selectedDate);
+      setConfirmedTime(selectedTime);
+      setIsRescheduling(false);
+      setAlert({ message: "Installation scheduled successfully!", type: "success" });
+    } catch (err: any) {
+      setAlert({ message: err.message || "Failed to schedule", type: "error" });
+    } finally {
+      setScheduling(false);
+      setTimeout(() => setAlert(null), 4000);
+    }
+  };
+
+  const handleCancelReschedule = () => {
+    setIsRescheduling(false);
+    setSelectedDate(confirmedDate);
+    setSelectedTime(confirmedTime);
+  };
+
+  const getNextDays = (count: number) => {
+    const days: string[] = [];
+    const current = new Date();
+    while (days.length < count) {
+      current.setDate(current.getDate() + 1);
+      // Skip Sundays (0) — keep Saturdays for installation work
+      if (current.getDay() !== 0) {
+        days.push(current.toISOString().split("T")[0]);
+      }
+    }
+    return days;
+  };
+
+  const nextDays = getNextDays(6);
+  const timeSlots = ["09:00 AM", "10:30 AM", "12:00 PM", "02:00 PM", "03:30 PM", "05:00 PM"];
+
+  return (
+    <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2">
+          <Calendar size={18} className="text-blue-600" />
+          <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+            Installation Schedule
+          </h2>
+        </div>
+
+        {alert && (
+          <div
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border ${
+              alert.type === "success"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
+            }`}
+          >
+            {alert.message}
+          </div>
+        )}
+      </div>
+
+      {/* Confirmed state */}
+      {!showForm ? (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <CheckCircle size={20} className="text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider mb-0.5">
+                  Your installation has been scheduled
+                </p>
+                <p className="font-black text-blue-900 text-base leading-snug">
+                  {new Date(confirmedDate + "T00:00:00").toLocaleDateString("en-IN", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                  })}{" "}
+                  at {confirmedTime}
+                </p>
+              </div>
+            </div>
+
+            {!isCompleted && !isCustomerView && (
+              <button
+                onClick={() => setIsRescheduling(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-white text-blue-700 font-bold text-xs rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors shadow-sm flex-shrink-0"
+              >
+                <RefreshCw size={12} />
+                Reschedule
+              </button>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* Scheduling form */
+        isCustomerView ? (
+          // Customer sees a read-only pending message — scheduling is done by staff
+          <div className="py-6 text-center text-slate-500 text-sm font-medium bg-slate-50 rounded-xl border border-dashed border-slate-200">
+            <Calendar size={24} className="mx-auto mb-2 opacity-30" />
+            Your installation schedule is pending confirmation from our team.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Date picker */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Select Date
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {nextDays.map((date) => {
+                  const isSelected = selectedDate === date;
+                  const dateObj = new Date(date + "T00:00:00");
+                  return (
+                    <button
+                      key={date}
+                      onClick={() => setSelectedDate(date)}
+                      disabled={isCompleted}
+                      className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl border transition-all ${
+                        isSelected
+                          ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20"
+                          : "bg-white border-slate-200 hover:border-slate-300 text-slate-600"
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+                        {dateObj.toLocaleDateString("en-US", { weekday: "short" })}
+                      </span>
+                      <span className="text-lg font-black leading-none my-1">
+                        {dateObj.getDate()}
+                      </span>
+                      <span className="text-[10px] font-semibold opacity-80">
+                        {dateObj.toLocaleDateString("en-US", { month: "short" })}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Time picker */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                Select Time
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {timeSlots.map((time) => {
+                  const isSelected = selectedTime === time;
+                  return (
+                    <button
+                      key={time}
+                      onClick={() => setSelectedTime(time)}
+                      disabled={isCompleted}
+                      className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                        isSelected
+                          ? "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20"
+                          : "bg-white border-slate-200 hover:border-slate-300 text-slate-600"
+                      }`}
+                    >
+                      <Clock size={13} className={isSelected ? "opacity-100" : "opacity-50"} />
+                      {time}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {!isCompleted && (
+                <div className="mt-4 flex justify-end gap-2">
+                  {isRescheduling && (
+                    <button
+                      onClick={handleCancelReschedule}
+                      className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSchedule}
+                    disabled={scheduling || !selectedDate || !selectedTime}
+                    className="inline-flex items-center gap-2 px-5 py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
+                  >
+                    {scheduling ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Save size={13} />
+                    )}
+                    {isRescheduling ? "Save New Schedule" : "Confirm Schedule"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      )}
+    </div>
+  );
+};

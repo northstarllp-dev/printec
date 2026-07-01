@@ -74,10 +74,10 @@ export function ProductionOrderDetailClient({
 
   // Fallbacks for sub-objects
   const pd = order.productionDetails || {
-    printing: false,
-    cutting: false,
-    fabrication: false,
-    assembly: false
+    procurementOfMaterials: false,
+    acpAndAcrylicCutting: false,
+    lightingAndWiring: false,
+    qualityCheck: false
   };
 
   const svDetails = order.siteVisitDetails || {};
@@ -86,7 +86,7 @@ export function ProductionOrderDetailClient({
   const dd = order.designDetails || { proofUrl: "", status: "Draft" };
   const mockImage = order.imageMockup || dd.proofUrl;
 
-  const handleCheckboxChange = async (key: "printing" | "cutting" | "fabrication" | "assembly") => {
+  const handleCheckboxChange = async (key: "procurementOfMaterials" | "acpAndAcrylicCutting" | "lightingAndWiring" | "qualityCheck") => {
     setSaving(true);
     setAlert(null);
 
@@ -443,10 +443,10 @@ export function ProductionOrderDetailClient({
 
             <div className="space-y-3.5">
               {[
-                { key: "printing", label: "1. Print Plotted Layout & Backing", desc: "Vinyl printing, plotter alignment, ACP pre-checks" },
-                { key: "cutting", label: "2. CNC Router Precision Cutting", desc: "ACP plotting, CNC cutting, edge profile checking" },
-                { key: "fabrication", label: "3. Frame Welding & Support", desc: "ACP support framework, structural welding, ACP binding" },
-                { key: "assembly", label: "4. Letters Mounting & wiring test", desc: "Acrylic letter mounting, LED illumination testing" },
+                { key: "procurementOfMaterials", label: "1. Procurement of Materials", desc: "Sourcing and procuring all required raw materials" },
+                { key: "acpAndAcrylicCutting", label: "2. ACP & Acrylic Cutting", desc: "Precision cutting of ACP and acrylic sheets" },
+                { key: "lightingAndWiring", label: "3. Lighting & Wiring", desc: "Installing LED modules and electrical wiring" },
+                { key: "qualityCheck", label: "4. Quality Check", desc: "Final inspection and quality assurance" },
               ].map(step => {
                 const isChecked = !!pd[step.key as keyof typeof pd];
                 return (

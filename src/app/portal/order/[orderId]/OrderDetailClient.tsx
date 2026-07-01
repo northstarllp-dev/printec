@@ -328,8 +328,8 @@ export function OrderDetailClient({ customer, order: initialOrder, siteVisitItem
                 depositPaid: Number(updatedOrder.deposit_paid) || 0,
 
                 designDetails: updatedOrder.design_details,
-                productionDetails: updatedOrder.production_details,
-                installationDetails: updatedOrder.installation_details,
+                // productionDetails & installationDetails aren't on the orders table anymore,
+                // so we don't update them from this realtime event.
                 stageStatus: updatedOrder.stage_status,
                 stageAdminNotes: updatedOrder.stage_admin_notes,
               }));

@@ -27,7 +27,8 @@ import {
 import { createClient } from "@/utils/supabase/client";
 import { scheduleSiteVisitAction } from "@/features/orders/actions/orderActions";
 import { mapSiteVisitFromDb } from "@/features/orders/actions/siteVisitMapper";
-import { provideInstallationLocationAction } from "@/features/installations/actions/installationActions";
+import { provideInstallationLocationAction, scheduleInstallationAction } from "@/features/installations/actions/installationActions";
+import { InstallationScheduleModule } from "@/features/installations/components/InstallationScheduleModule";
 import { DesignTab } from "./components/DesignTab";
 
 interface Customer {
@@ -299,6 +300,22 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
     }
   };
 
+  const handleScheduleInstallation = async () => {
+    if (!installationDate || !installationTime) {
+      alert("Please select both a date and a time.");
+      return;
+    }
+    setSchedulingInstallation(true);
+    try {
+      await scheduleInstallationAction(activeOrderId, { scheduledDate: installationDate, scheduledTime: installationTime });
+      alert("Installation scheduled successfully!");
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setSchedulingInstallation(false);
+    }
+  };
+
   const currentStep = activeOrder ? getStepIndex(activeOrder.stage, activeOrder.workflow_type) : 0;
   
   const [viewedStep, setViewedStep] = useState<number | null>(null);
@@ -368,8 +385,8 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
 
                 siteVisitDetails: o.siteVisitDetails,
                 designDetails: updatedOrder.design_details,
-                productionDetails: updatedOrder.production_details,
-                installationDetails: updatedOrder.installation_details,
+                productionDetails: updatedOrder.productionDetails,
+                installationDetails: updatedOrder.installationDetails,
                 stageStatus: updatedOrder.stage_status,
                 stageAdminNotes: updatedOrder.stage_admin_notes,
               } : o));
@@ -1245,10 +1262,10 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {[
-                        { done: pd.printing, label: "Print layout & backing plotted" },
-                        { done: pd.cutting, label: "CNC precision cutting complete" },
-                        { done: pd.fabrication, label: "Aluminium frame welding tested" },
-                        { done: pd.assembly, label: "LED circuitry & acrylic wired" },
+                        { done: pd.procurementOfMaterials, label: "Procurement of Materials" },
+                        { done: pd.acpAndAcrylicCutting, label: "ACP & Acrylic Cutting" },
+                        { done: pd.lightingAndWiring, label: "Lighting & Wiring" },
+                        { done: pd.qualityCheck, label: "Quality Check" },
                       ].map((item, i) => (
                         <div key={i} className={`p-4 border rounded-xl flex items-center justify-between ${item.done ? "bg-emerald-50/50 border-emerald-200 text-emerald-800" : "bg-slate-50 border-slate-200 text-slate-500"}`}>
                           <span className="text-xs font-semibold">{item.label}</span>
@@ -1264,8 +1281,20 @@ export function PortalClient({ customer, orders: initialOrders, quotations = [],
                   <div className="space-y-5">
                     <div>
                       <h2 className="text-xl font-black text-[#0b1c30] mb-1">Field Installation</h2>
-                      <p className="text-sm text-slate-500">Installation completion sign-off and records.</p>
+                      <p className="text-sm text-slate-500">Installation scheduling and completion records.</p>
                     </div>
+
+                    {/* INSTALLATION SCHEDULING (Customer Side) */}
+                    <div className="mb-6">
+                      <InstallationScheduleModule 
+                        orderId={activeOrder.id}
+                        initialScheduledDate={inst.scheduledDate}
+                        initialScheduledTime={inst.scheduledTime}
+                        isCompleted={activeOrder.stage === "Completed" || activeOrder.stage === "Closed"}
+                        isCustomerView={true}
+                      />
+                    </div>
+
                     {inst.gmapRequested && !inst.gmapLink && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center shadow-sm">
                         <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">

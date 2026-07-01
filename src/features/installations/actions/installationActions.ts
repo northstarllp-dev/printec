@@ -8,7 +8,7 @@ async function getSupabase() {
   const cookieStore = await cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
@@ -91,16 +91,11 @@ export async function markInstallationCompleted(orderId: string, checklist: any[
 export async function requestInstallationLocationAction(orderId: string) {
   const supabase = await getSupabase();
   
-  // Get current installation_details
-  const { data: order, error: fetchError } = await supabase.from("orders").select("installation_details, order_id").eq("id", orderId).single();
+  // Get current order for activity log
+  const { data: order, error: fetchError } = await supabase.from("orders").select("order_id").eq("id", orderId).single();
   if (fetchError) throw new Error(fetchError.message);
   
-  const updatedDetails = {
-    ...(order.installation_details || {}),
-    gmapRequested: true
-  };
-  
-  const { error } = await supabase.from("orders").update({ installation_details: updatedDetails }).eq("id", orderId);
+  const { error } = await supabase.from("installations").update({ gmapRequested: true }).eq("order_id", orderId);
   if (error) throw new Error(error.message);
 
   // Activity Log
@@ -119,17 +114,14 @@ export async function requestInstallationLocationAction(orderId: string) {
 export async function provideInstallationLocationAction(orderId: string, mapLink: string) {
   const supabase = await getSupabase();
   
-  // Get current installation_details
-  const { data: order, error: fetchError } = await supabase.from("orders").select("installation_details, order_id").eq("id", orderId).single();
+  // Get current order for activity log
+  const { data: order, error: fetchError } = await supabase.from("orders").select("order_id").eq("id", orderId).single();
   if (fetchError) throw new Error(fetchError.message);
   
-  const updatedDetails = {
-    ...(order.installation_details || {}),
-    gmapLink: mapLink,
-    gmapRequested: false // Clear the request flag
-  };
-  
-  const { error } = await supabase.from("orders").update({ installation_details: updatedDetails }).eq("id", orderId);
+  const { error } = await supabase.from("installations").update({ 
+    gmapLink: mapLink, 
+    gmapRequested: false 
+  }).eq("order_id", orderId);
   if (error) throw new Error(error.message);
 
   // Activity Log
@@ -140,6 +132,40 @@ export async function provideInstallationLocationAction(orderId: string, mapLink
     actor_role: "Customer",
     content: `Customer provided the exact Google Map location for installation.`,
     metadata: { action: "provide_location" }
+  });
+
+  return { success: true };
+}
+
+export async function scheduleInstallationAction(orderId: string, payload: { scheduledDate: string, scheduledTime: string }) {
+  const supabase = await getSupabase();
+  
+  // Get current order
+  const { data: order, error: fetchError } = await supabase.from("orders").select("stage, order_id").eq("id", orderId).single();
+  if (fetchError) throw new Error(fetchError.message);
+
+  // Upsert so it works even if the installations row doesn't exist yet
+  const { error: instError } = await supabase.from("installations").upsert({
+    order_id: orderId,
+    scheduledDate: payload.scheduledDate,
+    scheduledTime: payload.scheduledTime
+  }, { onConflict: "order_id" });
+  if (instError) throw new Error(instError.message);
+  
+  // Only advance stage if currently "Ready For Installation"
+  if (order.stage === "Ready For Installation") {
+    const { error } = await supabase.from("orders").update({ stage: "Installation Scheduled" }).eq("id", orderId);
+    if (error) throw new Error(error.message);
+  }
+
+  // Activity Log
+  await supabase.from("order_activity").insert({
+    order_id: order.order_id || orderId,
+    activity_type: "timeline",
+    actor_name: "System",
+    actor_role: "System",
+    content: `Installation scheduled for ${payload.scheduledDate} at ${payload.scheduledTime}.`,
+    metadata: { action: "schedule_installation", ...payload }
   });
 
   return { success: true };

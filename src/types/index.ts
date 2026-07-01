@@ -185,16 +185,23 @@ export interface DesignDetails {
 }
 
 export interface ProductionDetails {
-  printing: boolean;
-  cutting: boolean;
-  fabrication: boolean;
-  assembly: boolean;
+  procurementOfMaterials: boolean;
+  acpAndAcrylicCutting: boolean;
+  lightingAndWiring: boolean;
+  qualityCheck: boolean;
 }
 
 export interface InstallationDetails {
-  photoUrl: string;
-  customerSignature: string;
-  paymentCode: string;
+  photoUrl?: string; // Legacy support
+  customerSignature?: string;
+  paymentCode?: string;
+  gmapLink?: string;
+  gmapRequested?: boolean;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  afterPhotos?: string[];
+  checklist?: { id: string; label: string; checked: boolean }[];
+  notes?: string;
 }
 
 export interface Order {
